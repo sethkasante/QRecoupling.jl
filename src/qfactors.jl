@@ -4,7 +4,7 @@ using Primes
 using LRUCache
 
 export CyclotomicBasis,
-       CycloMonomial,CycloSum, 
+       CycloMonomial,CycloSum, _qRacahsum, 
        qinteger,
        qfactorial,
        qΔ2, qδ, δ, 
@@ -25,6 +25,11 @@ Represents ∏ Φ_d(q)^{e_d}. These are our basis objects
 """
 struct CycloMonomial
     powers::Dict{Int, Int}   # d => powers of Φ_d 
+end
+
+struct CycloExpr
+    unit_exp::Rational{Int}              # exponent m such that unit = q^(m/2)
+    cyclo::CycloMonomial
 end
 
 # struct CycloMonomial
@@ -103,6 +108,15 @@ function qfactorial(n::Int)
     end
 end
 
+# function _qfactorial(n::Int)
+#     n <= 1 && return CycloMonomial()
+#     dict = Dict{Int,Int}()
+#     for d in 2:n
+#         dict[d] = floor(n/d)
+#     end
+#     return CycloMonomial(dict)
+# end
+
 
 # classical and quantum triangle conditions at level k: 
 # checks admissible triple 
@@ -131,6 +145,67 @@ function qΔ2(j1,j2,j3)
 end
 
 
+
+# function _qΔ2(j1,j2,j3)
+#     δ(j1, j2, j3) || return CycloMonomial()
+#     dict = Dict{Int,Int}()
+#     for d in 2:j1+j2+j3+1
+#         exponent = floor(Int,(j1+j2-j3)/d) + floor(Int,(j1-j2+j3)/d) + 
+#                     floor(Int,(-j1+j2+j3)/d) - floor(Int,(j1+j2+j3+1)/d)
+#         exponent != 0 ? dict[d] = exponent : nothing
+#     end
+#     return CycloMonomial(dict)
+# end
+
+function _qΔ2(j1, j2, j3)
+    δ(j1, j2, j3) || return CycloExpr(0, CycloMonomial())
+
+    dict = Dict{Int,Int}()
+    n1 = j1 + j2 - j3
+    n2 = j1 - j2 + j3
+    n3 = -j1 + j2 + j3
+    n4 = j1 + j2 + j3 + 1
+
+    for d in 2:n4
+        exponent =
+            floor(n1/d) +
+            floor(n2/d) +
+            floor(n3/d) -
+            floor(n4/d)
+
+        exponent != 0 && (dict[d] = exponent)
+    end
+
+    # unit exponent from factorials
+
+    unit_exp = -((n1*(n1-1) + n2*(n2-1) + n3*(n3-1) - n4*(n4-1)) // 4)
+
+    return CycloExpr(unit_exp, CycloMonomial(dict))
+end
+
+function _q6jsummand(z,α1,α2,α3,α4,β1,β2,β3)
+    dict = Dict{Int,Int}()
+    for d in 2:max(z+1,β1-z,β2-z,β3-z)
+        exponent = floor(Int,(z+1)/d) - floor(Int,(z-α1)/d) - floor(Int,(z-α2)/d) - 
+                    floor(Int,(z-α3)/d) - floor(Int,(z-α4)/d) - floor(Int,(β1-z)/d) -
+                        floor(Int,(β2-z)/d) - floor(Int,(β3-z)/d)
+        exponent != 0 ? dict[d] = exponent : nothing
+    end
+    return CycloMonomial(dict)
+end
+
+function _qRacahsum(α1,α2,α3,α4,β1,β2,β3)
+    #range of z values
+    zrange = max(α1,α2,α3,α4):min(β1,β2,β3)
+    # n = length(zrange)
+    sgns = Int[] 
+    terms = CycloMonomial[] # add sizehint = n 
+    for z in zrange
+        push!(terms, _q6jsummand(z,α1,α2,α3,α4,β1,β2,β3) )
+        push!(sgns, iseven(z) ? 1 : -1 )
+    end
+    return CycloSum(terms,sgns)
+end
 # ----- dealing with summation -----
 
 """
@@ -225,17 +300,17 @@ function _qracah6j(j1, j2, j3, j4, j5, j6)
 
     cm, res, sgns = qRacahsum(α1,α2,α3,α4,β1,β2,β3)
     #square root term squared 
-    R = clean!(tri2_coeff * cm^2)
-    res = [clean!(r) for r in res]
+    R = simplify(tri2_coeff * cm^2)
+    res = [simplify(r) for r in res]
     S = CycloSum(res,sgns)
     return R, S
 end
 
-function clean(ct::CycloMonomial)
+function simplify(ct::CycloMonomial)
     CycloMonomial(Dict(filter((d,e)->e!=0, ct.powers)))
 end
 
-function clean!(ct::CycloMonomial)
+function simplify(ct::CycloMonomial)
     for (d,e) in collect(ct.powers)
         if e == 0
             delete!(ct.powers, d)
