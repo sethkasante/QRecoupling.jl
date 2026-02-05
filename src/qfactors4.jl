@@ -27,7 +27,7 @@ qδ(j1, j2, j3, k) = δ(j1, j2, j3) && (j1 + j2 + j3) <= k
 
 δtet(j1, j2, j3, j4, j5, j6) = δ(j1, j2, j3) && δ(j1, j5, j6) && δ(j2, j4, j6) && δ(j3, j4, j5)
 
-qδtet(j1, j2, j3, j4, j5, j6, k) = qδ(j1, j2, j3, k) && qδ(j1, j5, j6, k) && qδ(j2, j4, j6, k) && qδ(j3, j4, j5, k)
+qδtet(j1, j2, j3, j4, j5, j6) = qδ(j1, j2, j3, k) && qδ(j1, j5, j6, k) && qδ(j2, j4, j6, k) && qδ(j3, j4, j5, k)
 
 
 
@@ -41,12 +41,14 @@ end
 
 
 struct CycloExpr
-    unit_exp::Rational{Int}     # exponent m such that unit = q^(m/2)
+    unit_exp::Int     # exponent m such that unit = q^(m/2)
     cyclo::CycloMonomial
 end
 
+#set q = q0^2: so that units are in q0 and monomials are in q
+
 struct CycloSum               # global common factors
-    unit_exp::Vector{Rational{Int}}
+    unit_exp::Vector{Int}
     coeffs::Vector{Int}
     terms::Vector{CycloMonomial}  # reduced monomials → coeff
 end
@@ -94,7 +96,7 @@ function _qΔ2(j1, j2, j3)
 
     # unit exponent from factorials
 
-    unit_exp = -((n1*(n1-1) + n2*(n2-1) + n3*(n3-1) - n4*(n4-1)) // 4)
+    unit_exp = -((n1*(n1-1) + n2*(n2-1) + n3*(n3-1) - n4*(n4-1)) ÷ 2 )
 
     return CycloExpr(unit_exp, CycloMonomial(dict))
 end
@@ -121,7 +123,7 @@ function _q6jsummand(z,α1,α2,α3,α4,β1,β2,β3)
     # monomial unit exponents
 
     unit_expr = -((n1*(n1-1) - a1*(a1-1) - a2*(a2-1) - a3*(a3-1) -
-                a4*(a4-1) - b1*(b1-1) - b2*(b2-1) - b3*(b3-1)) // 4)
+                a4*(a4-1) - b1*(b1-1) - b2*(b2-1) - b3*(b3-1)) ÷ 2)
 
     return CycloExpr(unit_expr, CycloMonomial(dict))
 end
@@ -174,24 +176,60 @@ end
 
 using Nemo
 
+export val_unit, evaluate, val_unit, valuation, is_forced_zero, is_forced_poles, evaluate_6j
+
+#note that the units are monomials in Z[q^1/2] and cyclotomic polynomials are Φ_d(q)
+#set q0^2 = q and compute in terms of q0 
+
 const _, x = polynomial_ring(ZZ, "x")
+
+q0(k) = 
+
 function evaluate(m::CycloMonomial,k)
-    K, ζ = cyclotomic_field(k, "ζ")
+    K, ζ = cyclotomic_field(2*(k+2), "ζ") #2(k+2) from q0
     val = one(ζ)
     for (d, e) in m.exponent
-        Φd = K(cyclotomic(d, x))   # fast numerical Φ_d(q)
-        val *= Φd^e
-        return val 
-        # val *= Φd^e
+        val *= K(cyclotomic(d, x^2))^e   # fast numerical Φ_d(q)^e
     end
     return val
 end
 
-@inline function val_unit(exp::Rational{Int}, k)
-    K, ζ = cyclotomic_field(k, "ζ")
+
+@inline function val_unit(exp::Int, k)
+    #val = x^exp
+    K, ζ = cyclotomic_field(2*(k+2), "ζ")
+    #K(val)
     ζ^exp
 end
 
+function is_forced_zero(S::CycloExpr, k)
+    valuation(S, k+2) > 0 
+end
+
+function is_forced_poles(S::CycloExpr, k)
+    valuation(S, k+2) < 0 
+end
+
+# @inline 
+function evaluate(e::CycloExpr, k)
+    is_forced_zero(e,k+2) && return 0
+    val = valuation(e, k+2)
+    val < 0 && return throw(ArgumentError("The expression has poles of order $val"))
+    val_unit(e.unit_exp, k) * evaluate(e.cyclo, k)
+end
+
+function evaluate(S::CycloSum,k)
+    if is_forced_zero(S, k)
+        return 0
+    end
+
+    total = 0
+    @inbounds for i in eachindex(S.terms)
+        term = evaluate(S.terms[i], k)
+        total += S.coeffs[i] * val_unit(S.unit_exp[i], k) * term
+    end
+    return total
+end
 
 
 # ------ evaluation -------- 
@@ -202,25 +240,25 @@ end
 Evaluate ∏_d Φ_d(q)^{e_d} numerically.
 Assumes q is already specialized.
 """
-function eval2(m::CycloMonomial, q)
-    val = one(q)
-    for (d, e) in m.exponent
-        Φd = cyclotomic(d, q)   # fast numerical Φ_d(q)
-        val *= Φd^e
-    end
-    return val
-end
+# function eval2(m::CycloMonomial, q)
+#     val = one(q)
+#     for (d, e) in m.exponent
+#         Φd = cyclotomic(d, q)   # fast numerical Φ_d(q)
+#         val *= Φd^e
+#     end
+#     return val
+# end
 
-@inline eval_unit(exp::Rational{Int}, q) = q^exp
+# @inline eval_unit(exp::Rational{Int}, q) = q^exp
 
 """
     eval(e::CycloExpr, q)
 
 Evaluate q^(unit_exp) * cyclotomic monomial.
 """
-@inline function eval2(e::CycloExpr, q)
-    eval_unit(e.unit_exp, q) * eval(e.cyclo, q)
-end
+# @inline function eval2(e::CycloExpr, q)
+#     eval_unit(e.unit_exp, q) * eval(e.cyclo, q)
+# end
 
 """
     eval(S::CycloSum, q; k=nothing)
@@ -228,14 +266,14 @@ end
 Evaluate the Racah sum numerically.
 If k is provided, valuation at d=k+2 is checked.
 """
-function eval2(S::CycloSum, q; k=nothing)
+function evalua(S::CycloSum, q; k=nothing)
     if k !== nothing && is_forced_zero(S, k)
         return zero(q)
     end
 
     total = zero(q)
     @inbounds for i in eachindex(S.terms)
-        term = eval(S.terms[i], q)
+        term = evaluate(S.terms[i], q)
         total += S.coeffs[i] * eval_unit(S.unit_exp[i], q) * term
     end
     return total
@@ -246,22 +284,22 @@ end
 
 Compute the quantum or classical 6j symbol.
 """
-function evaluate_6j(j1,j2,j3,j4,j5,j6; q, k=nothing)
+function evaluate_6j(j1,j2,j3,j4,j5,j6, k)
     T2, S = _qracah6j(j1,j2,j3,j4,j5,j6)
 
     # evaluate triangle product
-    tri_val = eval(T2, q)
+    tri_val = evaluate(T2, k)
 
     # evaluate Racah sum
-    sum_val = eval(S, q; k=k)
+    sum_sq = evaluate(S, k)^2
 
-    return sqrt(tri_val) * sum_val
+    return (tri_val) * sum_sq
 end
 
-function evaluate_6j_q(js...; k)
-    q = cis(2π/(k+2))
-    evaluate_6j(js...; q=q, k=k)
-end
+# function evaluate_6j_q(js...; k)
+#     q = cis(2π/(k+2))
+#     evaluate_6j(js...; q=q, k=k)
+# end
 
 """
     is_forced_zero(S::CycloSum, k)
@@ -387,14 +425,14 @@ function cyclotomic_eval(n::Int, k::Int; prec=256)
     return val
 end
 
-function evaluate(term::CycloMonomial, k::Int; prec=256)
-    val = Complex{BigFloat}(term.coeff)
-    for (d,e) in term.factors
-        φ = cyclotomic_eval(d, k; prec=prec)
-        val *= φ^e
-    end
-    return val
-end
+# function evaluate(term::CycloMonomial, k::Int; prec=256)
+#     val = Complex{BigFloat}(term.coeff)
+#     for (d,e) in term.factors
+#         φ = cyclotomic_eval(d, k; prec=prec)
+#         val *= φ^e
+#     end
+#     return val
+# end
 
 
 # function evaluate(fe::FactoredElement, Q::QSU2kField)
