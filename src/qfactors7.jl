@@ -119,18 +119,17 @@ export q6j, log_racah_term, logqnfact_table
 
 Returns logqn[n+1] = log([n]_q), n = 0..k+1
 """
-function logqn_table(k::Int, ::Type{T}=BigFloat) where {T<:AbstractFloat}
+function logqn_table2(k::Int, ::Type{T}=Float64) where {T<:AbstractFloat}
     N = k + 2
-    logqn = Vector{BigFloat}(undef, N)
+    logqn = Vector{T}(undef, N)
 
-    θ = T(pi) / N
-    logden = log(sin(θ))
-
-    # symmetry: n ↔ k+2-n
-    half = N ÷ 2
+    θ = one(T) / N
+    logden = log(sinpi(θ))
     logqn[1] = zero(T)
+
+    half = N ÷ 2
     @inbounds for n in 1:half
-        v = log(sin(n * θ)) - logden
+        v = log(sinpi(n * θ)) - logden
         logqn[n+1] = v
         logqn[N+1-n] = v
     end
@@ -142,8 +141,8 @@ end
 
 Returns logqnfact[n+1] = log([n]_q!), n = 0..k+1
 """
-function logqnfact_table(k::Int, ::Type{T}) where {T<:AbstractFloat}
-    logqn = logqn_table(k, T)
+function logqnfact_table2(k::Int, ::Type{T}=Float64) where {T<:AbstractFloat}
+    logqn = logqn_table2(k, T)
     return cumsum(logqn)
 end
 
