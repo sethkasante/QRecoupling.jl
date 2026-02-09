@@ -1,7 +1,7 @@
 
 module QRacahSymbol
 
-# QRacahSymbol.jl
+# QRacahSymbols.jl
 using LRUCache
 
 export qracah6j, qracah6js,
@@ -45,6 +45,8 @@ end
 
 # Cache for precomputed log-q-factorials: key (k, DataType) -> Vector{BigFloat}
 const LOGQFACT_CACHE = LRU{Tuple{Int,DataType}, Vector{BigFloat}}(maxsize = 1024)
+
+#add caching for qracah6j 
 
 # ===== admissibility conditions ===#
 
@@ -117,14 +119,14 @@ function logqn_table(k::Int, ::Type{T}=BigFloat)::Vector{BigFloat} where {T<:Abs
     N = k + 2
     logqn = Vector{T}(undef, N)
 
-    θ = T(pi) / N
-    logden = log(sin(θ))
+    θ = T(1) / N
+    logden = log(sinpi(θ))
 
     # Use symmetry: n ↔ k+2-n
     half = N ÷ 2
     logqn[1] = zero(T)
     @inbounds for n in 1:half
-        val = log(sin(n * θ)) - logden
+        val = log(sinpi(n * θ)) - logden
         logqn[N + 1 - n] = logqn[n+1] = val
     end
     return logqn
@@ -135,9 +137,19 @@ end
 
 Compute table of log quantum factorials: logqnfact[n+1] = log([n]_q!) for n = 0..k+1.
 """
+# function logqnfact_table(k::Int, ::Type{T}=BigFloat)::Vector{BigFloat} where {T<:AbstractFloat}
+#     return cumsum(logqn_table(k, T))
+# end
 function logqnfact_table(k::Int, ::Type{T}=BigFloat)::Vector{BigFloat} where {T<:AbstractFloat}
-    return cumsum(logqn_table(k, T))
+    logqn = logqn_table(k, T)
+    logqnfact = similar(logqn)
+    logqnfact[1] = logqn[1]
+    @inbounds for n in 2:k+2
+        logqnfact[n] = logqnfact[n-1] + logqn[n]
+    end
+    return logqnfact
 end
+
 
 # ==== core log building blocks ======#
 
@@ -401,7 +413,7 @@ function qclebschgordan(model::SU2kModel,
     # Phase convention (Kirillov–Reshetikhin)
     phase = (-1)^(Int(j1 - j2 + m3))
 
-    return phase * norm * q3j(model, j1,j2,j3, m1,m2,-m3)
+    #compute series 
 end
 
 end
