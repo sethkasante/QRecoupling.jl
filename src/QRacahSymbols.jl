@@ -4,7 +4,7 @@ module QRacahSymbol
 # QRacahSymbols.jl
 using LRUCache
 
-export qracah6j, qracah6js,
+export qracah6j, qracah6js, logqnfact_table,
         qδ,
         qdim, 
         SU2kModel,
@@ -188,6 +188,25 @@ Compute log of summand for given z in the Racah sum.
     logden = tab[z-α1+1] + tab[z-α2+1] + tab[z-α3+1] +
         tab[z-α4+1] + tab[β1-z+1] + tab[β2-z+1] + tab[β3-z+1]
     return lognum - logden
+end
+
+function llog_racah_summand(z, α1, α2, α3, α4, β1, β2, β3, tab)
+    lognum = tab[z+2]
+    logden = tab[z-α1+1] + tab[z-α2+1] + tab[z-α3+1] +
+        tab[z-α4+1] + tab[β1-z+1] + tab[β2-z+1] + tab[β3-z+1]
+    return lognum - logden
+end
+
+function flog_racah_summand(α1, α2, α3, α4, β1, β2, β3, tab)
+    zrange = max(α1, α2, α3, α4):min(β1, β2, β3)
+    res = Vector{BigFloat}(undef,length(zrange))
+    for (i,z) in enumerate(zrange)
+        lognum = tab[z+2]
+        logden = tab[z-α1+1] + tab[z-α2+1] + tab[z-α3+1] +
+            tab[z-α4+1] + tab[β1-z+1] + tab[β2-z+1] + tab[β3-z+1]
+        res[i] = lognum - logden
+    end
+    return res
 end
 
 """
