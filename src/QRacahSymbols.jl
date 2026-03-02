@@ -37,14 +37,15 @@ Create an SU2kModel with level k, computing log-q-factorial table with BigFloat 
 Uses LRU cache to avoid recomputation.
 """
 function SU2kModel(k::Int)::SU2kModel
-    tab = get!(LOGQFACT_CACHE, (k, BigFloat)) do
+    # Get current precision
+    prec = precision(BigFloat) 
+    tab = get!(LOGQFACT_CACHE, (k, prec)) do
         logqnfact_table(k, BigFloat)
     end
     return SU2kModel{BigFloat}(k, tab)
 end
-
 # Cache for precomputed log-q-factorials: key (k, DataType) -> Vector{BigFloat}
-const LOGQFACT_CACHE = LRU{Tuple{Int,DataType}, Vector{BigFloat}}(maxsize = 1024)
+const LOGQFACT_CACHE = LRU{Tuple{Int,Int}, Vector{BigFloat}}(maxsize = 1024)
 
 #add caching for qracah6j 
 
