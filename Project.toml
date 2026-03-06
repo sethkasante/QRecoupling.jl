@@ -1,13 +1,20 @@
-name = "Quantum6j"
-uuid = "2b562d8e-bf11-4e94-980c-128e38f2978a"
-version = "0.1.0"
-authors = ["Seth-Kurankyi <seth.kurankyi@gmail.com>"]
+name = "QRacahSymbols"
+uuid = "963d34ac-6484-4913-adce-21060ac8c184"
+#uuid = "2b562d8e-bf11-4e94-980c-128e38f2978a"
+version = "1.0.0"
+authors = ["sethkasante<seth.kurankyi@gmail.com>"]
 
-#[deps]
-#Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+[deps]
+LRUCache = "8ac3fa9e-de4c-5943-a1ef-25c4f6f809a1"
+Nemo = "2edaba10-b0fd-574a-956b-3511119afafc"
 
 [compat]
-Test = "1.11.0"
+julia = "1.6"
+LRUCache = "1.1"
+Nemo = "0.30"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
