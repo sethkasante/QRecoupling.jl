@@ -37,10 +37,10 @@ function mul_qint(M::CycloMonomial, n::Int, power::Int=1)
     return CycloMonomial(M.sign, new_z_pow, M.exps)
 end
 
-function Base.inv(M::CycloMonomial)
-    M.sign == 0 && throw(DivideError())
-    return CycloMonomial(M.sign, -M.z_pow, -M.exps)
-end
+# function Base.inv(M::CycloMonomial)
+#     M.sign == 0 && throw(DivideError())
+#     return CycloMonomial(M.sign, -M.z_pow, -M.exps)
+# end
 
 # ============================================================
 # Symbolic Engine (Single-Allocation Setup)

@@ -58,6 +58,12 @@ function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin; mode=:g
     end
 end
 
+"""
+    q6j(j1, j2, j3, j4, j5, j6; k::Int, mode=:numeric)
+
+Evaluates the k-independent 6j-symbol. 
+Valid modes: `:generic` (Symbolic CycloMonomials) or `:classical` (Ponzano-Regge limit).
+"""
 function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::Int; mode=:numeric, T::Type{<:AbstractFloat}=Float64, prec=256)
     if mode == :generic || mode == :classical
         return q6j(j1, j2, j3, j4, j5, j6; mode=mode) 
