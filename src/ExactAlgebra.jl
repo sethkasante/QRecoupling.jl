@@ -67,15 +67,12 @@ function q6jseries_exact(model::ExactSU2kModel, j1::Spin, j2::Spin, j3::Spin, j4
     return sum_cf
 end
 
+
 function qracah6j_exact(model::ExactSU2kModel, j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
-    if !qδtet(j1, j2, j3, j4, j5, j6, model.k)
-        return ExactResult(model.k, model.K(0), model.K(0))
-    end
     Tc2 = qtricoeff2_exact(model, j1, j2, j3, j4, j5, j6)
     Sum_cf = q6jseries_exact(model, j1, j2, j3, j4, j5, j6)
     return ExactResult(model.k, Tc2, Sum_cf)
 end
-
 
 
 # ============================================================
@@ -117,7 +114,7 @@ function q3jseries_exact(model::ExactSU2kModel, j1::Spin, j2::Spin, j3::Spin, m1
 end
 
 function qracah3j_exact(model::ExactSU2kModel, j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin)
-    # The m-admissibility should be validated upstream
+    # The m-admissibility validated in the main file
     pref_sq = q3j_pref_sq_exact(model, j1, j2, j3, m1, m2)
     Sum_cf = q3jseries_exact(model, j1, j2, j3, m1, m2)
     

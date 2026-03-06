@@ -72,9 +72,10 @@ end
 end
 
 function _qracah6j_stable(model::NumericSU2kModel{T}, j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)::T where {T}
-    if !qδtet(j1, j2, j3, j4, j5, j6, model.k) 
-        return zero(T)
-    end
+    # if !qδtet(j1, j2, j3, j4, j5, j6, model.k) 
+    #     return zero(T)
+    # end
+    #admissible checks in main file
     
     table = model.logqnfact
     logT = logqtri_coeffs(j1, j2, j3, j4, j5, j6, table)
@@ -131,6 +132,7 @@ end
 end
 
 function _qracah3j_stable(model::NumericSU2kModel{T}, j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin)::T where {T}
+    #admissible checks performed in the main file
     table = model.logqnfact
 
     logT = log_q3j_prefactor(j1, j2, j3, m1, m2, table)
