@@ -74,4 +74,4 @@ d_val = qdim(2.5, k; mode=:numeric, T=BigFloat) # Enforce BigFloat precision
 Under the hood, QRacahSymbols.jl completely avoids heap allocations in its deep loops. The symbolic engine relies on in-place array mutation and the Hypergeometric Ratio Method to drop complexities from $O(N \log N)$ to $O(N)$, while the Exact engine natively builds quantum factorials directly in the algebraic field, eliminating generic array instantiation.
 
 ## Citation
-If you use QRacahSymbols.jl in your research, please cite our JOSS paper:(Citation details pending)
+If you use `QRacahSymbols.jl` in your research, please cite our JOSS paper:(Citation details pending). 
