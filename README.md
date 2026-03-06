@@ -14,7 +14,7 @@ Standard hypergeometric evaluations of quantum Racah symbols suffer from catastr
 
 * **The 3-Tier Engine**:
   * `Numeric`: Ultrafast table-based evaluation using log-sum-exp stabilization. Safe from factorial overflow up to massive spins ($j \approx 450$, $k > 20,000$).
-  * `Exact`: Zero-precision-loss algebraic evaluation mapping strictly into `Nemo.jl` cyclotomic number fields ($\mathbb Q(\zeta_{2N}$).
+  * `Exact`: Zero-precision-loss algebraic evaluation mapping strictly into `Nemo.jl` cyclotomic number fields ($\mathbb {Q}(\zeta_{2N}$).
   * `Generic`: Pure symbolic factorization into dense integer arrays of `CycloMonomial` representations.
 * **TQFT Category Suite**: Natively evaluates Quantum Dimensions, R-matrices (braiding), F-symbols (fusion), and G-symbols (tetrahedral weights).
 * **Geometric Canonicalization**: Internally exploits the 24-fold $S_4$ tetrahedral symmetry and massive LRU caches to bypass redundant computations in $O(1)$ time.
