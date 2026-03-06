@@ -149,8 +149,8 @@ end
 function Base.show(io::IO, res::ExactResult)
     k_sub = to_subscript(res.k)
     print(io, "Exact SU(2)$k_sub Symbol:\n")
-    print(io, "  Prefactor²: ", res.pref_sq, "\n")
-    print(io, "  Racah Sum:  ", res.sum_cf)
+    print(io, "  Prefactor(Δ²): ", res.pref_sq, "\n")
+    print(io, "  Racah Sum(Σ):  ", res.sum_cf)
 end
 
 # ----------------------------------------
