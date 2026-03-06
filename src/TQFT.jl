@@ -143,3 +143,61 @@ function gsymbol_exact(model::ExactSU2kModel, j1, j2, j3, j4, j5, j6)
     new_pref_sq = res_6j.pref_sq * dim_prod
     return ExactResult(model.k, new_pref_sq, res_6j.sum_cf)
 end
+
+# ============================================================
+# Extension Suite: TQFT Functions (Numeric)
+# ============================================================
+
+"""
+    qdim_numeric(j, model::NumericSU2kModel)
+
+Quantum dimension [2j+1]_q using the log-tables.
+"""
+function qdim_numeric(j, model::NumericSU2kModel)
+    n = Int(2j + 1)
+    # [n]_q = [n]_q! / [n-1]_q!
+    # exp(log([n]!) - log([n-1]!))
+    return exp(model.logqnfact[n+1] - model.logqnfact[n])
+end
+
+"""
+    fsymbol_numeric(model::NumericSU2kModel, j1, j2, j3, j4, j5, j6)
+
+Returns the normalized F-matrix element.
+F = (-1)^{j1+j2+j3+j4} √([2j3+1][2j6+1]) {j1 j2 j3; j4 j5 j6}_q
+"""
+function fsymbol_numeric(model::NumericSU2kModel, j1, j2, j3, j4, j5, j6)
+    val_6j = _qracah6j_stable(model, j1, j2, j3, j4, j5, j6)
+    
+    d3 = qdim_numeric(j3, model)
+    d6 = qdim_numeric(j6, model)
+    
+    phase = iseven(Int(j1 + j2 + j4 + j5)) ? 1 : -1
+    return phase * sqrt(d3 * d6) * val_6j
+end
+
+"""
+    rmatrix_numeric(j1, j2, j3, k::Int)
+
+Returns the braiding R-symbol. Since this is purely a phase, it is evaluated 
+directly without the log-tables.
+"""
+function rmatrix_numeric(j1, j2, j3, k::Int)
+    phase_exp = Int(j3*(j3+1) - j1*(j1+1) - j2*(j2+1))
+    s = iseven(Int(j1 + j2 - j3)) ? 1 : -1
+    return s * cispi(phase_exp / (k + 2))
+end
+
+"""
+    gsymbol_numeric(model::NumericSU2kModel, j1, j2, j3, j4, j5, j6)
+
+The G-symbol (Tetrahedral Weight) used in state sums.
+G = {6j} * √(Π [2j_i + 1]_q)
+"""
+function gsymbol_numeric(model::NumericSU2kModel, j1, j2, j3, j4, j5, j6)
+    val_6j = _qracah6j_stable(model, j1, j2, j3, j4, j5, j6)
+    
+    dims_prod = qdim_numeric(j1, model) * qdim_numeric(j2, model) * qdim_numeric(j3, model) * qdim_numeric(j4, model) * qdim_numeric(j5, model) * qdim_numeric(j6, model)
+                
+    return val_6j * sqrt(dims_prod)
+end

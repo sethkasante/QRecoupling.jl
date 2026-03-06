@@ -131,9 +131,22 @@ end
 
 function Base.show(io::IO, res::GenericResult)
     print(io, "√(", res.pref_sq, ") × (")
-    join(io, res.series, "  +  ")
+    
+    n_terms = length(res.series)
+    if n_terms <= 5
+        join(io, res.series, "  +  ")
+    else
+        # Print first 2 terms, an ellipsis, and the last 2 terms
+        print(io, res.series[1], "  +  ", res.series[2], "  +  ... (", n_terms - 4, " more terms) ...  +  ", res.series[end-1], "  +  ", res.series[end])
+    end
     print(io, ")")
 end
+
+# function Base.show(io::IO, res::GenericResult)
+#     print(io, "√(", res.pref_sq, ") × (")
+#     join(io, res.series, "  +  ")
+#     print(io, ")")
+# end
 
 """
     ExactResult
