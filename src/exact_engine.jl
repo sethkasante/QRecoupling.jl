@@ -127,47 +127,120 @@ function qracah3j_exact(model::ExactSU2kModel, j1::Spin, j2::Spin, j3::Spin, m1:
     return ExactResult(model.k, pref_sq, Sum_cf)
 end
 
-# ============================================================
-# Float Projection (Horner's Method)
-# ============================================================
+
+
+# ==============================================================================
+# Exact Field Evaluation Engine
+# ==============================================================================
 
 """
-    evaluate_exact(res::ExactResult, [T=Complex{BigFloat}]; prec=256)
-Projects an exact algebraic result into a floating-point number.
-Defaults to Complex{BigFloat}. Can be cast to Float64, ComplexF64, etc.
+    horner_eval(poly_elem, z::Complex{BigFloat})
+
+Evaluates a Nemo cyclotomic polynomial element at a complex point `z` 
+using a zero-allocation Horner's method.
 """
-function evaluate_exact(res::ExactResult, ::Type{T}=Complex{BigFloat}; prec=256) where {T}
-    # Calculate in high precision
-    val = setprecision(BigFloat, prec) do
-        target_z = cis(BIG_PI / (res.k + 2))
-        val_sum = horner_eval(res.sum_cf, target_z)
-        val_pref_sq = horner_eval(res.pref_sq, target_z)
-        
-        val_pref = sqrt(abs(val_pref_sq))
-        return val_pref * val_sum
+function horner_eval(poly_elem, z::Complex{BigFloat})
+    # Fast path for pure rational numbers (QQFieldElem)
+    if poly_elem isa Nemo.QQFieldElem
+        num = BigFloat(numerator(poly_elem))
+        den = BigFloat(denominator(poly_elem))
+        return Complex{BigFloat}(num / den)
     end
     
-    # Intelligently cast based on the requested type T
+    deg = Nemo.degree(parent(poly_elem))
+    res = zero(Complex{BigFloat})
+    
+    # Horner's method: Evaluate without allocating an array
+    for i in (deg - 1):-1:0
+        c = Nemo.coeff(poly_elem, i)
+        
+        # Safely extract Nemo coefficients to BigFloat without Float64 truncation
+        c_val = BigFloat(numerator(c)) / BigFloat(denominator(c))
+        
+        res = res * z + c_val
+    end
+    
+    return res
+end
+
+"""
+    evaluate_exact(ev::ExactValue, [T=Complex{BigFloat}]; prec=256)
+
+Projects a self-contained ExactValue into a floating-point number.
+"""
+function evaluate_exact(ev::ExactValue, ::Type{T}=Complex{BigFloat}; prec=256) where {T}
+    val = setprecision(BigFloat, prec) do
+        target_z = cispi(big(1.0) / (ev.k + 2))
+        return horner_eval(ev.val, target_z)
+    end
+    
     if T <: Real
-        # For Real types (e.g., Float64), we assume the imaginary part is numerical noise
         return T(real(val))
     else
-        # For Complex types, we return the full value
         return T(val)
     end
 end
 
-function horner_eval(poly_elem, z::Complex{BigFloat})
-    if poly_elem isa Nemo.QQFieldElem
-        return Complex{BigFloat}(BigFloat(numerator(poly_elem)) / BigFloat(denominator(poly_elem)))
+
+"""
+    evaluate_exact(res::ExactResult, ::Type{T}=Complex{BigFloat}; prec=256)
+
+Projects a full ExactResult (6j or 3j symbol) into a floating-point number.
+"""
+function evaluate_exact(res::ExactResult, ::Type{T}=Complex{BigFloat}; prec=256) where {T}
+    # Calculate in high precision
+    val = setprecision(BigFloat, prec) do
+        target_z = cispi(big(1.0) / (res.k + 2))
+        
+        val_sum = horner_eval(res.sum_cf, target_z)
+        val_pref_sq = horner_eval(res.pref_sq, target_z)
+        
+        # In SU(2)_k, pref_sq is mathematically real and non-negative
+        val_pref = sqrt(abs(val_pref_sq))
+        
+        return val_pref * val_sum
     end
-    coeffs = [BigFloat(coeff(poly_elem, i)) for i in 0:degree(parent(poly_elem))-1]
-    res = Complex{BigFloat}(0.0)
-    for i in length(coeffs):-1:1
-        res = res * z + coeffs[i]
+    
+    # Clean casting
+    if T <: Real
+        return T(real(val))
+    else
+        return T(val)
     end
-    return res
 end
+
+
+
+# ============================================================
+# Float Projection (Horner's Method)
+# ============================================================
+
+# """
+#     evaluate_exact(res::ExactResult, [T=Complex{BigFloat}]; prec=256)
+# Projects an exact algebraic result into a floating-point number.
+# Defaults to Complex{BigFloat}. Can be cast to Float64, ComplexF64, etc.
+# """
+# function evaluate_exact(res::ExactResult, ::Type{T}=Complex{BigFloat}; prec=256) where {T}
+#     # Calculate in high precision
+#     val = setprecision(BigFloat, prec) do
+#         target_z = cis(BIG_PI / (res.k + 2))
+#         val_sum = horner_eval(res.sum_cf, target_z)
+#         val_pref_sq = horner_eval(res.pref_sq, target_z)
+        
+#         val_pref = sqrt(abs(val_pref_sq))
+#         return val_pref * val_sum
+#     end
+    
+#     # Intelligently cast based on the requested type T
+#     if T <: Real
+#         # For Real types (e.g., Float64), we assume the imaginary part is numerical noise
+#         return T(real(val))
+#     else
+#         # For Complex types, we return the full value
+#         return T(val)
+#     end
+# end
+
 
 
 

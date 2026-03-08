@@ -6,17 +6,18 @@ using LRUCache
 
 # Data Structures and Types
 export CycloMonomial, ExactSU2kModel, NumericSU2kModel
-export GenericResult, ExactResult
+export GenericResult, ExactResult, ExactValue
 export Spin
 
 # Internal Handlers for advanced usage
 export qracah6j_generic, qracah6j_exact, qracah6j_numeric, qracah6j_classical
 export qracah3j_generic, qracah3j_exact, qracah3j_numeric, qracah3j_classical
+export clear_caches!
 
 
 # Primary API Functions 
 export q6j, q3j, fsymbol, rmatrix, gsymbol, qint, qdim
-export evaluate_exact, evaluate_classical, evaluate_symbolic
+export evaluate_exact, evaluate_classical, evaluate_generic
 
 # Include architecture files
 include("types.jl")
@@ -31,10 +32,27 @@ include("tqft.jl")
 const Q6J_NUMERIC_CACHE = LRU{Tuple{NTuple{6, Float64}, Int, DataType}, Any}(maxsize=50000)
 const Q6J_EXACT_CACHE   = LRU{Tuple{NTuple{6, Float64}, Int}, ExactResult}(maxsize=10000)
 const EXACT_MODEL_CACHE = LRU{Int, ExactSU2kModel}(maxsize=20)
+const PHI_EVAL_CACHE = LRU{Tuple{Int, Int}, Tuple{BigFloat, BigFloat}}(maxsize=10000)
+const LOGQFACT_CACHE = LRU{Tuple{Int, DataType, Int}, Any}(maxsize = 10240)
 
+
+"""
+    clear_caches!()
+
+Empties all internal LRU caches (numeric, exact models, and evaluations).
+Useful for freeing up memory during massive state-sum computations.
+"""
+function clear_caches!()
+    empty!(Q6J_NUMERIC_CACHE)
+    empty!(Q6J_EXACT_CACHE)
+    empty!(EXACT_MODEL_CACHE)
+    empty!(PHI_EVAL_CACHE)
+    empty!(LOGQFACT_CACHE) 
+    return nothing
+end
 
 # ============================================================
-# 1. Quantum 6j Symbol
+# Quantum 6j Symbol
 # ============================================================
 
 """
@@ -46,9 +64,14 @@ If `k` is omitted, only `:generic` and `:classical` modes are valid.
 function q6j end
 
 function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::OptInt=nothing; 
-             mode=:generic, T::Type{<:AbstractFloat}=Float64, prec=256)
+             mode=nothing, T::Type{<:AbstractFloat}=Float64, prec=256)
     
-    # 1. k-Independent Modes (:generic, :classical)
+    # --- select default mode ---
+    if mode === nothing
+        mode = (k === nothing) ? :generic : :numeric
+    end
+
+    # --- k-independent computations---
     if mode == :generic || mode == :classical
         if !δtet(j1, j2, j3, j4, j5, j6)
             return mode == :generic ? GenericResult(CycloMonomial(0, 0, Int[]), CycloMonomial[]) : 0.0
@@ -56,19 +79,18 @@ function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::OptI
         return mode == :generic ? qracah6j_generic(j1, j2, j3, j4, j5, j6) : qracah6j_classical(j1, j2, j3, j4, j5, j6)
     end
     
-    # 2. k-Dependent Modes (:numeric, :exact)
+    # --- level k-dependent computations---
     if k === nothing
-        throw(ArgumentError("Mode :$mode requires a level `k`."))
+        throw(ArgumentError("Mode :$mode requires a level k. Try q6j(..., k; mode=:$mode)"))
     end
 
-    # Quantum admissibility checks
     if !qδtet(j1, j2, j3, j4, j5, j6, k) 
         if mode == :exact
-            # Fast zero-return without building the full model if not cached
+            # zero-allocation return if possible
             if haskey(EXACT_MODEL_CACHE, k)
                 return ExactResult(k, EXACT_MODEL_CACHE[k].K(0), EXACT_MODEL_CACHE[k].K(0))
             else
-                K, _ = Nemo.cyclotomic_field(2 * (k + 2), "ζ")
+                K, _ = Nemo.cyclotomic_field(2*(k+2), "ζ")
                 return ExactResult(k, K(0), K(0))
             end
         else
@@ -76,7 +98,6 @@ function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::OptI
         end
     end
 
-    # Cache execution - canonical spins
     c_spins = canonical_spins(j1, j2, j3, j4, j5, j6)
     
     if mode == :exact
@@ -96,7 +117,7 @@ end
 
 
 # ============================================================
-# 2. Quantum 3j Symbol
+# Quantum 3j Symbol
 # ============================================================
 
 """
@@ -113,10 +134,16 @@ function q3j end
 q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin; kwargs...) = 
     q3j(j1, j2, j3, m1, m2, -m1-m2, nothing; kwargs...)
 
+
 function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin, k::OptInt=nothing; 
-             mode=:generic, T::Type{<:AbstractFloat}=Float64, prec=256)
+             mode=nothing, T::Type{<:AbstractFloat}=Float64, prec=256)
     
-    # 1. k-Independent Modes
+    # --- select default mode ---
+    if mode === nothing
+        mode = (k === nothing) ? :generic : :numeric
+    end
+
+    # --- k-independent computations---
     if mode == :generic || mode == :classical
         if !δ(j1, j2, j3) || !iszero(m1 + m2 + m3)
             return mode == :generic ? GenericResult(CycloMonomial(0, 0, Int[]), CycloMonomial[]) : 0.0
@@ -124,23 +151,13 @@ function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin, k::OptI
         return mode == :generic ? qracah3j_generic(j1, j2, j3, m1, m2, m3) : qracah3j_classical(j1, j2, j3, m1, m2, m3)
     end
     
-    # 2. k-dependent modes
     if k === nothing
-        throw(ArgumentError("Mode :$mode requires a level `k`."))
+        throw(ArgumentError("Mode :$mode requires a level k."))
     end
-    
-    # Quantum admissibility checks
-    if !qδ(j1, j2, j3, k) || !iszero(m1 + m2 + m3)
-        if mode == :exact
-            if haskey(EXACT_MODEL_CACHE, k)
-                return ExactResult(k, EXACT_MODEL_CACHE[k].K(0), EXACT_MODEL_CACHE[k].K(0))
-            else
-                K, _ = Nemo.cyclotomic_field(2 * (k + 2), "ζ")
-                return ExactResult(k, K(0), K(0))
-            end
-        else
-            return zero(T)
-        end
+
+    # --- level k-dependent computations---
+    if !qδ(j1, j2, j3, k) || !iszero(m1 + m2 + m3) # quantum admissibility and zero checks
+        return (mode == :exact ? ExactResult(k, 0, 0) : zero(T))
     end
 
     if mode == :exact
@@ -153,6 +170,7 @@ function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin, k::OptI
         throw(ArgumentError("Unknown mode: $mode"))
     end
 end
+
 
 
 # ============================================================
@@ -174,7 +192,7 @@ function qint end
 
 
 # ============================================================
-# Master API: TQFT Symbols
+# Public API for TQFT Symbols
 # ============================================================
 
 """
@@ -185,8 +203,11 @@ function qint end
 Access standard SU(2)_k category data.
 """
 function qdim end
+
 function fsymbol end
+
 function rmatrix end
+
 function gsymbol end
 
 

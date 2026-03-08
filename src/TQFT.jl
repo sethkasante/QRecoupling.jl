@@ -36,7 +36,8 @@ function qint(n::Int, k::Int; mode=:numeric, T::Type{<:AbstractFloat}=Float64)
         else
             K, z = Nemo.cyclotomic_field(2 * (k + 2), "ζ")
             z_inv = inv(z)
-            return (z^n - z_inv^n) * inv(z - z_inv)
+            val = (z^n - z_inv^n) * inv(z - z_inv)
+            return ExactValue(k, val)
         end
         
     elseif mode == :numeric
@@ -105,7 +106,8 @@ function qdim(j::Spin, k::Int; mode=:numeric, T::Type{<:AbstractFloat}=Float64, 
     if mode == :exact
         #TODO:Change to haskey otherwise compute qint 
         model = get!(() -> ExactSU2kModel(k), EXACT_MODEL_CACHE, k)
-        return qdim_exact(model, j)
+        val = qdim_exact(model, j)
+        return ExactValue(k, val)
     elseif mode == :numeric
         model = NumericSU2kModel(k; T=T, prec=prec)
         return qdim_numeric(j, model)

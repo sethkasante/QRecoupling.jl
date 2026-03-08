@@ -134,6 +134,23 @@ function Base.show(io::IO, res::GenericResult)
     print(io, ")")
 end
 
+"""
+    ExactValue{T}
+A self-contained exact algebraic value (like a quantum dimension or integer) 
+in the SU(2)_k cyclotomic field.
+"""
+struct ExactValue{T}
+    k::Int
+    val::T
+end
+
+# Pretty Printing for the REPL
+function Base.show(io::IO, ev::ExactValue)
+    k_sub = to_subscript(ev.k)
+    print(io, "Exact SU(2)$k_sub Value:\n  ")
+    print(io, ev.val)
+end
+
 struct ExactResult
     k::Int
     pref_sq::nf_elem

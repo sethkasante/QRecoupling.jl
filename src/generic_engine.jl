@@ -243,88 +243,119 @@ function qracah3j_classical(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3
     return Float64(sqrt(BigFloat(pref_sq_val)) * BigFloat(sumz))
 end
 
-#--------- Evaluations -------------------
+#-------- Evaluations -------- 
 
-# Efficiently evaluate Φ_d(x) using the product of (x^k - 1) formula
-function evaluate_phi(d::Int, x::Complex{BigFloat})
-    # Φ_d(x) = Π_{n|d} (x^n - 1)^μ(d/n)
-    # This is much faster than expanding the polynomial coefficients
-    res = Complex{BigFloat}(1.0)
+"""
+    evaluate_phi_stable(d::Int, k::Int)
+
+Computes the Log-Magnitude and Phase of Φ_d(q) at q = exp(i * 2π / (k+2)).
+Uses the trigonometric product formula for extreme numerical stability and caches the result.
+"""
+# Efficiently evaluate Φ_d(x) using the product of (x^k - 1) for x root of unity
+function evaluate_phi_stable(d::Int, k::Int)
+    cache_key = (d, k)
+    if haskey(PHI_EVAL_CACHE, cache_key)
+        return PHI_EVAL_CACHE[cache_key]
+    end
+
+    # q = exp(iϕ) where ϕ = 2π / (k+2)
+    ϕ = big(2) * big(π) / (k + 2)
+    
+    total_log_mag = big(0.0)
+    total_phase = big(0.0)
+    
     for n in 1:d
         if d % n == 0
-            term = (x^n - 1.0)
-            m = moebius_mu(d ÷ n) # Use Nemo.moebius_mu
-            if m == 1
-                res *= term
-            elseif m == -1
-                res /= term
+            m = Nemo.moebius_mu(d ÷ n)
+            m == 0 && continue
+
+            # Φ_d(x) = Π_{n|d} (x^n - 1)^μ(d/n)
+            # We evaluate |x^n - 1| and angle(x^n - 1)
+            # |e^{inϕ} - 1| = |2 * sin(nϕ/2)|
+            # angle(e^{inϕ} - 1) = (nϕ + π)/2
+            val_sin = 2 * sin(n * ϕ / 2)
+            mag_n = abs(val_sin)
+            phase_n = (n * ϕ + big(π)) / 2
+            
+            # If sin() is negative, the abs() flipped the sign. 
+            # We must add π to the phase to compensate.
+            if val_sin < 0
+                phase_n += big(π)
             end
+            
+            total_log_mag += m * log(mag_n)
+            total_phase += m * phase_n
         end
     end
+    
+    res = (total_log_mag, total_phase)
+    PHI_EVAL_CACHE[cache_key] = res
     return res
 end
 
 """
-    evaluate_symbolic(m::CycloMonomial, k::Int; T=Complex{BigFloat})
-Evaluates a symbolic cyclotomic monomial at the root of unity q = exp(iπ/(k+2)).
+    evaluate_generic(m::CycloMonomial, k::Int, ::Type{T}=Complex{BigFloat}; prec=512)
+
+Evaluates a symbolic cyclotomic monomial using log-sum-exp for numerical stability.
 """
-function evaluate_symbolic(m::CycloMonomial, k::Int, ::Type{T}=Complex{BigFloat}) where {T}
+function evaluate_generic(m::CycloMonomial, k::Int, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
     m.sign == 0 && return zero(T)
     
-    # Root of unity for level k
-    θ = BIG_PI / (k + 2)
-    z = cis(θ) # z = q^(1/2)
-    
-    # 1. Start with the sign and z-power
-    # Use cispi or exp for high precision
-    res = Complex{BigFloat}(m.sign * z^m.z_pow)
-    
-    # 2. Multiply by each Φ_d(q)
-    for (d, exp_val) in enumerate(m.exps)
-        exp_val == 0 && continue
+    return setprecision(BigFloat, prec) do
+        θ = big(π) / (k + 2)
         
-        # Evaluate the d-th cyclotomic polynomial at q = z^2
-        # Φ_d(q) = Π (q - ζ_d^k) where gcd(k,d)=1
-        val_phi = evaluate_phi(d, z^2)
-        res *= val_phi^exp_val
-    end
-    
-    return T(res)
-end
-
-"""
-    evaluate_symbolic(res::GenericResult, k::Int, ::Type{T}=Complex{BigFloat})
-Evaluates a symbolic 6j or 3j result at the level-k root of unity q = exp(iπ/(k+2)).
-Returns a numerical value of type T.
-"""
-function evaluate_symbolic(res::GenericResult, k::Int, ::Type{T}=Complex{BigFloat}) where {T}
-    # 1. Handle the case where the symbol is identically zero (admissibility)
-    if res.pref_sq.sign == 0
-        return zero(T)
-    end
-
-    # 2. Evaluate the squared prefactor
-    # Mathematically, for SU(2)_k, the prefactor squared is always real and non-negative
-    val_pref_sq = evaluate_symbolic(res.pref_sq, k, Complex{BigFloat})
-    val_pref = sqrt(abs(val_pref_sq))
-
-    # 3. Evaluate and sum the Racah series terms
-    val_sum = zero(Complex{BigFloat})
-    for term in res.series
-        val_sum += evaluate_symbolic(term, k, Complex{BigFloat})
-    end
-
-    # 4. Final combination and cast to requested type T
-    # Most 6j/3j are real, but we return Complex by default to handle R-matrices
-    final_val = val_pref * val_sum
-    
-    if T <: Real
-        return T(real(final_val))
-    else
-        return T(final_val)
+        # Initialize with the overall sign and z^z_pow phase
+        log_mag = big(0.0)
+        phase = m.z_pow * θ
+        if m.sign == -1
+            phase += big(π)
+        end
+        
+        # Add contributions from cyclotomic factors
+        for (d, e) in enumerate(m.exps)
+            (e == 0 || d < 1) && continue
+            
+            # Fetch strictly by (d, k)
+            log_mag_phi, phase_phi = evaluate_phi_stable(d, k)
+            
+            log_mag += e * log_mag_phi
+            phase += e * phase_phi
+        end
+        
+        res = exp(log_mag) * cis(phase)
+        return T(res)
     end
 end
 
+"""
+    evaluate_generic(res::GenericResult, k::Int, ::Type{T}=Complex{BigFloat}; prec=512)
 
+Evaluates a full 3j or 6j GenericResult at level k.
+"""
+function evaluate_generic(res::GenericResult, k::Int, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
+    res.pref_sq.sign == 0 && return zero(T)
+
+    return setprecision(BigFloat, prec) do
+        # 1. Squared prefactor -> take sqrt(abs())
+        val_pref_sq = evaluate_generic(res.pref_sq, k, Complex{BigFloat}; prec=prec)
+        val_pref = sqrt(abs(val_pref_sq))
+
+        # 2. Sum the Racah series
+        val_sum = zero(Complex{BigFloat})
+        for term in res.series
+            val_sum += evaluate_generic(term, k, Complex{BigFloat}; prec=prec)
+        end
+
+        # 3. Combine
+        final_val = val_pref * val_sum
+        
+        # 4. Safe casting
+        if T <: Real
+            return T(real(final_val))
+        else
+            return T(final_val)
+        end
+    end
+end
 
 

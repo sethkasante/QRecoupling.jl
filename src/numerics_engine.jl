@@ -1,7 +1,6 @@
 # src/Numerics.jl
 
 const BIG_PI = big(π)
-const LOGQFACT_CACHE = LRU{Tuple{Int, DataType, Int}, Any}(maxsize = 10240)
 
 struct NumericSU2kModel{T <: AbstractFloat}
     k::Int
