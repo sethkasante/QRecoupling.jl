@@ -22,11 +22,11 @@ export evaluate_exact, evaluate_classical, evaluate_generic
 # Include architecture files
 include("types.jl")
 include("admissibility.jl")
-include("symmetry.jl")
+include("symmetries.jl")
 include("generic_engine.jl")
 include("exact_engine.jl")
 include("numerics_engine.jl")
-include("tqft.jl")
+include("tqfts.jl")
 
 # Initialize the global Evaluation & Model Caches
 const Q6J_NUMERIC_CACHE = LRU{Tuple{NTuple{6, Float64}, Int, DataType}, Any}(maxsize=50000)
