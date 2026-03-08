@@ -60,39 +60,7 @@ end
     return q_delta2_exact(model, j1, j2, j3) * q_delta2_exact(model, j1, j5, j6) * q_delta2_exact(model, j2, j4, j6) * q_delta2_exact(model, j3, j4, j5)
 end
 
-# function q6jseries_exact(model::ExactSU2kModel, j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
-#     α1 = Int(j1 + j2 + j3); α2 = Int(j1 + j5 + j6) 
-#     α3 = Int(j2 + j4 + j6); α4 = Int(j3 + j4 + j5)
-#     β1 = Int(j1 + j2 + j4 + j5); β2 = Int(j1 + j3 + j4 + j6); β3 = Int(j2 + j3 + j5 + j6)
-    
-#     zrange = max(α1, α2, α3, α4):min(β1, β2, β3, model.k) 
-    
-#     # Pre-allocate mutatable memory buffers for the loop
-#     sum_cf = model.K(0)
-#     term   = model.K(0)
-#     den    = model.K(0)
 
-#     @inbounds for z in zrange
-#         # In-place multiplications: den = a * b * c ...
-#         Nemo.mul!(den, model.q_facts[z-α1+1], model.q_facts[z-α2+1])
-#         Nemo.mul!(den, den, model.q_facts[z-α3+1])
-#         Nemo.mul!(den, den, model.q_facts[z-α4+1])
-#         Nemo.mul!(den, den, model.q_facts[β1-z+1])
-#         Nemo.mul!(den, den, model.q_facts[β2-z+1])
-#         Nemo.mul!(den, den, model.q_facts[β3-z+1])
-        
-#         # In-place exact division: term = num / den
-#         Nemo.divexact!(term, model.q_facts[z+2], den)
-        
-#         # In-place addition/subtraction
-#         if iseven(z)
-#             Nemo.add!(sum_cf, sum_cf, term)
-#         else
-#             Nemo.sub!(sum_cf, sum_cf, term)
-#         end
-#     end
-#     return sum_cf
-# end
 function q6jseries_exact(model::ExactSU2kModel, j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
     α1 = Int(j1 + j2 + j3); α2 = Int(j1 + j5 + j6) 
     α3 = Int(j2 + j4 + j6); α4 = Int(j3 + j4 + j5)
@@ -163,52 +131,6 @@ end
 # Float Projection (Horner's Method)
 # ============================================================
 
-# ============================================================
-# Float Projection (Horner's Method)
-# ============================================================
-
-# function evaluate_exact(res::ExactResult; prec=256)
-#     # Scope the precision strictly to this evaluation
-#     setprecision(BigFloat, prec) do
-#         target_z = exp(im * big(π) / (res.k + 2))
-        
-#         val_sum = horner_eval(res.sum_cf, target_z)
-#         val_pref_sq = horner_eval(res.pref_sq, target_z)
-        
-#         # Mathematically, pref_sq is strictly positive. 
-#         # Using abs() perfectly ignores tiny imaginary/negative floating-point artifacts.
-#         val_pref = sqrt(abs(val_pref_sq))
-        
-#         return val_pref * val_sum
-#     end
-# end
-
-# function horner_eval(poly_elem, z::Complex{BigFloat})
-#     # Handle pure rational numbers safely
-#     if poly_elem isa Nemo.QQFieldElem
-#         num = BigFloat(BigInt(numerator(poly_elem)))
-#         den = BigFloat(BigInt(denominator(poly_elem)))
-#         return Complex{BigFloat}(num / den)
-#     end
-    
-#     # Extract coefficients safely ensuring NO Float64 truncation
-#     deg = degree(parent(poly_elem))
-#     res = Complex{BigFloat}(0.0)
-    
-#     for i in (deg-1):-1:0
-#         c = coeff(poly_elem, i)
-        
-#         # Cast Nemo fmpz -> Julia BigInt -> Julia BigFloat
-#         num = BigFloat(BigInt(numerator(c)))
-#         den = BigFloat(BigInt(denominator(c)))
-#         c_val = num / den
-        
-#         res = res * z + c_val
-#     end
-    
-#     return res
-# end
-
 """
     evaluate_exact(res::ExactResult, [T=Complex{BigFloat}]; prec=256)
 Projects an exact algebraic result into a floating-point number.
@@ -233,14 +155,6 @@ function evaluate_exact(res::ExactResult, ::Type{T}=Complex{BigFloat}; prec=256)
         # For Complex types, we return the full value
         return T(val)
     end
-end
-
-function evaluate_exact(res::ExactResult; prec=256)
-    target_z = exp(im * big(π) / (res.k + 2))
-    val_sum = horner_eval(res.sum_cf, target_z)
-    val_pref_sq = horner_eval(res.pref_sq, target_z)
-    val_pref = sqrt(max(real(val_pref_sq), 0.0))
-    return val_pref * val_sum
 end
 
 function horner_eval(poly_elem, z::Complex{BigFloat})

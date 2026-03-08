@@ -1,16 +1,44 @@
-using Test 
-
-@test 0 == 0
-
-
 
 #add tests 
 
-# using Test
-# using QRacahSymbols
+using Test
+using QRacahSymbols
 # using Nemo
 
-# # Set global precision high enough to rigorously test BigFloat vs Exact Field projections
+
+@testset "QRacahSymbols.jl Core Tests" begin
+    
+    @testset "Quantum Integers" begin
+        # [2]_q at k=2 is sin(2π/4)/sin(π/4) = 1/0.707... = sqrt(2)
+        @test qint(2, 2, mode=:numeric) ≈ sqrt(2.0)
+        
+        # Symbolic [2]_q is Φ_2
+        @test qint(2, mode=:generic).exps[2] == 1
+    end
+
+    @testset "3j and 6j Consistency" begin
+        j = 1
+        k = 10
+        
+        # Get all three modes
+        val_num = q6j(j,j,j,j,j,j, k, mode=:numeric)
+        res_exact = q6j(j,j,j,j,j,j, k, mode=:exact)
+        res_gen = q6j(j,j,j,j,j,j, mode=:generic)
+        
+        # 1. Exact vs Numeric
+        @test evaluate_exact(res_exact, Float64) ≈ val_num atol=1e-12
+        
+        # 2. Generic vs Numeric (evaluation at q = exp(iπ/(k+2)))
+        # (This requires a helper to evaluate CycloMonomials numerically)
+    end
+
+    @testset "Admissibility" begin
+        # Triangle inequality failure
+        @test q6j(10, 1, 1, 1, 1, 1, 20, mode=:numeric) == 0.0
+    end
+end
+
+# Set global precision high enough to rigorously test BigFloat vs Exact Field projections
 # setprecision(BigFloat, 256)
 
 # @testset "QRacahSymbols.jl Master Validation Suite" begin

@@ -11,7 +11,7 @@ export Spin
 
 # Export Primary API Functions
 export q6j, q3j, fsymbol, rmatrix, gsymbol, qint, qdim
-export evaluate_exact, evaluate_classical
+export evaluate_exact, evaluate_classical, evaluate_symbolic
 
 # Export Internal Handlers (Optional, for advanced users)
 export qracah6j_generic, qracah6j_exact, qracah6j_numeric, qracah6j_classical

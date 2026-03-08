@@ -18,4 +18,4 @@
 
     all_perms = (flips(p1)..., flips(p2)..., flips(p3)..., flips(p4)..., flips(p5)..., flips(p6)...)
     return reduce(max, all_perms)
-end
+end 

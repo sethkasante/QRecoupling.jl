@@ -72,6 +72,7 @@ end
 
 # Constructor for pre-allocating the vector capacity
 SymbolicBuffer(capacity::Int) = SymbolicBuffer(1, 0, zeros(Int, capacity))
+# Snapshot function to freeze the buffer into a CycloMonomial
 snapshot(buf::SymbolicBuffer) = CycloMonomial(buf.sign, buf.z_pow, copy(buf.exps))
 
 # ----------------------------------------

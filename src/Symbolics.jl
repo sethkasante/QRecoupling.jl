@@ -1,13 +1,5 @@
-# ============================================================
-# NOTE: Move this struct to src/Types.jl
-# ============================================================
 
-
-# Constructor for pre-allocating the vector capacity
-SymbolicBuffer(capacity::Int) = SymbolicBuffer(1, 0, zeros(Int, capacity))
-
-# Snapshot function to freeze the buffer into a CycloMonomial
-snapshot(buf::SymbolicBuffer) = CycloMonomial(buf.sign, buf.z_pow, copy(buf.exps))
+#Symbolics.jl
 
 # ============================================================
 # Core Allocation-Free In-Place Operations
@@ -249,4 +241,86 @@ function qracah3j_classical(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3
     pref_sq_val = evaluate_classical(q3j.pref_sq)
     
     return Float64(sqrt(BigFloat(pref_sq_val)) * BigFloat(sumz))
+end
+
+#--------- Evaluations -------------- 
+
+# Efficiently evaluate Φ_d(x) using the product of (x^k - 1) formula
+function evaluate_phi(d::Int, x::Complex{BigFloat})
+    # Φ_d(x) = Π_{n|d} (x^n - 1)^μ(d/n)
+    # This is much faster than expanding the polynomial coefficients
+    res = Complex{BigFloat}(1.0)
+    for n in 1:d
+        if d % n == 0
+            term = (x^n - 1.0)
+            m = moebius_mu(d ÷ n) # Use Nemo.moebius_mu
+            if m == 1
+                res *= term
+            elseif m == -1
+                res /= term
+            end
+        end
+    end
+    return res
+end
+
+"""
+    evaluate_symbolic(m::CycloMonomial, k::Int; T=Complex{BigFloat})
+Evaluates a symbolic cyclotomic monomial at the root of unity q = exp(iπ/(k+2)).
+"""
+function evaluate_symbolic(m::CycloMonomial, k::Int, ::Type{T}=Complex{BigFloat}) where {T}
+    m.sign == 0 && return zero(T)
+    
+    # Root of unity for level k
+    θ = BIG_PI / (k + 2)
+    z = cis(θ) # z = q^(1/2)
+    
+    # 1. Start with the sign and z-power
+    # Use cispi or exp for high precision
+    res = Complex{BigFloat}(m.sign * z^m.z_pow)
+    
+    # 2. Multiply by each Φ_d(q)
+    for (d, exp_val) in enumerate(m.exps)
+        exp_val == 0 && continue
+        
+        # Evaluate the d-th cyclotomic polynomial at q = z^2
+        # Φ_d(q) = Π (q - ζ_d^k) where gcd(k,d)=1
+        val_phi = evaluate_phi(d, z^2)
+        res *= val_phi^exp_val
+    end
+    
+    return T(res)
+end
+
+"""
+    evaluate_symbolic(res::GenericResult, k::Int, ::Type{T}=Complex{BigFloat})
+Evaluates a symbolic 6j or 3j result at the level-k root of unity q = exp(iπ/(k+2)).
+Returns a numerical value of type T.
+"""
+function evaluate_symbolic(res::GenericResult, k::Int, ::Type{T}=Complex{BigFloat}) where {T}
+    # 1. Handle the case where the symbol is identically zero (admissibility)
+    if res.pref_sq.sign == 0
+        return zero(T)
+    end
+
+    # 2. Evaluate the squared prefactor
+    # Mathematically, for SU(2)_k, the prefactor squared is always real and non-negative
+    val_pref_sq = evaluate_symbolic(res.pref_sq, k, Complex{BigFloat})
+    val_pref = sqrt(abs(val_pref_sq))
+
+    # 3. Evaluate and sum the Racah series terms
+    val_sum = zero(Complex{BigFloat})
+    for term in res.series
+        val_sum += evaluate_symbolic(term, k, Complex{BigFloat})
+    end
+
+    # 4. Final combination and cast to requested type T
+    # Most 6j/3j are real, but we return Complex by default to handle R-matrices
+    final_val = val_pref * val_sum
+    
+    if T <: Real
+        return T(real(final_val))
+    else
+        return T(final_val)
+    end
 end
