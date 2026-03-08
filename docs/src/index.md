@@ -6,7 +6,7 @@ The calculation of quantum $6j$-symbols relies on the $q$-deformed Kirillov-Resh
 
 `QRacahSymbols.jl` resolves this by exposing a rigorous **Three-Tier Architecture**:
 
-1. **`mode=:numeric`**: Employs an $O(1)$ table-lookup system fortified by a `log-sum-exp` shift, allowing for nanosecond evaluation of tensor network invariants while remaining perfectly stable up to massive spin bounds.
+1. **`mode=:numeric`**: Employs an $O(1)$ table-lookup system fortified by a `log-sum-exp` shift, allowing for fast (nanoseconds) evaluation of tensor network invariants while remaining perfectly stable up to massive spin bounds.
 2. **`mode=:exact`**: Leverages `Nemo.jl` to map the evaluation directly into the cyclotomic number field $\mathbb{Q}(\zeta_{2N})$, guaranteeing zero precision loss and returning exact topological invariants suitable for formal mathematical proofs.
 3. **`mode=:generic`**: A highly optimized prime-factorization vector engine that returns the abstract polynomial decomposition of the symbol into cyclotomic roots ($\Phi_d(q)$).
 
@@ -40,5 +40,5 @@ evaluate_generic(val_symb, 20, Float64; prec=512)
 
 ## Next Steps
 
-* Visit the [Mathematical Framework](@ref) page to understand the symmetry canonicalization and hypergeometric ratio optimizations utilized under the hood.
-* Visit the [API Reference](@ref) page for exhaustive details on function signatures, TQFT evaluators, and type stabilization strategies.
+* Visit the [Mathematical Framework](@ref) page to understand how we bypass floating-point limits.
+* Visit the [API Reference](@ref) page for details on function signatures, TQFT evaluators, and type stabilization strategies.
