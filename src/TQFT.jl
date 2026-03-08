@@ -215,7 +215,7 @@ end
 
 #------ Public API for F-symbols ----------
 
-function fsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::Union{Int, Nothing}=nothing; 
+function fsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::OptInt=nothing; 
                  mode=:numeric, T::Type{<:AbstractFloat}=Float64, prec=256)
     
     # Admissibility checks
@@ -282,7 +282,7 @@ end
 
 # ----- Public API for G-symbols ----------- 
 
-function gsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::Union{Int, Nothing}=nothing; 
+function gsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::OptInt=nothing; 
                  mode=:numeric, T::Type{<:AbstractFloat}=Float64, prec=256)
     
     # Admissibility checks
