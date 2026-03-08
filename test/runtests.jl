@@ -1,12 +1,12 @@
 
-#add tests 
+#add tests
 
 using Test
 using QRacahSymbols
 # using Nemo
 
 
-@testset "QRacahSymbols.jl Core Tests" begin
+@testset "QRacahSymbols.jl Tests" begin
     
     @testset "Quantum Integers" begin
        

@@ -4,11 +4,11 @@
 [![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://sethkasante.github.io/QRacahSymbols.jl/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**QRacahSymbols.jl** is a high-performance, mathematically rigorous Julia library for evaluating Quantum $6j$-symbols, $3j$-symbols, and topological category data for the $SU(2)_k$ quantum group.
+**QRacahSymbols.jl** is a high-performance, mathematically rigorous Julia library for evaluating Quantum $6j$-symbols, $3j$-symbols, and topological category data for the SU(2)$_k$ quantum group.
 
 Standard hypergeometric evaluations of quantum Racah symbols suffer from catastrophic cancellation and floating-point overflow at high spins. This package solves this by introducing a highly optimized **Three-Tier Architecture**, allowing researchers to seamlessly seamlessly jump between nanosecond floating-point tensor contractions and zero-precision-loss algebraic number field evaluations.
 
-
+Standard hypergeometric evaluations of quantum Racah symbols suffer from catastrophic cancellation and floating-point overflow at high spins. **QRacahSymbols.jl** solves this by introducing a highly optimized **Three-Tier Architecture**, allowing researchers to seamlessly jump between nanosecond floating-point tensor contractions and zero-precision-loss algebraic number field evaluations.
 
 ## Core Features
 
@@ -74,4 +74,4 @@ d_val = qdim(2.5, k; mode=:numeric, T=BigFloat) # Enforce BigFloat precision
 Under the hood, QRacahSymbols.jl completely avoids heap allocations in its deep loops. The symbolic engine relies on in-place array mutation and the Hypergeometric Ratio Method to drop complexities from $O(N \log N)$ to $O(N)$, while the Exact engine natively builds quantum factorials directly in the algebraic field, eliminating generic array instantiation.
 
 ## Citation
-If you use `QRacahSymbols.jl` in your research, please cite our JOSS paper:(Citation details pending). 
+If you use `QRacahSymbols.jl` in your research, please cite .... 
