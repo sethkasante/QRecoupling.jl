@@ -243,7 +243,7 @@ function qracah3j_classical(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3
     return Float64(sqrt(BigFloat(pref_sq_val)) * BigFloat(sumz))
 end
 
-#--------- Evaluations -------------- 
+#--------- Evaluations -------------------
 
 # Efficiently evaluate Φ_d(x) using the product of (x^k - 1) formula
 function evaluate_phi(d::Int, x::Complex{BigFloat})
@@ -324,3 +324,7 @@ function evaluate_symbolic(res::GenericResult, k::Int, ::Type{T}=Complex{BigFloa
         return T(final_val)
     end
 end
+
+
+
+
