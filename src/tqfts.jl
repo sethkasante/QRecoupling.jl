@@ -141,21 +141,32 @@ function rmatrix_numeric(j1::Spin, j2::Spin, j3::Spin, k::Int; T::Type{<:Abstrac
 end
 
 # ------  Public API for Rmatrix Braiding  ------
-function rmatrix(j1::Spin, j2::Spin, j3::Spin, k::Union{Int, Nothing}=nothing; mode=:generic, T=Float64)
-    # gatekeeper
-    if k === nothing
+function rmatrix(j1::Spin, j2::Spin, j3::Spin, k::OptInt=nothing; 
+             mode=nothing, T::Type{<:AbstractFloat}=Float64)
+    
+    # --- select default mode ---
+    if mode === nothing
+        mode = (k === nothing) ? :generic : :numeric
+    end
+
+    # level k-independent 
+    if mode == :generic || mode == :classical
         if !δ(j1, j2, j3) 
             return (mode == :generic ? CycloMonomial(0,0,Int[]) : 0.0)
         end
         
-        mode == :generic && return rmatrix_symb(j1, j2, j3)
-        error("Mode $mode requires level k")
-    else
+        mode == :generic && return rmatrix_symb(j1, j2, j3) : 1.0
+    end
+
+    if k === nothing
+        throw(ArgumentError("Mode :$mode requires level k. Try rmatrix(..., k; mode=:$mode)"))
+    else # level k : either exact or numeric 
         if !qδ(j1, j2, j3, k) 
-            return (mode == :exact ? qint(0, k; mode=:exact) : zero(T))
+            return (mode == :exact ? Nemo.QQFieldElem(0) : zero(T))
         end
 
         if mode == :exact
+            # change to haskey? 
             model = get!(() -> ExactSU2kModel(k), EXACT_MODEL_CACHE, k)
             return rmatrix_exact(model, j1, j2, j3)
         elseif mode == :numeric
@@ -215,18 +226,33 @@ function fsymbol_numeric(model::NumericSU2kModel{T}, j1::Spin, j2::Spin, j3::Spi
     return phase * sqrt(qdim_numeric(j3, model) * qdim_numeric(j6, model)) * val_6j
 end
 
+function fsymbol_classical(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
+    val_6j = qracah6j_classical(j1, j2, j3, j4, j5, j6)
+    phase = iseven(Int(j1 + j2 + j4 + j5)) ? 1 : -1
+    return phase * sqrt((2j3+1) * (2j6+1)) * val_6j
+end
+
+
 #------ Public API for F-symbols ----------
 
 function fsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::OptInt=nothing; 
-                 mode=:numeric, T::Type{<:AbstractFloat}=Float64, prec=256)
+             mode=nothing, T::Type{<:AbstractFloat}=Float64, prec=256)
     
-    # Admissibility checks
-    if k === nothing
-        if !δtet(j1, j2, j3, j4, j5, j6) 
-            return GenericResult(CycloMonomial(0, 0, Int[]), CycloMonomial[])
-        else
-            return fsymbol_generic(j1, j2, j3, j4, j5, j6)
+    # --- select default mode ---
+    if mode === nothing
+        mode = (k === nothing) ? :generic : :numeric
+    end
+
+    # k-independent
+    if mode == :generic || mode == :classical
+        if !δtet(j1, j2, j3, j4, j5, j6)
+            return mode == :generic ? GenericResult(CycloMonomial(0, 0, Int[]), CycloMonomial[]) : 0.0
         end
+        return mode == :generic ? fsymbol_generic(j1, j2, j3, j4, j5, j6) : fsymbol_classical(j1, j2, j3, j4, j5, j6)
+    end
+
+    # level k computations
+    if k === nothing
         error("Mode $mode requires level k")
     else
         # level k admissibility conditions
@@ -281,19 +307,33 @@ function gsymbol_numeric(model::NumericSU2kModel{T}, j1::Spin, j2::Spin, j3::Spi
     return val_6j * sqrt(dims_prod)
 end
 
+function gsymbol_classical(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
+    val_6j = qracah6j_classical(j1, j2, j3, j4, j5, j6)
+    dims_prod = (2j1+1) * (2j2+1) * (2j3+1) * (2j4+1) * (2j5+1) * (2j6+1)
+    return val_6j * sqrt(dims_prod)
+end
 
 # ----- Public API for G-symbols ----------- 
 
+
 function gsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::OptInt=nothing; 
-                 mode=:numeric, T::Type{<:AbstractFloat}=Float64, prec=256)
+             mode=nothing, T::Type{<:AbstractFloat}=Float64, prec=256)
     
-    # Admissibility checks
-    if k === nothing
-        if !δtet(j1, j2, j3, j4, j5, j6) 
-            return GenericResult(CycloMonomial(0, 0, Int[]), CycloMonomial[])
-        else
-            return gsymbol_generic(j1, j2, j3, j4, j5, j6)
+    # --- select default mode ---
+    if mode === nothing
+        mode = (k === nothing) ? :generic : :numeric
+    end
+
+    # k-independent
+    if mode == :generic || mode == :classical
+        if !δtet(j1, j2, j3, j4, j5, j6)
+            return mode == :generic ? GenericResult(CycloMonomial(0, 0, Int[]), CycloMonomial[]) : 0.0
         end
+        return mode == :generic ? gsymbol_generic(j1, j2, j3, j4, j5, j6) : gsymbol_classical(j1, j2, j3, j4, j5, j6)
+    end
+
+    # level k computations
+    if k === nothing
         error("Mode $mode requires level k")
     else
         # level k admissibility conditions

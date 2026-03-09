@@ -34,36 +34,43 @@ The master API intelligently routes your computation based on the provided mode.
 ```julia
 using QRacahSymbols
 
-j = 2 # Spins are standard Reals (Float64, Int, or Rational)
+j = 1 # Spins are standard Reals (Float64, Int, or Rational)
 k = 10  # Level of the SU(2)_k quantum group
 
 # 1. Fast numeric evaluation (default)
 julia> q6j(j, j, j, j, j, j, k; mode=:numeric)
--0.13952809568069593
+0.1547005383792515
 
 # 2. Exact algebraic evaluation in rational cyclotomic Fields
 julia> q6j(j, j, j, j, j, j, k; mode=:exact)
 Exact SU(2)₁₀ Symbol:
-  Prefactor(Δ²): 37829//144*ζ^6 - 37829//72*ζ^2 + 262087//576
-  Racah Sum(Σ):  700*ζ^6 - 1400*ζ^2 - 1212 
+  Prefactor(Δ²): 65//3*ζ^6 - 130//3*ζ^2 + 1351//36
+  Racah Sum(Σ):  -14*ζ^6 + 28*ζ^2 + 24 
 
-# 3. Symbolic cyclotomic factorization (default without k)
+# 3. Symbolic cyclotomic factorization (default k-independent)
 julia> q6j(j, j, j, j, j, j; mode=:generic)
-√(z⁷² Φ₃⁻⁸ Φ₄⁻⁴ Φ₅⁻⁴ Φ₆⁻⁴ Φ₇⁻⁴) × (z⁻¹⁸ Φ₃² Φ₄ Φ₅ Φ₆ Φ₇  +  -z⁻²⁸ Φ₂⁴ Φ₃² Φ₄² Φ₅ Φ₆ Φ₇ Φ₈  +  z⁻³² Φ₃³ Φ₄² Φ₅ Φ₆ Φ₇ Φ₈ Φ₉)
+√(z²⁴ Φ₂⁻⁸ Φ₃⁻⁴ Φ₄⁻⁴) × (-z⁻⁶ Φ₂² Φ₃ Φ₄  +  z⁻¹⁰ Φ₂² Φ₃ Φ₄ Φ₅)
 
 # 4. Classical Ponzano-Regge Limit (q -> 1 or k -> ∞)
 julia> q6j(j, j, j, j, j, j; mode=:classical)
--0.04285714285714295
+0.16666666666666657
 ```
 
 ## Evaluating TQFT Data
 QRacahSymbols natively supports the local topological data required for state-sum invariants and tensor networks.
 ```julia
-# F-Matrix (Fusion)
-f_val = fsymbol(1, 1, 1, 1, 1, 1, k; mode=:numeric)
+k=10
+# F-symbol (Fusion)
+fsymbol(1, 1, 1, 1, 1, 1, k; mode=:numeric)
+0.4226497308103741
+
+# G-symbol
+gsymbol(1, 1, 1, 1, 1, 1, k; mode=:numeric)
+3.1547005383792506
 
 # R-Matrix (Braiding)
 r_val = rmatrix(1, 1, 1, k; mode=:exact)
+ζ^6 - ζ^2
 
 # Quantum Dimension
 d_val = qdim(2.5, k; mode=:numeric, T=BigFloat) # Enforce BigFloat precision

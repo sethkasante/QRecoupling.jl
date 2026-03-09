@@ -79,11 +79,10 @@ function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::OptI
         return mode == :generic ? qracah6j_generic(j1, j2, j3, j4, j5, j6) : qracah6j_classical(j1, j2, j3, j4, j5, j6)
     end
     
-    # --- level k-dependent computations---
     if k === nothing
         throw(ArgumentError("Mode :$mode requires a level k. Try q6j(..., k; mode=:$mode)"))
     end
-
+    # --- level k-dependent computations---
     if !qδtet(j1, j2, j3, j4, j5, j6, k) 
         if mode == :exact
             # zero-allocation return if possible
