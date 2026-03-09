@@ -34,20 +34,26 @@ The master API intelligently routes your computation based on the provided mode.
 ```julia
 using QRacahSymbols
 
-j = 2.5 # Spins are standard Reals (Float64, Int, or Rational)
+j = 2 # Spins are standard Reals (Float64, Int, or Rational)
 k = 10  # Level of the SU(2)_k quantum group
 
-# 1. High-Speed Numeric Evaluation (Default)
-val_num = q6j(j, j, j, j, j, j, k; mode=:numeric) 
+# 1. Fast numeric evaluation (default)
+julia> q6j(j, j, j, j, j, j, k; mode=:numeric)
+-0.13952809568069593
 
-# 2. Exact Algebraic Evaluation in Cyclotomic Fields
-val_exact = q6j(j, j, j, j, j, j, k; mode=:exact) 
+# 2. Exact algebraic evaluation in rational cyclotomic Fields
+julia> q6j(j, j, j, j, j, j, k; mode=:exact)
+Exact SU(2)₁₀ Symbol:
+  Prefactor(Δ²): 37829//144*ζ^6 - 37829//72*ζ^2 + 262087//576
+  Racah Sum(Σ):  700*ζ^6 - 1400*ζ^2 - 1212 
 
-# 3. Pure Symbolic Cyclotomic Polynomial Representation (default)
-val_symb = q6j(j, j, j, j, j, j; mode=:generic) # k-independent
+# 3. Symbolic cyclotomic factorization (default without k)
+julia> q6j(j, j, j, j, j, j; mode=:generic)
+√(z⁷² Φ₃⁻⁸ Φ₄⁻⁴ Φ₅⁻⁴ Φ₆⁻⁴ Φ₇⁻⁴) × (z⁻¹⁸ Φ₃² Φ₄ Φ₅ Φ₆ Φ₇  +  -z⁻²⁸ Φ₂⁴ Φ₃² Φ₄² Φ₅ Φ₆ Φ₇ Φ₈  +  z⁻³² Φ₃³ Φ₄² Φ₅ Φ₆ Φ₇ Φ₈ Φ₉)
 
-# 4. Classical Ponzano-Regge Limit (q -> 1)
-val_class = q6j(j, j, j, j, j, j; mode=:classical)
+# 4. Classical Ponzano-Regge Limit (q -> 1 or k -> ∞)
+julia> q6j(j, j, j, j, j, j; mode=:classical)
+-0.04285714285714295
 ```
 
 ## Evaluating TQFT Data
