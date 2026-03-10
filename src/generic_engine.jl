@@ -293,13 +293,18 @@ function evaluate_phi_stable(d::Int, k::Int)
     return res
 end
 
-"""
-    evaluate_generic(m::CycloMonomial, k::Int, ::Type{T}=Complex{BigFloat}; prec=512)
 
-Evaluates a symbolic cyclotomic monomial using log-sum-exp for numerical stability.
-"""
-function evaluate_generic(m::CycloMonomial, k::Int, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
+function evaluate_level(m::CycloMonomial, k::Int, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
     m.sign == 0 && return zero(T)
+    # O(1) Algebraic Zero/Pole Check
+    if length(m.exps) >= k + 2
+        exponent = m.exps[k+2]
+        if exponent > 0
+            return zero(T) # Topological selection rule (exact zero)
+        elseif exponent < 0
+            throw(DomainError(k, "Topological pole: Level k=$k violates admissibility bounds."))
+        end
+    end
     
     return setprecision(BigFloat, prec) do
         θ = big(π) / (k + 2)
@@ -327,17 +332,48 @@ function evaluate_generic(m::CycloMonomial, k::Int, ::Type{T}=Complex{BigFloat};
     end
 end
 
-"""
-    evaluate_generic(res::GenericResult, k::Int, ::Type{T}=Complex{BigFloat}; prec=512)
+function evaluate_analytic(m::CycloMonomial, q::Number, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
+    m.sign == 0 && return zero(T)
+    
+    # Evaluate z = q^(1/2) for the phase prefactor
+    z = sqrt(Complex(q))
+    val = Complex{BigFloat}(m.sign) * (z ^ m.z_pow)
+    
+    for (d, e) in enumerate(m.exps)
+        (e == 0 || d < 1) && continue
+        poly_val = evaluate_cyclotomic(d, q) # Evaluates Φ_d(q)
+        val *= poly_val ^ e
+    end
+    
+    return T(val)
+end
 
-Evaluates a full 3j or 6j GenericResult at level k.
 """
-function evaluate_generic(res::GenericResult, k::Int, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
+    evaluate_generic(m::CycloMonomial, k::Int, ::Type{T}=Complex{BigFloat}; prec=512)
+
+Evaluates a symbolic cyclotomic monomial using log-sum-exp for numerical stability.
+"""
+function evaluate_generic(m::CycloMonomial, ::Type{T}=Complex{BigFloat}; k=OptInt, q=OptInt, prec=512) where {T}
+    # 1. Intent Validation
+    if (isnothing(k) && isnothing(q)) || (!isnothing(k) && !isnothing(q))
+        throw(ArgumentError("Ambiguous evaluation. You must specify exactly one target: either `k=val` or `q=val`."))
+    end
+
+    # 2. Physical Level Evaluation (Discrete Geometry)
+    if !isnothing(k)
+        evaluate_level(m, k, T; prec=prec)
+    else
+        evaluate_analytic(m, q, T; prec=prec)
+    end
+end
+
+
+function evaluate_level(res::GenericResult, k::Int, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
     res.pref_sq.sign == 0 && return zero(T)
 
     return setprecision(BigFloat, prec) do
         # 1. Squared prefactor -> take sqrt(abs())
-        val_pref_sq = evaluate_generic(res.pref_sq, k, Complex{BigFloat}; prec=prec)
+        val_pref_sq = evaluate_level(res.pref_sq, k, Complex{BigFloat}; prec=prec)
         val_pref = sqrt(abs(val_pref_sq))
 
         # 2. Sum the Racah series
@@ -359,3 +395,53 @@ function evaluate_generic(res::GenericResult, k::Int, ::Type{T}=Complex{BigFloat
 end
 
 
+function evaluate_analytic(res::GenericResult, q::Number, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
+    res.pref_sq.sign == 0 && return zero(T)
+   
+    
+    return setprecision(BigFloat, prec) do
+        # 1. Squared prefactor -> take sqrt(abs())
+        val_pref_sq = evaluate_analytic(res.pref_sq, q, Complex{BigFloat}; prec=prec)
+
+        # If the prefactor evaluates to an exact zero (via the d=k+2 check), abort early
+        iszero(val_pref_sq) && return zero(T)
+
+        val_pref = sqrt(abs(val_pref_sq))
+
+        # 2. Sum the Racah series
+        val_sum = zero(Complex{BigFloat})
+        for term in res.series
+            val_sum += evaluate_generic(term, q, Complex{BigFloat}; prec=prec)
+        end
+
+        # 3. Combine
+        final_val = val_pref * val_sum
+        
+        # 4. Safe casting
+        if T <: Real
+            return T(real(final_val))
+        else
+            return T(final_val)
+        end
+    end
+end
+
+
+"""
+    evaluate_generic(res::GenericResult, k::Int, ::Type{T}=Complex{BigFloat}; prec=512)
+
+Evaluates a full 3j or 6j GenericResult at level k.
+"""
+function evaluate_generic(res::GenericResult, ::Type{T}=Complex{BigFloat}; k=OptInt, q=OptInt, prec=512) where {T}
+    # 1. Intent Validation
+    if (isnothing(k) && isnothing(q)) || (!isnothing(k) && !isnothing(q))
+        throw(ArgumentError("Ambiguous evaluation. You must specify exactly one target: either `k=val` or `q=val`."))
+    end
+
+    # 2. Physical Level Evaluation (Discrete Geometry)
+    if !isnothing(k)
+        evaluate_level(res, k, T; prec=prec)
+    else
+        evaluate_analytic(res, q, T; prec=prec)
+    end
+end
