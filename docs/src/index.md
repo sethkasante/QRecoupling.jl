@@ -30,10 +30,13 @@ julia> q6j(1, 1, 1, 1, 1, 1, 20)
 
 # 2. Exact Algebraic Evaluation
 # Returns a self-contained ExactValue holding a Nemo cyclotomic polynomial.
-julia> q6j(1, 1, 1, 1, 1, 1, 20; mode=:exact)
+julia> val_exact = q6j(1, 1, 1, 1, 1, 1, 20; mode=:exact)
 Exact SU(2)₂₀ Symbol:
   Prefactor(Δ²): 2987//11*ζ^18 - 3880//11*ζ^16 + 1695//11*ζ^14 + 962//11*ζ^12 - 962//11*ζ^10 - 1695//11*ζ^8 + 3880//11*ζ^6 - 2987//11*ζ^4 + 1626//11
   Racah Sum(Σ):  -27*ζ^18 + 7*ζ^16 - 19*ζ^14 + 14*ζ^12 - 14*ζ^10 + 19*ζ^8 - 7*ζ^6 + 27*ζ^4 + 31
+
+julia> evaluate_exact(val_exact,Float64)
+0.1640608932500723
 
 # 3. Symbolic Cyclotomic Factorization
 # Operates purely algebraically, bypassing all floating-point limitations.
