@@ -69,14 +69,14 @@ using QRacahSymbols
 
 j = 550 # macroscopic spins
 
-# symbolic computation (very fast)
+#1. Symbolic computation (very fast O(1) algebraic additions)
 symb_gen = q6j(j, j, j, j, j, j; mode=:generic);
 
-# Evaluate safely at physical level k = 50000 using 512-bit precision
+#2. Evaluate safely at physical level k = 50_000 using 512-bit precision
 julia> evaluate_generic(symb_gen, Float64; k=50000, prec=512)
 -3.627000456391523e-5
 
-# 3. Or analytically continue to a generic complex deformation parameter q
+#3. Or analytically continue to a generic complex deformation parameter q
 evaluate_generic(symb_gen, Complex{BigFloat}; q=0.5 + 0.1im)
 ```
 
