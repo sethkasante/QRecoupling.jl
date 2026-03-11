@@ -7,7 +7,7 @@
 **QRacahSymbols.jl** is a high-performance, mathematically rigorous Julia library for the exact and numerically stable evaluation of quantum $\text{SU(2)}_k$ recoupling coefficients ($\{3j\}$- and $\{6j\}$-symbols and topological category) at arbitrary roots of unity.
 
 ## The Catastrophic Cancellation Problem (and Solution)
-Standard numerical implementations of the quantum Racah formula suffer from ***catastrophic cancellation*** at macroscopic spins due to the alternating summation of massive $q$-deformed factorials. This package (`QRacahSymbols.jl`) circumvents this crisis entirely using a novel **CycloMonomial architecture**, which rigorously factors the topological invariant into integer arrays of cyclotomic polynomials ($\Phi_d(q)$) prior to any floating-point evaluation.
+Standard numerical implementations of the quantum Racah formula suffer from ***catastrophic cancellation*** at macroscopic spins due to the alternating summation of massive $q$-deformed factorials. This package (`QRacahSymbols.jl`) circumvents this crisis entirely using a novel **CycloMonomial architecture**, which rigorously factors the topological invariant into integer arrays of cyclotomic polynomials $(\Phi_d(q))$ prior to any floating-point evaluation.
 
 This guarantees mathematically exact, zero-drift computations of tensor network amplitudes even in the deep semiclassical limit ($j \ge 500$), unlocking extreme-spin probes for research in mathematics and physics.
 
@@ -88,4 +88,4 @@ For the complete API reference, interactive tutorials, and deep dives into the m
 
 If you use `QRacahSymbols.jl` in your research, please cite our underlying methodological paper:
 
-> Seth K. Asante, *"Exact Algebraic Evaluation of Quantum Recoupling Coefficients: The CycloMonomial Architecture"* (To appear, 2026). arXiv:XXXX.XXXXX.
+> Seth K. Asante, *"Exact Algebraic Evaluation of Quantum Recoupling Coefficients using Cyclotomic Representation"* (To appear, 2026). arXiv:XXXX.XXXXX.
