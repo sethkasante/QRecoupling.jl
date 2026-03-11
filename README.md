@@ -4,22 +4,25 @@
 [![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://sethkasante.github.io/QRacahSymbols.jl/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**QRacahSymbols.jl** is a high-performance, mathematically rigorous Julia library for evaluating Quantum $6j$-symbols, $3j$-symbols, and topological category data for the SU(2)$_k$ quantum group.
-
-Standard hypergeometric evaluations of quantum Racah symbols suffer from catastrophic cancellation and floating-point overflow at high spins. **QRacahSymbols.jl** solves this by introducing a highly optimized **Three-Tier Architecture**, allowing researchers to seamlessly jump between fast floating-point tensor contractions and zero-precision-loss algebraic number field evaluations.
+**QRacahSymbols.jl** is a high-performance, mathematically rigorous Julia library for the exact and numerically stable evaluation of quantum $\text{SU(2)}_k$ recoupling coefficients ($\{3j\}$- and $\{6j\}$-symbols and topological category) at arbitrary roots of unity.
 
 ## The Catastrophic Cancellation Problem (and Solution)
-For large spins (e.g., $j = 500$), the alternating Racah sums generate massive intermediate values (up to $10^{60}$). Standard numerical libraries suffer complete precision collapse. `QRacahSymbols.jl` bypasses this by calculating the symbolic cyclotomic polynomial representation, canceling terms algebraically *before* numerical evaluation:
+Standard numerical implementations of the quantum Racah formula suffer from <u>*catastrophic cancellation*</u> at macroscopic spins due to the alternating summation of massive $q$-deformed factorials. This package (`QRacahSymbols.jl`) circumvents this crisis entirely using a novel **CycloMonomial architecture**, which rigorously factors the topological invariant into integer arrays of cyclotomic polynomials ($\Phi_d(q)$) prior to any floating-point evaluation.
+
+This guarantees mathematically exact, zero-drift computations of tensor network amplitudes even in the deep semiclassical limit ($j \ge 500$), unlocking extreme-spin probes for research in maths and physics.
+
 
 ## Core Features
 
+`QRacahSymbols.jl` is built as a unified interface with three main computational engines: 
+
 * **The 3-Tier Engine**:
-  * `Numeric`: Ultrafast table-based evaluation using log-sum-exp stabilization procedure. Safe from factorial overflow up to massive spins ($j \approx 450$, for $k > 20,000$).
-  * `Exact`: Zero-precision-loss algebraic evaluation mapping strictly into `Nemo.jl` cyclotomic number fields $\mathbb Q(\zeta_{2(k+2)})$.
+  * `Numeric`: Ultrafast table-based evaluation using *log-sum-exp* stabilization procedure for low spins. Safe from factorial overflow up to massive spins ($j \le 450$, for $k > 20,000$).
+  * `Exact`: Algebraic evaluation mapping strictly into `Nemo.jl` cyclotomic number fields $\mathbb Q(\zeta_{2(k+2)})$.
   * `Generic`: Pure symbolic factorization into dense integer arrays of `CycloMonomial` representations.
-* **TQFT Category Suite**: Natively evaluates Quantum Dimensions, R-matrices (braiding), F-symbols (fusion), and G-symbols (tetrahedral weights).
-* **Geometric Canonicalization**: Internally exploits the 24-fold $S_4$ tetrahedral symmetry and massive LRU caches to bypass redundant computations in $O(1)$ time.
-* **Dispatch API**: The library automatically routes your computation based on context. Provide a level `k` for numeric results, or omit it for symbolic results.
+
+* **TQFT Category Suite**: Evaluates quantum dimensions, R-matrices (braiding), F-symbols (fusion), and G-symbols (tetrahedral weights).
+
 
 ## Installation
 
@@ -30,7 +33,10 @@ pkg> add QRacahSymbols
 
 ## Quick Start
 
-The master API intelligently routes your computation based on the provided mode. The level $k$ is passed as the final positional argument.
+The package exposes a unified interface with three polymorphic computational engines: `:numeric` (high-throughput), `:exact` (computer algebra via `Nemo.jl`), and `:generic` (the exact CycloMonomial algorithm).
+
+### 1. Standard Evaluations
+For low spins ($j \lesssim 40$), the `:numeric` engine provides maximum speed using stack-allocated `Float64` arithmetic and `:exact` engine gives exact results in cyclotomic fields:
 ```julia
 using QRacahSymbols
 
@@ -55,29 +61,30 @@ julia> q6j(j, j, j, j, j, j; mode=:generic)
 julia> q6j(j, j, j, j, j, j; mode=:classical)
 0.16666666666666657
 ```
+### 2. Exact Semiclassical Asymptotics (CycloMonomial Engine)
 
-## Evaluating TQFT Data
-QRacahSymbols natively supports the local topological data required for state-sum invariants and tensor networks.
+For macroscopic spins where standard floats fail, use the `:generic` engine to construct the level-independent algebraic invariant, and then defer specialization to arbitrary precision.
 ```julia
-k=10
-# F-symbol (Fusion)
-fsymbol(1, 1, 1, 1, 1, 1, k; mode=:numeric)
-0.4226497308103741
+using QRacahSymbols
 
-# G-symbol
-gsymbol(1, 1, 1, 1, 1, 1, k; mode=:numeric)
-3.1547005383792506
+j = 550 # macroscopic spins
 
-# R-Matrix (Braiding)
-r_val = rmatrix(1, 1, 1, k; mode=:exact)
-ζ^6 - ζ^2
+# symbolic computation (very fast)
+symb_gen = q6j(j, j, j, j, j, j; mode=:generic);
 
-# Quantum Dimension
-d_val = qdim(2.5, k; mode=:numeric, T=BigFloat) # Enforce BigFloat precision
+# Evaluate safely at physical level k = 50000 using 512-bit precision
+julia> evaluate_generic(symb_gen, Float64; k=50000, prec=512)
+-3.627000456391523e-5
+
+# 3. Or analytically continue to a generic complex deformation parameter q
+evaluate_generic(symb_gen, Complex{BigFloat}; q=0.5 + 0.1im)
 ```
 
-## Architecture & Performance
-Under the hood, `QRacahSymbols.jl` completely avoids heap allocations in its deep loops. The generic engine relies on in-place array mutation and the Hypergeometric Ratio Method to drop complexities from $O(N \log N)$ to $O(N)$, while the Exact engine natively builds quantum factorials directly in the algebraic field (using `Nemo.jl`), eliminating generic array instantiation. Memory caches can be managed manually for massive state-sum computations via `clear_caches!()`.
+
+## Documentation
+For the complete API reference, tutorials, and deep-dives into the mathematical architecture, please see the Documentation.
 
 ## Citation
-If you use `QRacahSymbols.jl` in your research, please cite our upcoming arXiv paper: 
+If you use `QRacahSymbols.jl` in your research, please cite our underlying methodological paper:
+
+[Seth K. Asante], "*To appear*" (2026). arXiv:XXXX.XXXXX.
