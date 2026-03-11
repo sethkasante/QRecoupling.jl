@@ -294,6 +294,52 @@ function evaluate_phi_stable(d::Int, k::Int)
 end
 
 
+"""
+    mobius(n::Int)
+
+Computes the classical Möbius function μ(n) for integer factorization.
+Returns 0 if n has a squared prime factor, 1 if square-free with an even number of prime factors, 
+and -1 if square-free with an odd number of prime factors.
+"""
+function mobius(n::Int)
+    n == 1 && return 1
+    p = 0
+    for i in 2:isqrt(n)
+        if n % i == 0
+            (n % (i * i) == 0) && return 0
+            p += 1
+            n ÷= i
+            while n % i == 0
+                n ÷= i
+            end
+        end
+    end
+    n > 1 && (p += 1)
+    return isodd(p) ? -1 : 1
+end
+
+"""
+    evaluate_cyclotomic(d::Int, q::Number)
+
+Evaluates the d-th cyclotomic polynomial Φ_d(q) analytically at a complex or real parameter `q`.
+Utilizes Möbius inversion for strictly O(τ(d)) performance, bypassing polynomial expansion.
+"""
+function evaluate_cyclotomic(d::Int, q::Number)
+    d == 1 && return q - one(q)
+    
+    val = one(q)
+    for k in 1:d
+        if d % k == 0
+            mu = mobius(k)
+            if mu == 1
+                val *= (q^(d ÷ k) - one(q))
+            elseif mu == -1
+                val /= (q^(d ÷ k) - one(q))
+            end
+        end
+    end
+    return val
+end
 
 
 # ----- Internal Dispatch: Physical Level k (Discrete Geometry) --- #
@@ -371,21 +417,85 @@ end
 
 # ----- Internal Dispatch: Analytic Continuation (Continuous Parameter) --- #
 
+# function evaluate_analytic(m::CycloMonomial, q::Number, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
+#     m.sign == 0 && return zero(T)
+    
+#     return setprecision(BigFloat, prec) do
+#         # Evaluate z = q^(1/2) for the phase prefactor
+#         z = sqrt(Complex(q))
+#         val = Complex{BigFloat}(m.sign) * (z ^ m.z_pow)
+        
+#         for (d, e) in enumerate(m.exps)
+#             (e == 0 || d < 1) && continue
+#             poly_val = evaluate_cyclotomic(d, q) # Evaluates Φ_d(q)
+#             val *= poly_val ^ e
+#         end
+        
+#         return T(val)
+#     end
+# end
+
+# function evaluate_analytic(res::GenericResult, q::Number, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
+#     res.pref_sq.sign == 0 && return zero(T)
+    
+#     return setprecision(BigFloat, prec) do
+#         # 1. Squared prefactor
+#         val_pref_sq = evaluate_analytic(res.pref_sq, q, Complex{BigFloat}; prec=prec)
+
+#         # Abort early if the polynomial evaluates exactly to zero at this arbitrary q
+#         iszero(val_pref_sq) && return zero(T)
+
+#         # Do NOT take abs() here; preserve complex branch cuts for analytic continuation
+#         val_pref = sqrt(val_pref_sq)
+
+#         # 2. Sum the Racah series (Call internal function directly for performance)
+#         val_sum = zero(Complex{BigFloat})
+#         for term in res.series
+#             val_sum += evaluate_analytic(term, q, Complex{BigFloat}; prec=prec)
+#         end
+
+#         # 3. Combine
+#         final_val = val_pref * val_sum
+        
+#         return T(final_val)
+#     end
+# end
+
 function evaluate_analytic(m::CycloMonomial, q::Number, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
     m.sign == 0 && return zero(T)
     
     return setprecision(BigFloat, prec) do
-        # Evaluate z = q^(1/2) for the phase prefactor
-        z = sqrt(Complex(q))
-        val = Complex{BigFloat}(m.sign) * (z ^ m.z_pow)
+        # Force q into BigFloat precision immediately
+        q_big = Complex{BigFloat}(q)
         
-        for (d, e) in enumerate(m.exps)
-            (e == 0 || d < 1) && continue
-            poly_val = evaluate_cyclotomic(d, q) # Evaluates Φ_d(q)
-            val *= poly_val ^ e
+        # Initialize Logarithmic Accumulators
+        log_mag = big(0.0)
+        phase = big(0.0)
+        
+        # 1. Sign Phase
+        if m.sign == -1
+            phase += big(π)
         end
         
-        return T(val)
+        # 2. Prefactor z^z_pow (where z = sqrt(q))
+        z = sqrt(q_big)
+        log_z = log(z)
+        log_mag += m.z_pow * real(log_z)
+        phase += m.z_pow * imag(log_z)
+        
+        # 3. Cyclotomic Factors (Log-Sum-Exp over the complex plane)
+        for (d, e) in enumerate(m.exps)
+            (e == 0 || d < 1) && continue
+            
+            poly_val = evaluate_cyclotomic(d, q_big)
+            log_poly = log(poly_val)
+            
+            log_mag += e * real(log_poly)
+            phase += e * imag(log_poly)
+        end
+        
+        # Recombine safely
+        return T(exp(log_mag) * cis(phase))
     end
 end
 
@@ -396,10 +506,10 @@ function evaluate_analytic(res::GenericResult, q::Number, ::Type{T}=Complex{BigF
         # 1. Squared prefactor
         val_pref_sq = evaluate_analytic(res.pref_sq, q, Complex{BigFloat}; prec=prec)
 
-        # Abort early if the polynomial evaluates exactly to zero at this arbitrary q
+        # Abort early if exact zero
         iszero(val_pref_sq) && return zero(T)
 
-        # Do NOT take abs() here; preserve complex branch cuts for analytic continuation
+        # Do NOT take abs() here; preserve complex branch cuts for analytic continuation!
         val_pref = sqrt(val_pref_sq)
 
         # 2. Sum the Racah series (Call internal function directly for performance)
@@ -414,7 +524,6 @@ function evaluate_analytic(res::GenericResult, q::Number, ::Type{T}=Complex{BigF
         return T(final_val)
     end
 end
-
 
 # Public API: Unified Evaluation Interface
 
