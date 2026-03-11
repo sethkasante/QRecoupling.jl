@@ -50,5 +50,5 @@ julia> evaluate_generic(val_symb, 20, Float64)
 
 ## Next Steps
 
-* Visit the [Mathematical Framework](@ref) page to understand how we bypass floating-point limits.
+* Visit the [Theory & Architecture](@ref) page to understand how we bypass floating-point limits.
 * Visit the [API Reference](@ref) page for details on function signatures, TQFT evaluators, and type stabilization strategies.

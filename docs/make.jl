@@ -18,7 +18,7 @@ makedocs(;
     ),
     pages = [
         "Home" => "index.md",
-        "Mathematical Framework" => "math.md",
+        "Theory & Architecture" => "math.md",
         "API Reference" => "api.md"
     ],
     warnonly = [:missing_docs, :cross_references]

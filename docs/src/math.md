@@ -1,48 +1,51 @@
 # Theory & Architecture
 
-The **QRacahSymbols.jl** package implements the $q$-deformed Racah formula for the $SU(2)_k$ quantum group.
+The `QRacahSymbols.jl` package provides a high-performance framework for the evaluation of $q$-deformed recoupling coefficients in the $\text{SU(2)}_k$ modular tensor category.
 
+## Quantum recoupling coefficients
+The fundamental object of the library is the quantum $\{6j\}$-symbol: 
+$$\begin{Bmatrix} j_1 & j_2 & j_3 \\ j_4 & j_5 & j_6\end{Bmatrix}_q.$$
 
-The core of the library is the evaluation of the quantum $6j$-symbol 
-$$\begin{Bmatrix} j_1 & j_2 & j_3 \\ j_4 & j_5 & j_6\end{Bmatrix}_q,$$ 
-which represents the associativity of the fusion of three anyons in a topological quantum field theory.
+In the context of Topological Quantum Field Theory (TQFT), this symbol represents the associativity of fusion (the $F$-move) for three anyons of spins $j_1, j_2, j_3$ into a total spin $j_6$.
 
+These symbols are defined by the Quantum Racah Formula, an alternating summation of massive products of quantum factorials. The building blocks are:
 
+* **Quantum integers:** defined as $[n]_q = \frac{q^{n/2} - q^{-n/2}}{q^{1/2} - q^{-1/2}}$. At the level $k$, we typically specialize to the root of unity $q = e^{i \frac{2\pi}{k+2}}$. 
+* **Quantum factorials:** given by $[n]_q! = \prod_{k=1}^n [k]_q$,  with $[0]_q!=1$. 
 
-## The Kirillov-Reshetikhin Formula
-We evaluate the quantum Racah $W$-coefficient ($6j$-symbol) using the following alternating sum:
+### The Numerical Precision Crisis
+In standard floating-point arithmetic (`Float64`), the Racah sum encounters a **catastrophic cancellation** barrier. As the spins $j$ increase, the individual summands grow exponentially, while the final physical invariant oscillates and scales as $O(j^{-1/2})$.
 
-$$\;\;\; \quad \begin{Bmatrix} j_1 & j_2 & j_3 \\ j_4 & j_5 & j_6\end{Bmatrix}_q = \Delta(j_1, j_2, j_3) \Delta(j_1, j_5, j_6) \Delta(j_2, j_4, j_6) \Delta(j_3, j_4, j_5) \sum_z \frac{(-1)^z [z+1]_q!}{\prod_i [z - \alpha_i]_q! \prod_j [\beta_j - z]_q!}$$
+To resolve a value of $10^{-10}$ from summands of magnitude $10^{50}$, a bit-depth is required that scales linearly with the spin. Without a specialized architecture, numerical "noise" completely obliterates the signal for spins $j > 50$.
 
-Where:
-* $[n]_q = \frac{q^{n/2} - q^{-n/2}}{q^{1/2} - q^{-1/2}}, \;\;\;\;\;\;\; \text{with} \;\;\;\; q = e^{i \frac{2\pi}{k+2}}$ is the quantum integer.
-* $\Delta(a, b, c) = \left( \frac{[a+b-c]_q! \; [a-b+c]_q! \; [-a+b+c]_q!}{[a+b+c+1]_q!}\right)^\frac12$ is the quantum triangle coefficient.
-* The sum is stabilized in the `Numeric` engine using a **log-sum-exp** shift to prevent floating-point overflow.
+## The CycloMonomial Architecture
+To bypass these limits, `QRacahSymbols.jl` implements a `CycloMonomial` engine. Rather than projecting quantum factorials onto the complex plane prematurely, we "lift" the calculation into the cyclotomic ring $\mathbb{Z}[\zeta]$.
 
-## The Catastrophic Cancellation Problem
-Topological Quantum Field Theories (TQFTs) rely heavily on $\text{SU(2)}_k$ modular tensor category data. The core invariant is given by the quantum Racah $W$-coefficient ($6j$-symbol), an alternating sum of massive quantum factorials. 
+### Algebraic Factorization
+We exploit the property that every quantum integer $[n]_q$ is a product of cyclotomic polynomials $\Phi_d(q)$. Specifically, for $z = q^{1/2}$:
 
-In standard floating-point arithmetic (`Float64`), this alternating series suffers from **catastrophic cancellation** at high spins. For example, at $j=500$, the terms in the sum can reach $10^{60}$, completely obliterating the precision of the final answer (which is often on the order of $10^{-5}$).
+$$[n]_q = \prod_{d|n, d>1} \Phi_d(z).$$
 
-## The CycloMonomial Solution
-To bypass this limit, `QRacahSymbols.jl` implements a `CycloMonomial` architecture. Because the quantum deformation parameter $q$ is a root of unity, the quantum integers $[n]_q$ can be factored exactly into **cyclotomic polynomials** $\Phi_d(q)$.
+Consequently, any quantum factorial $[n]_q!$ can be uniquely represented as a symbolic monomial:
+$$[n]_q! = s \cdot z^{p} \cdot \prod_d \Phi_d(z)^{e_d}$$
 
-Instead of computing massive intermediate floating-point numbers, the Generic Engine represents the Racah sum purely as arrays of prime-power exponents. The massive factorials are cancelled algebraically $O(1)$ *before* any numerical evaluation takes place.
+where $s \in \{-1, 1\}$ is a sign and $e_d$ are integer exponents.
 
-### Cyclotomic Factorization
-In the `Generic` mode, we exploit the fact that quantum integers $[n]_q$ are products of *cyclotomic polynomials* $\Phi_d(q)$. Thus, any quantum factorial can be represented as cyclotomic monomials:
-
-$$[n]_q! =  s \cdot z^{p} \cdot \prod_d \Phi_d(q)^{e_d}$$
-
-with integer exponents, where $z = q^{1/2}$. This allows for exact symbolic manipulation without ever choosing a specific value for $q$. The quantum $\{6j\}_q$-symbols is therefore a linear combination of products of cyclotomic monomials. 
-
+### The Generic Engine (`:generic`)
+In the `:generic` mode, the package represents the Racah sum as a collection of **Prime-Power Exponent Arrays**.
+    1. **Symbolic Cancellation:** Massive factorial products in the numerator and denominator are cancelled by simply subtracting their exponent vectors. This is an $O(1)$ operation that precedes any numerical evaluation. 
+    2. **Delayed Specialization:** The "subtraction" of large terms happens exactly in the symbolic space. Numerical evaluation only occurs at the very last step, using high-precision stabilization.
+    3. **Structural Zeros:** This architecture natively recognizes the topological truncation of the fusion category. If a symbol is zero due to the level $k$ constraint, the engine encounters a symbolic factor of $\Phi_{k+2}(q)$, which is exactly zero at the root of unity.
 
 
 ## Topological Category Data
 
-Beyond the $\{6j\}_q$-symbols, the package natively evaluates the full suite of TQFT structural constants required for state-sum models: 
-* Quantum $\{3j\}_q$-symbols 
-* Quantum Dimensions ($[2j+1]_q$)
-* F-symbols (Unitary fusion matrices)
-* R-matrices (Braiding phases)
-* G-symbols (Tetrahedral weights for Turaev-Viro models)
+Beyond the $\{6j\}_q$-symbols, the package provides the complete set of structural constants required for Turaev-Viro state-sum models and anyonic braiding.
+
+| Function | Physical Meaning | Output Type |
+| --- | --- | --- |
+| `q6j`, `q3j` | Quantum Wigner $6j$- and $3j$-symbols | `GenericResult` |
+| `qdim` | Quantum Dimensions $[2j+1]_q$ | `CycloMonomial` |
+| `fsymbol` | Unitary $F$-matrix (fusion basis transformation) | `Numeric/Generic` |
+| `rmatrix` | $R$-matrix (braiding phases/statistics) | `Numeric/Generic` |
+| `evaluate_generic` | Analytic continuation to arbitrary $q \in \mathbb{C}$ | `Complex/Real` |
