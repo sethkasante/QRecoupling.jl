@@ -88,4 +88,4 @@ For the complete API reference, interactive tutorials, and deep dives into the m
 
 If you use `QRacahSymbols.jl` in your research, please cite our underlying methodological paper:
 
-> Seth K. Asante, *"Exact Algebraic Evaluation of Quantum Recoupling Coefficients using Cyclotomic Representation"* (To appear, 2026). arXiv:XXXX.XXXXX.
+> Seth K. Asante, *"Exact Algebraic Evaluation of Quantum Recoupling Coefficients using Cyclotomic Representation"* (To appear soon, 2026). arXiv:XXXX.XXXXX.
