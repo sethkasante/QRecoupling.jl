@@ -133,12 +133,9 @@ end
 # Exact Field Evaluation Engine
 # ==============================================================================
 
-"""
-    horner_eval(poly_elem, z::Complex{BigFloat})
 
-Evaluates a Nemo cyclotomic polynomial element at a complex point `z` 
-using a zero-allocation Horner's method.
-"""
+
+# Evaluates a Nemo cyclotomic polynomial element at a complex point `z` using a zero-allocation Horner's method.
 function horner_eval(poly_elem, z::Complex{BigFloat})
     # Fast path for pure rational numbers (QQFieldElem)
     if poly_elem isa Nemo.QQFieldElem
