@@ -4,3 +4,4 @@
 ```@autodocs
 Modules = [QRacahSymbols]
 Order   = [:function, :type]
+```
