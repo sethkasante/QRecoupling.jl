@@ -1,4 +1,4 @@
-# src/Types.jl
+# src/types.jl
 
 # Define a robust type alias for Spins to eliminate method ambiguities
 const Spin = Real
@@ -180,4 +180,86 @@ Base.://(a::ExactResult, b::ExactResult) = a / b
 # Equality check (Algebraic)
 function Base.:(==)(a::ExactResult, b::ExactResult)
     return a.k == b.k && a.pref_sq == b.pref_sq && a.sum_cf == b.sum_cf
+end
+
+
+
+
+# struct GenericResult
+#     pref_sq::CycloMonomial         # Triangle coefficients & prefactors (squared)
+#     m_min::CycloMonomial           # Initial summand M(z_min)
+#     ratios::Vector{CycloMonomial}  # Recursive ratios R_z
+#     z_range::UnitRange{Int}        # Track the summation bounds
+# end
+
+
+
+"""
+    Generic6j
+Recursive representation of the 6j symbol.
+M_{z+1} = M_z * ratios[i]
+"""
+struct Generic6j
+    pref_sq::CycloMonomial         # Triangle coefficients (squared)
+    m_min::CycloMonomial           # Initial summand M(z_min)
+    ratios::Vector{CycloMonomial}  # Recursive ratios R_z
+    z_range::UnitRange{Int}        # Track the summation bounds
+end
+
+# Add a simplified Sparse representation for the inner loops
+# struct SparseMonomial
+#     sign::Int8
+#     z_pow::Int
+#     active::Vector{Pair{Int, Int}}
+# end
+
+# function to_sparse(m::CycloMonomial, h::Int)
+#     active = Pair{Int, Int}[]
+#     for (d, e) in enumerate(m.exps)
+#         (e != 0 && d != h) && push!(active, d => e)
+#     end
+#     return SparseMonomial(Int8(m.sign), m.z_pow, active)
+# end
+
+
+# function Base.show(io::IO, res::Generic6j)
+#     print(io, "√(", res.pref_sq, ") × ", res.m_min, " × ( 1 ")
+    
+#     n_ratios = length(res.ratios)
+#     if n_ratios == 0
+#         print(io, ")")
+#     elseif n_ratios == 1
+#         print(io, " + R_1 )  [1 ratio]")
+#     elseif n_ratios == 2
+#         print(io, " + R_1 + R_1·R_2 )  [2 ratios]")
+#     else
+#         print(io, " + R_1 + R_1·R_2 + ... + ∏_{i=1}^{$n_ratios} R_i )  [$n_ratios ratios]")
+#     end
+# end
+# Put these helpers at the top of your types or display file
+
+
+function Base.show(io::IO, ::MIME"text/plain", res::Generic6j)
+    n_ratios = length(res.ratios)
+    
+    println(io, "Generic Quantum Symbol (Hypergeometric Form)")
+    println(io, "  ├─ Δ² (Prefactor) : ", res.pref_sq)
+    println(io, "  ├─ M₀ (Base Term) : ", res.m_min)
+    
+    if n_ratios == 0
+        print(io,   "  └─ Ratios (R)     : [Empty Series]")
+    elseif n_ratios <= 3
+        println(io, "  └─ Ratios (R)     : ", n_ratios, " terms")
+        for i in 1:n_ratios
+            prefix = (i == n_ratios) ? "       └─ R" : "       ├─ R"
+            print(io, prefix, to_subscript(i), " : ", res.ratios[i])
+            i < n_ratios && println(io) # Avoid trailing newline
+        end
+    else
+        println(io, "  └─ Ratios (R)     : ", n_ratios, " terms")
+        println(io, "       ├─ R", to_subscript(1), " : ", res.ratios[1])
+        println(io, "       ├─ R", to_subscript(2), " : ", res.ratios[2])
+        println(io, "       ├─ ... (", n_ratios - 3, " more) ...")
+        print(io,   "       └─ R", to_subscript(n_ratios), " : ", res.ratios[end])
+    end
 end
