@@ -1,83 +1,173 @@
-# src/types.jl
+# types.jl
 
-# Define a robust type alias for Spins to eliminate method ambiguities
-const Spin = Real
-const OptInt = Union{Nothing, Int}
+
+# -----------------------------------------------------
+# -- Core Symbolic Structures ---
+# The Cyclotomic representation of 3j and 6j symbols
+# -----------------------------------------------------
+
 
 """
     CycloMonomial
 
-Represents a product of cyclotomic polynomials evaluated at q.
+Represents a quantum prime factorization of basic objects (like q-integers and q-factorials) 
+in terms of products of  `q` and irreducible cyclotomic polynomials Φ_d(q). 
+Uses a sparse representation, storing ONLY non-zero exponents as a strictly ordered `Vector` 
+of Pairs to guarantee O(1) cache-friendly loops during evaluation.
 """
 struct CycloMonomial
     sign::Int
     z_pow::Int 
-    exps::Vector{Int} 
+    exps::Vector{Pair{Int, Int}} #(d => exponent)
 end
 
+
+"""
+    SymbolicBuffer
+
+A dense, mutable accumulator used during the algorithmic construction phase.
+"""
+mutable struct SymbolicBuffer
+    sign::Int
+    z_pow::Int
+    exps::Vector{Int} # dense for fast direct indexing
+end
+
+SymbolicBuffer(capacity::Int) = SymbolicBuffer(1, 0, zeros(Int, capacity))
+
+
+"""
+    snapshot(buf::SymbolicBuffer)
+
+Freezes `SymbolicBuffer` into sparse `CycloMonomial`.
+"""
+function snapshot(buf::SymbolicBuffer)
+    nnz = 0
+    @inbounds for e in buf.exps
+        if e != 0; nnz += 1; end
+    end
+    
+    sparse_exps = Vector{Pair{Int, Int}}(undef, nnz)
+    
+    idx = 1
+    @inbounds for d in 1:length(buf.exps)
+        e = buf.exps[d]
+        if e != 0
+            sparse_exps[idx] = d => e
+            idx += 1
+        end
+    end
+    
+    return CycloMonomial(buf.sign, buf.z_pow, sparse_exps)
+end
+
+
+"""
+    snapshot_square_root(buf::SymbolicBuffer)
+
+Intercepts the dense buffer and factorizes algebraic perfect squares in a single pass.
+It isolates the perfect square root from the strictly square-free remainder.
+"""
+function snapshot_square_root(buf::SymbolicBuffer)
+    nnz_sq = 0
+    nnz_rem = 0
+    
+    @inbounds for e in buf.exps
+        if e != 0
+            q, r = divrem(e, 2)
+            if q != 0; nnz_sq += 1; end
+            if r != 0; nnz_rem += 1; end
+        end
+    end
+    
+    sq_exps = Vector{Pair{Int, Int}}(undef, nnz_sq)
+    rem_exps = Vector{Pair{Int, Int}}(undef, nnz_rem)
+    
+    idx_sq = 1
+    idx_rem = 1
+    @inbounds for d in 1:length(buf.exps)
+        e = buf.exps[d]
+        if e != 0
+            q, r = divrem(e, 2)
+            if q != 0
+                sq_exps[idx_sq] = d => q
+                idx_sq += 1
+            end
+            if r != 0
+                rem_exps[idx_rem] = d => r
+                idx_rem += 1
+            end
+        end
+    end
+    
+    q_z, r_z = divrem(buf.z_pow, 2)
+    
+    m_root = CycloMonomial(1, q_z, sq_exps)
+    m_rem  = CycloMonomial(buf.sign, r_z, rem_exps)
+    
+    return m_root, m_rem # returns root and remainder
+end
+
+
+# ------- CycloMonomial Arithmetic Overloads ---- 
+
+# ---- Base functions for products and divisions ---- 
+
 function Base.:*(a::CycloMonomial, b::CycloMonomial)
-    len_a = length(a.exps)
-    len_b = length(b.exps)
-    max_len = max(len_a, len_b)
+    a.sign == 0 && return a
+    b.sign == 0 && return b
     
-    new_exps = zeros(Int, max_len)
+    max_d = 0
+    !isempty(a.exps) && (max_d = max(max_d, a.exps[end].first)) # Array is sorted!
+    !isempty(b.exps) && (max_d = max(max_d, b.exps[end].first))
     
-    @inbounds @simd for i in 1:len_a
-        new_exps[i] += a.exps[i]
-    end
-    @inbounds @simd for i in 1:len_b
-        new_exps[i] += b.exps[i]
-    end
+    buf = SymbolicBuffer(max_d)
+    buf.sign = a.sign * b.sign
+    buf.z_pow = a.z_pow + b.z_pow
     
-    while !isempty(new_exps) && new_exps[end] == 0
-        pop!(new_exps)
-    end
+    @inbounds for (d, e) in a.exps; buf.exps[d] += e; end
+    @inbounds for (d, e) in b.exps; buf.exps[d] += e; end
     
-    return CycloMonomial(a.sign * b.sign, a.z_pow + b.z_pow, new_exps)
+    return snapshot(buf)
 end
 
 function Base.:/(a::CycloMonomial, b::CycloMonomial)
-    len_a = length(a.exps)
-    len_b = length(b.exps)
-    max_len = max(len_a, len_b)
+    a.sign == 0 && return a
+    b.sign == 0 && throw(DivideError())
     
-    new_exps = zeros(Int, max_len)
+    max_d = 0
+    !isempty(a.exps) && (max_d = max(max_d, a.exps[end].first))
+    !isempty(b.exps) && (max_d = max(max_d, b.exps[end].first))
     
-    @inbounds @simd for i in 1:len_a
-        new_exps[i] += a.exps[i]
-    end
-    @inbounds @simd for i in 1:len_b
-        new_exps[i] -= b.exps[i]
-    end
+    buf = SymbolicBuffer(max_d)
+    buf.sign = a.sign * b.sign
+    buf.z_pow = a.z_pow - b.z_pow
     
-    while !isempty(new_exps) && new_exps[end] == 0
-        pop!(new_exps)
-    end
+    @inbounds for (d, e) in a.exps; buf.exps[d] += e; end
+    @inbounds for (d, e) in b.exps; buf.exps[d] -= e; end
     
-    return CycloMonomial(a.sign * b.sign, a.z_pow - b.z_pow, new_exps)
+    return snapshot(buf)
 end
 
 Base.://(a::CycloMonomial, b::CycloMonomial) = a / b
 
 function Base.inv(M::CycloMonomial)
     M.sign == 0 && throw(DivideError())
-    return CycloMonomial(M.sign, -M.z_pow, -M.exps)
+    inv_exps = [d => -e for (d, e) in M.exps] # keep it strictly sorted
+    return CycloMonomial(M.sign, -M.z_pow, inv_exps)
+end
+
+# Check symbolic equality
+function Base.:(==)(a::CycloMonomial, b::CycloMonomial)
+    # Because the arrays are sequentially, they are strictly sorted.
+    # We can just compare the Vectors directly!
+    return a.sign == b.sign && a.z_pow == b.z_pow && a.exps == b.exps
 end
 
 
-mutable struct SymbolicBuffer
-    sign::Int
-    z_pow::Int
-    exps::Vector{Int}
-end
-
-# Constructor for pre-allocating the vector capacity
-SymbolicBuffer(capacity::Int) = SymbolicBuffer(1, 0, zeros(Int, capacity))
-# Snapshot function to freeze the buffer into a CycloMonomial
-snapshot(buf::SymbolicBuffer) = CycloMonomial(buf.sign, buf.z_pow, copy(buf.exps))
-
+ 
 # ----------------------------------------
-# Human-Readable Output
+# Human-Readable Output (Pretty Printing)
 # ----------------------------------------
 
 const SUBSCRIPTS = Dict('0'=>'₀', '1'=>'₁', '2'=>'₂', '3'=>'₃', '4'=>'₄', 
@@ -89,19 +179,14 @@ to_subscript(n::Int) = map(c -> SUBSCRIPTS[c], string(n))
 to_superscript(n::Int) = map(c -> SUPERSCRIPTS[c], string(n))
 
 function Base.show(io::IO, M::CycloMonomial)
-    if M.sign == 0
-        print(io, "0")
-        return
-    end
+    M.sign == 0 && return print(io, "0")
 
     parts = String[]
     if M.z_pow != 0
         push!(parts, M.z_pow == 1 ? "z" : "z" * to_superscript(M.z_pow))
     end
     
-    for d in 1:length(M.exps)
-        e = M.exps[d]
-        e == 0 && continue
+    for (d, e) in M.exps
         base_str = "Φ" * to_subscript(d)
         push!(parts, e == 1 ? base_str : base_str * to_superscript(e))
     end
@@ -114,136 +199,35 @@ function Base.show(io::IO, M::CycloMonomial)
     end
 end
 
-# ----------------------------------------
-# Result Structs
-# ----------------------------------------
 
-struct GenericResult
-    pref_sq::CycloMonomial
-    series::Vector{CycloMonomial}
-end
-
-function Base.show(io::IO, res::GenericResult)
-    print(io, "√(", res.pref_sq, ") × (")
-    n_terms = length(res.series)
-    if n_terms <= 5
-        join(io, res.series, "  +  ")
-    else
-        print(io, res.series[1], "  +  ", res.series[2], "  +  ... (", n_terms - 4, " more terms) ...  +  ", res.series[end-1], "  +  ", res.series[end])
-    end
-    print(io, ")")
-end
-
-"""
-    ExactValue{T}
-A self-contained exact algebraic value (like a quantum dimension or integer) 
-in the SU(2)_k cyclotomic field.
-"""
-struct ExactValue{T}
-    k::Int
-    val::T
-end
-
-# Pretty Printing for the REPL
-function Base.show(io::IO, ev::ExactValue)
-    k_sub = to_subscript(ev.k)
-    print(io, "Exact SU(2)$k_sub Value:\n  ")
-    print(io, ev.val)
-end
-
-struct ExactResult
-    k::Int
-    pref_sq::nf_elem
-    sum_cf::nf_elem
-end
-
-function Base.show(io::IO, res::ExactResult)
-    k_sub = to_subscript(res.k)
-    print(io, "Exact SU(2)$k_sub Symbol:\n")
-    print(io, "  Prefactor(Δ²): ", res.pref_sq, "\n")
-    print(io, "  Racah Sum(Σ):  ", res.sum_cf)
-end
-
-function Base.:*(a::ExactResult, b::ExactResult)
-    @assert a.k == b.k "Cannot multiply results from different levels k"
-    return ExactResult(a.k, a.pref_sq * b.pref_sq, a.sum_cf * b.sum_cf)
-end
-
-function Base.:/(a::ExactResult, b::ExactResult)
-    @assert a.k == b.k "Cannot divide results from different levels k"
-    return ExactResult(a.k, a.pref_sq * inv(b.pref_sq), a.sum_cf * inv(b.sum_cf))
-end
-
-
-Base.://(a::ExactResult, b::ExactResult) = a / b
-
-# Equality check (Algebraic)
-function Base.:(==)(a::ExactResult, b::ExactResult)
-    return a.k == b.k && a.pref_sq == b.pref_sq && a.sum_cf == b.sum_cf
-end
-
-
-
-
-# struct GenericResult
-#     pref_sq::CycloMonomial         # Triangle coefficients & prefactors (squared)
-#     m_min::CycloMonomial           # Initial summand M(z_min)
-#     ratios::Vector{CycloMonomial}  # Recursive ratios R_z
-#     z_range::UnitRange{Int}        # Track the summation bounds
-# end
-
+# ---------------------------------------
+# -- Constructors for main results 
+# (including 3j and 6j symbols) 
+# ---------------------------------------
 
 
 """
-    Generic6j
-Recursive representation of the 6j symbol.
-M_{z+1} = M_z * ratios[i]
+    CycloResult
+
+A high-performance, deferred-specialization representation of a quantum recoupling symbol.
+Structures the evaluation as a hypergeometric ratio sequence to minimize algebraic divisions.
 """
-struct Generic6j
-    pref_sq::CycloMonomial         # Triangle coefficients (squared)
-    m_min::CycloMonomial           # Initial summand M(z_min)
-    ratios::Vector{CycloMonomial}  # Recursive ratios R_z
-    z_range::UnitRange{Int}        # Track the summation bounds
+struct CycloResult
+    pref_root::CycloMonomial       # Triangle coefficients (square-rooted part)
+    pref_rem::CycloMonomial        # Remainder (square-free part inside the sqrt)
+    m_min::CycloMonomial           # first term in Racah sum  
+    ratios::Vector{CycloMonomial}  # ratios of hypergeometric steps
+    z_range::UnitRange{Int}        # range of sum
+    max_d::Int                     # maximum index d
 end
 
-# Add a simplified Sparse representation for the inner loops
-# struct SparseMonomial
-#     sign::Int8
-#     z_pow::Int
-#     active::Vector{Pair{Int, Int}}
-# end
-
-# function to_sparse(m::CycloMonomial, h::Int)
-#     active = Pair{Int, Int}[]
-#     for (d, e) in enumerate(m.exps)
-#         (e != 0 && d != h) && push!(active, d => e)
-#     end
-#     return SparseMonomial(Int8(m.sign), m.z_pow, active)
-# end
-
-
-# function Base.show(io::IO, res::Generic6j)
-#     print(io, "√(", res.pref_sq, ") × ", res.m_min, " × ( 1 ")
-    
-#     n_ratios = length(res.ratios)
-#     if n_ratios == 0
-#         print(io, ")")
-#     elseif n_ratios == 1
-#         print(io, " + R_1 )  [1 ratio]")
-#     elseif n_ratios == 2
-#         print(io, " + R_1 + R_1·R_2 )  [2 ratios]")
-#     else
-#         print(io, " + R_1 + R_1·R_2 + ... + ∏_{i=1}^{$n_ratios} R_i )  [$n_ratios ratios]")
-#     end
-# end
-# Put these helpers at the top of your types or display file
-
-
-function Base.show(io::IO, ::MIME"text/plain", res::Generic6j)
+function Base.show(io::IO, ::MIME"text/plain", res::CycloResult)
     n_ratios = length(res.ratios)
     
-    println(io, "Generic Quantum Symbol (Hypergeometric Form)")
-    println(io, "  ├─ Δ² (Prefactor) : ", res.pref_sq)
+    println(io, "CycloResult (Hypergeometric Ratio Form)")
+    println(io, "  ├─ Max Φ_d(q) req : d = ", res.max_d)
+    println(io, "  ├─ Δ (Root Part)  : ", res.pref_root)
+    println(io, "  ├─ Δ (Rem Part)   : √(", res.pref_rem, ")")
     println(io, "  ├─ M₀ (Base Term) : ", res.m_min)
     
     if n_ratios == 0
@@ -253,7 +237,7 @@ function Base.show(io::IO, ::MIME"text/plain", res::Generic6j)
         for i in 1:n_ratios
             prefix = (i == n_ratios) ? "       └─ R" : "       ├─ R"
             print(io, prefix, to_subscript(i), " : ", res.ratios[i])
-            i < n_ratios && println(io) # Avoid trailing newline
+            i < n_ratios && println(io) 
         end
     else
         println(io, "  └─ Ratios (R)     : ", n_ratios, " terms")
@@ -262,4 +246,26 @@ function Base.show(io::IO, ::MIME"text/plain", res::Generic6j)
         println(io, "       ├─ ... (", n_ratios - 3, " more) ...")
         print(io,   "       └─ R", to_subscript(n_ratios), " : ", res.ratios[end])
     end
+end
+
+
+
+# ------ Exact Algebraic Structures (using Nemo.jl)  ------------
+
+"""
+    ExactResult{T}
+A rigorously exact representation of a quantum symbol. 
+Maintains the exact algebraic square-free remainder separated from the evaluated sum.
+"""
+struct ExactResult{T}
+    k::Int
+    pref_rem::CycloMonomial # The purely square-free algebraic remainder!
+    sum_part::T
+end
+
+function Base.show(io::IO, res::ExactResult)
+    k_sub = to_subscript(res.k)
+    print(io, "Exact SU(2)$k_sub Symbol:\n")
+    print(io, "  Prefactor: √(", res.pref_rem, ")\n")
+    print(io, "  Sum(Σ):    ", res.sum_part)
 end
