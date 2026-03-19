@@ -131,7 +131,7 @@ algebraic cyclotomic field for SU(2)_k.
 
 # Returns:
 An `ExactResult{T}` containing:
-1. `pref_rem`: The strictly square-free remainder (kept symbolic for fast O(1) multiplication).
+1. `pref_rad`: The strictly square-free remainder (kept symbolic for fast O(1) multiplication).
 2. `sum_part`: The evaluated rational sum (a Nemo field element).
 
 # Architecture:
@@ -144,7 +144,7 @@ function evaluate_level_exact(res::CycloResult, k::Int)
     _, z = cyclotomic_field(2 * h, "ζ")
     z_zero, z_one = zero(z), one(z)
     
-    if res.pref_rem.sign == 0 || res.m_min.sign == 0
+    if res.pref_rad.sign == 0 || res.m_min.sign == 0
         return ExactResult(k, EMPTY_MONOMIAL, z_zero)
     end
     
@@ -161,7 +161,7 @@ function evaluate_level_exact(res::CycloResult, k::Int)
     c_mmin = _project_ratio_nemo(res.m_min, V_exact, V_inv, z, h, z_zero, z_one)
     exact_root = _project_ratio_nemo(res.pref_root, V_exact, V_inv, z, h, z_zero, z_one)
     
-    return ExactResult(k, res.pref_rem, exact_root * c_mmin * sum_val)
+    return ExactResult(k, res.pref_rad, exact_root * c_mmin * sum_val)
 end
 
 export evaluate_level_exact

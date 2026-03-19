@@ -214,7 +214,7 @@ Structures the evaluation as a hypergeometric ratio sequence to minimize algebra
 """
 struct CycloResult
     pref_root::CycloMonomial       # Triangle coefficients (square-rooted part)
-    pref_rem::CycloMonomial        # Remainder (square-free part inside the sqrt)
+    pref_rad::CycloMonomial        # Remainder (square-free part inside the sqrt)
     m_min::CycloMonomial           # first term in Racah sum  
     ratios::Vector{CycloMonomial}  # ratios of hypergeometric steps
     z_range::UnitRange{Int}        # range of sum
@@ -227,7 +227,7 @@ function Base.show(io::IO, ::MIME"text/plain", res::CycloResult)
     println(io, "CycloResult (Hypergeometric Ratio Form)")
     println(io, "  ├─ Max Φ_d(q) req : d = ", res.max_d)
     println(io, "  ├─ Δ (Root Part)  : ", res.pref_root)
-    println(io, "  ├─ Δ (Rem Part)   : √(", res.pref_rem, ")")
+    println(io, "  ├─ Δ (Rem Part)   : √(", res.pref_rad, ")")
     println(io, "  ├─ M₀ (Base Term) : ", res.m_min)
     
     if n_ratios == 0
@@ -260,12 +260,12 @@ end
     ExactResult{T}
 
 A rigorously exact representation of a quantum symbol in a cyclotomic number field.
-Maintains the exact algebraic square-free remainder symbolically (`pref_rem`) to 
+Maintains the exact algebraic square-free remainder symbolically (`pref_rad`) to 
 allow O(1) square-root extraction during multiplication, bypassing heavy CAS factorization.
 """
 struct ExactResult{T}
     k::Int                  # Level k 
-    pref_rem::CycloMonomial # Stored symbolically for fast multiplication!
+    pref_rad::CycloMonomial # Stored symbolically for fast multiplication!
     sum_part::T             # The evaluated Nemo sum (Type T is a Nemo field element)
 end
 
@@ -293,7 +293,7 @@ function Base.show(io::IO, res::ExactResult)
     k_sub = to_subscript(res.k)
     print(io, "Exact SU(2)$k_sub Symbol:\n")
     
-    if res.pref_rem.sign == 0 || iszero(res.sum_part)
+    if res.pref_rad.sign == 0 || iszero(res.sum_part)
         print(io, "  0\n")
         return
     end
@@ -302,7 +302,7 @@ function Base.show(io::IO, res::ExactResult)
     K = parent(res.sum_part)
     z = gen(K)
     
-    A_val = _eval_nemo_print(res.pref_rem, res.k, K, z)
+    A_val = _eval_nemo_print(res.pref_rad, res.k, K, z)
 
     if isone(A_val)
         print(io, "  Value: ", res.sum_part)
@@ -318,7 +318,7 @@ function Base.:(==)(a::ExactResult, b::ExactResult)
     a.k == b.k || return false
     iszero(a.sum_part) && return iszero(b.sum_part)
     iszero(b.sum_part) && return false
-    return a.pref_rem == b.pref_rem && a.sum_part == b.sum_part
+    return a.pref_rad == b.pref_rad && a.sum_part == b.sum_part
 end
 
 function Base.:+(a::ExactResult, b::ExactResult)
@@ -326,8 +326,8 @@ function Base.:+(a::ExactResult, b::ExactResult)
     iszero(a.sum_part) && return b
     iszero(b.sum_part) && return a
     
-    if a.pref_rem == b.pref_rem
-        return ExactResult(a.k, a.pref_rem, a.sum_part + b.sum_part)
+    if a.pref_rad == b.pref_rad
+        return ExactResult(a.k, a.pref_rad, a.sum_part + b.sum_part)
     else
         error("Cannot add ExactResults: They do not belong to the same topological square-class.")
     end
@@ -342,7 +342,7 @@ function Base.:*(a::ExactResult, b::ExactResult)
     iszero(a.sum_part) && return a
     iszero(b.sum_part) && return b
     
-    m_prod = a.pref_rem * b.pref_rem
+    m_prod = a.pref_rad * b.pref_rad
     
     sq_exps = Pair{Int,Int}[]
     rem_exps = Pair{Int,Int}[]
@@ -387,7 +387,7 @@ end
     
 #     z = res.z
 #     zero_z= zero(z)
-#     if res.pref_rem.sign == 0 || iszero(res.sum_part)
+#     if res.pref_rad.sign == 0 || iszero(res.sum_part)
 #         # print(io, "  0\n")
 #         return zero_z
 #     end
@@ -398,17 +398,17 @@ end
 #     h = res.k + 2
     
 #     # Safely get max_d to pull from our O(1) exact phase cache
-#     max_d = isempty(res.pref_rem.exps) ? 0 : res.pref_rem.exps[end].first
+#     max_d = isempty(res.pref_rad.exps) ? 0 : res.pref_rad.exps[end].first
     
 #     if max_d > 0
 #         V_exact = get_phi_exact_table(max_d, res.k, z)
 #         # Use our existing fast projector
-#         num, den = _project_ratio_nemo(res.pref_rem, V_exact, z, h, zero_z, one(z))
+#         num, den = _project_ratio_nemo(res.pref_rad, V_exact, z, h, zero_z, one(z))
 #         A_val = divexact(num, den)
 #     else
 #         # Trivial case (empty remainder, just a sign or z power)
-#         A_val = z^(res.pref_rem.z_pow)
-#         res.pref_rem.sign == -1 && (A_val = -A_val)
+#         A_val = z^(res.pref_rad.z_pow)
+#         res.pref_rad.sign == -1 && (A_val = -A_val)
 #     end
 
 #     # If the remainder evaluates exactly to 1, don't print the sqrt
@@ -431,13 +431,13 @@ end
 # """
 # struct ExactResult{T}
 #     k::Int
-#     pref_rem::CycloMonomial # The purely square-free algebraic remainder!
+#     pref_rad::CycloMonomial # The purely square-free algebraic remainder!
 #     sum_part::T
 # end
 
 # function Base.show(io::IO, res::ExactResult)
 #     k_sub = to_subscript(res.k)
 #     print(io, "Exact SU(2)$k_sub Symbol:\n")
-#     print(io, "  Prefactor: √(", res.pref_rem, ")\n")
+#     print(io, "  Prefactor: √(", res.pref_rad, ")\n")
 #     print(io, "  Sum(Σ):    ", res.sum_part)
 # end
