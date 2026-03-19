@@ -143,16 +143,17 @@ end
 
 export cyclo_to_numeric
 
-"""
-    evaluate_numeric(res::CycloResult, ::Type{T}=Float64; k=nothing, q=nothing, theta=nothing, prec=512)
 
-High-performance numeric evaluator for a compiled `CycloResult`.
-Maps the exact symbolic arrays into highly accurate floats/complex values.
+"""
+    cyclo_to_numeric(res::CycloResult, ::Type{T}=Float64; k=nothing, q=nothing, theta=nothing, prec=512)
+
+The master numeric dispatcher for `QRacahSymbols`.
+Takes a compiled `CycloResult` and safely projects it into the requested numeric regime.
 
 # Targeting Options
-- `k=val`: Fast discrete evaluation at SU(2)_k root of unity (Topological regime).
-- `theta=val`: Fast continuous evaluation on the unit circle q = e^{iθ} (Volume Conjecture regime).
-- `q=val`: Full analytic continuation to arbitrary complex parameter (SL(2,C) regime).
+- `k=val`: Fast discrete evaluation at $SU(2)_k$ root of unity (Topological regime).
+- `theta=val`: Fast continuous evaluation on the unit circle $q = \\exp(i\\theta)$.
+- `q=val`: Full analytic continuation to arbitrary complex parameter $q \\in \\mathbb{C}$ ($SL(2,\\mathbb{C})$ regime).
 """
 function cyclo_to_numeric(res::CycloResult, ::Type{T}=Float64; k=nothing, q=nothing, theta=nothing, prec=512) where {T}
     targets_defined = (!isnothing(k)) + (!isnothing(q)) + (!isnothing(theta))
