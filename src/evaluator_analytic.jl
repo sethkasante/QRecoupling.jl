@@ -156,6 +156,12 @@ function evaluate_unit_circle(res::CycloResult, theta::Real, ::Type{T}=Complex{B
     end
 end
 
+"""
+    cyclo_to_analytic(res::CycloResult, q::Number, ::Type{T}=Complex{BigFloat}; prec=512)
+
+Analytically continues the `CycloResult` to an arbitrary complex parameter q ∈ C.
+Provides the foundational math engine for generic SL(2,C) representation theory.
+"""
 function evaluate_analytic(res::CycloResult, q::Number, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
     (res.pref_rad.sign == 0 || res.m_min.sign == 0) && return zero(T)
 
