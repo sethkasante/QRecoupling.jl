@@ -250,22 +250,194 @@ end
 
 
 
+
 # ------ Exact Algebraic Structures (using Nemo.jl)  ------------
+# ==============================================================================
+# Exact Algebraic Structures (Nemo.jl Engine)
+# ==============================================================================
 
 """
     ExactResult{T}
-A rigorously exact representation of a quantum symbol. 
-Maintains the exact algebraic square-free remainder separated from the evaluated sum.
+
+A rigorously exact representation of a quantum symbol in a cyclotomic number field.
+Maintains the exact algebraic square-free remainder symbolically (`pref_rem`) to 
+allow O(1) square-root extraction during multiplication, bypassing heavy CAS factorization.
 """
 struct ExactResult{T}
-    k::Int
-    pref_rem::CycloMonomial # The purely square-free algebraic remainder!
-    sum_part::T
+    k::Int                  # Level k 
+    pref_rem::CycloMonomial # Stored symbolically for fast multiplication!
+    sum_part::T             # The evaluated Nemo sum (Type T is a Nemo field element)
+end
+
+# Helper function strictly for pretty-printing the square-free remainder
+function _eval_nemo_print(m::CycloMonomial, k::Int, K, z)
+    m.sign == 0 && return K(0)
+    
+    max_d = isempty(m.exps) ? 0 : m.exps[end].first
+    V_exact, V_inv = get_phi_exact_table(max_d, k, z)
+    
+    A_val = K(1)
+    @inbounds for (d, e) in m.exps
+        if e > 0
+            A_val *= (e == 1) ? V_exact[d] : V_exact[d]^e
+        elseif e < 0
+            A_val *= (e == -1) ? V_inv[d] : V_inv[d]^abs(e)
+        end
+    end
+    
+    A_val *= z^(m.z_pow)
+    return m.sign == 1 ? A_val : -A_val
 end
 
 function Base.show(io::IO, res::ExactResult)
     k_sub = to_subscript(res.k)
     print(io, "Exact SU(2)$k_sub Symbol:\n")
-    print(io, "  Prefactor: √(", res.pref_rem, ")\n")
-    print(io, "  Sum(Σ):    ", res.sum_part)
+    
+    if res.pref_rem.sign == 0 || iszero(res.sum_part)
+        print(io, "  0\n")
+        return
+    end
+
+    # Dynamically extract the field and generator
+    K = parent(res.sum_part)
+    z = gen(K)
+    
+    A_val = _eval_nemo_print(res.pref_rem, res.k, K, z)
+
+    if isone(A_val)
+        print(io, "  Value: ", res.sum_part)
+    else
+        print(io, "  Value: √(A) * B\n")
+        print(io, "  ----------------\n")
+        print(io, "  A (Radical) = ", A_val, "\n")
+        print(io, "  B (Sum)     = ", res.sum_part)
+    end
 end
+
+function Base.:(==)(a::ExactResult, b::ExactResult)
+    a.k == b.k || return false
+    iszero(a.sum_part) && return iszero(b.sum_part)
+    iszero(b.sum_part) && return false
+    return a.pref_rem == b.pref_rem && a.sum_part == b.sum_part
+end
+
+function Base.:+(a::ExactResult, b::ExactResult)
+    @assert a.k == b.k "Cannot add results from different levels k"
+    iszero(a.sum_part) && return b
+    iszero(b.sum_part) && return a
+    
+    if a.pref_rem == b.pref_rem
+        return ExactResult(a.k, a.pref_rem, a.sum_part + b.sum_part)
+    else
+        error("Cannot add ExactResults: They do not belong to the same topological square-class.")
+    end
+end
+
+# ------------------------------------------------------------------------------
+# Magic Multiplier (Extracts new squares dynamically!)
+# ------------------------------------------------------------------------------
+function Base.:*(a::ExactResult, b::ExactResult)
+    @assert a.k == b.k "Cannot multiply different levels"
+    
+    iszero(a.sum_part) && return a
+    iszero(b.sum_part) && return b
+    
+    m_prod = a.pref_rem * b.pref_rem
+    
+    sq_exps = Pair{Int,Int}[]
+    rem_exps = Pair{Int,Int}[]
+    for (d, e) in m_prod.exps
+        q, r = divrem(e, 2)
+        if q != 0; push!(sq_exps, d => q); end
+        if r != 0; push!(rem_exps, d => r); end
+    end
+    q_z, r_z = divrem(m_prod.z_pow, 2)
+    
+    m_root = CycloMonomial(1, q_z, sq_exps)
+    m_rem  = CycloMonomial(m_prod.sign, r_z, rem_exps)
+    
+    h = a.k + 2
+    K = parent(a.sum_part)
+    z = gen(K)
+    
+    max_d = isempty(m_root.exps) ? 0 : m_root.exps[end].first
+    V_exact, V_inv = get_phi_exact_table(max_d, a.k, z)
+    
+    # Evaluate the newly formed root using the ultra-fast division-free projector
+    exact_new_root = _project_ratio_nemo(m_root, V_exact, V_inv, z, h, K(0), K(1))
+    
+    new_sum = exact_new_root * a.sum_part * b.sum_part
+    
+    return ExactResult(a.k, m_rem, new_sum)
+end
+
+
+
+
+
+
+
+
+
+
+
+# function Base.show(io::IO, res::ExactResult)
+#     k_sub = to_subscript(res.k)
+#     print(io, "Exact SU(2)$k_sub Symbol:\n")
+    
+#     z = res.z
+#     zero_z= zero(z)
+#     if res.pref_rem.sign == 0 || iszero(res.sum_part)
+#         # print(io, "  0\n")
+#         return zero_z
+#     end
+
+#     # Evaluate the CycloMonomial into the Nemo field purely for printing
+#     # K = parent(res.sum_part)
+#     # z = gen(K)
+#     h = res.k + 2
+    
+#     # Safely get max_d to pull from our O(1) exact phase cache
+#     max_d = isempty(res.pref_rem.exps) ? 0 : res.pref_rem.exps[end].first
+    
+#     if max_d > 0
+#         V_exact = get_phi_exact_table(max_d, res.k, z)
+#         # Use our existing fast projector
+#         num, den = _project_ratio_nemo(res.pref_rem, V_exact, z, h, zero_z, one(z))
+#         A_val = divexact(num, den)
+#     else
+#         # Trivial case (empty remainder, just a sign or z power)
+#         A_val = z^(res.pref_rem.z_pow)
+#         res.pref_rem.sign == -1 && (A_val = -A_val)
+#     end
+
+#     # If the remainder evaluates exactly to 1, don't print the sqrt
+#     if isone(A_val)
+#         print(io, "  Val: ", res.sum_part)
+#     else
+#         print(io, "  Val: √(", A_val, ") * (", res.sum_part, ")")
+#     end
+# end
+
+
+
+
+
+
+# """
+#     ExactResult{T}
+# A rigorously exact representation of a quantum symbol. 
+# Maintains the exact algebraic square-free remainder separated from the evaluated sum.
+# """
+# struct ExactResult{T}
+#     k::Int
+#     pref_rem::CycloMonomial # The purely square-free algebraic remainder!
+#     sum_part::T
+# end
+
+# function Base.show(io::IO, res::ExactResult)
+#     k_sub = to_subscript(res.k)
+#     print(io, "Exact SU(2)$k_sub Symbol:\n")
+#     print(io, "  Prefactor: √(", res.pref_rem, ")\n")
+#     print(io, "  Sum(Σ):    ", res.sum_part)
+# end

@@ -113,11 +113,11 @@ function q6j_cyclo(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
     # Prefactor extraction -> split into root and remainder
     qtricoeff2_symb!(buf, j1, j2, j3, j4, j5, j6)
     max_d_tracker = max(max_d_tracker, get_max_d(buf))
-    pref_root, pref_rem = snapshot_square_root(buf)
+    pref_root, pref_rad = snapshot_square_root(buf)
     
     # topological zeros (triangle inequality violation)
     if z_min > z_max
-        return CycloResult(pref_root, pref_rem, ZERO_MONOMIAL, CycloMonomial[], 0:-1, max_d_tracker)
+        return CycloResult(pref_root, pref_rad, ZERO_MONOMIAL, CycloMonomial[], 0:-1, max_d_tracker)
     end
     
     # ---- construct the hypergeometric representation of the sum ----
@@ -161,7 +161,7 @@ function q6j_cyclo(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
         push!(ratios, snapshot(buf))
     end
     
-    return CycloResult(pref_root, pref_rem, m_min, ratios, z_min:z_max, max_d_tracker)
+    return CycloResult(pref_root, pref_rad, m_min, ratios, z_min:z_max, max_d_tracker)
 end
 
 
@@ -188,7 +188,7 @@ function q3j_cyclo(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = 
     
     max_d_tracker = max(max_d_tracker, get_max_d(buf))
     # split to root and remainder 
-    pref_root, pref_rem = snapshot_square_root(buf)
+    pref_root, pref_rad = snapshot_square_root(buf)
 
     # Bounds for sum 
     α1 = Int(j3 - j2 + m1)
@@ -203,7 +203,7 @@ function q3j_cyclo(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = 
 
     if z_min > z_max
         empty_m = CycloMonomial(0, 0, Pair{Int,Int}[])
-        return CycloResult(pref_root, pref_rem, empty_m, CycloMonomial[], 0:-1, max_d_tracker)
+        return CycloResult(pref_root, pref_rad, empty_m, CycloMonomial[], 0:-1, max_d_tracker)
     end
 
     # --- initial summand M(z_min) ---
@@ -242,5 +242,5 @@ function q3j_cyclo(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = 
         push!(ratios, snapshot(buf))
     end
 
-    return CycloResult(pref_root, pref_rem, m_min, ratios, z_min:z_max, max_d_tracker)
+    return CycloResult(pref_root, pref_rad, m_min, ratios, z_min:z_max, max_d_tracker)
 end
