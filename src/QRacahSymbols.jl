@@ -18,7 +18,6 @@ include("symmetries.jl")
 
 # Abstract Math Builders
 include("cyclo_builder.jl")
-include("topological_symbols.jl")
 
 # Computation Engines
 include("evaluator_direct.jl")     # Fast Log-Sum-Exp Floats
@@ -26,6 +25,9 @@ include("evaluator_discrete.jl")   # Exact Roots of Unity Sieve
 include("evaluator_analytic.jl")   # Continuous Complex sweeps
 include("evaluator_classical.jl")  # q=1 Limits & Zero-Allocation GMP
 include("evaluator_exact.jl")      # Rigorous Nemo.jl Cyclotomic Fields
+
+# tqft symbols 
+include("topological_symbols.jl")
 
 # Public User Interface
 # Contains the master dispatchers and cache-clearing API
@@ -55,5 +57,9 @@ export clear_caches!,
 export q6j_cyclo, q3j_cyclo
 export q6j_classical, q3j_classical, q6j_classical_exact, q3j_classical_exact
 export q6j_direct, q3j_direct
+
+
+#constructors for results
+export ExactResult, CycloResult, ClassicalResult
 
 end # module QRacahSymbols
