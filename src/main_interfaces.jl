@@ -32,11 +32,9 @@ Aggressively clears all internal caches.
 clear_caches!() = (clear_numeric_caches!(); clear_sieve_caches!(); clear_exact_caches!(); nothing)
 
 
-# Define a zero-allocation empty result for topological zeros.
 # Notice m_min has sign = 0 to trigger the fast-fail in downstream evaluators!
-const TOPOLOGICAL_ZERO_MONOMIAL = CycloMonomial(0, 0, Pair{Int,Int}[])
 const EMPTY_CYCLO_RESULT = CycloResult(
-    EMPTY_MONOMIAL, EMPTY_MONOMIAL, TOPOLOGICAL_ZERO_MONOMIAL, CycloMonomial[], 0:-1, 0
+    EMPTY_MONOMIAL, EMPTY_MONOMIAL, ZERO_MONOMIAL, CycloMonomial[], 0:-1, 0
 )
 
 # ==============================================================================
