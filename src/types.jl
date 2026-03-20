@@ -221,14 +221,26 @@ struct CycloResult
     max_d::Int                     # maximum index d
 end
 
+
 function Base.show(io::IO, ::MIME"text/plain", res::CycloResult)
     n_ratios = length(res.ratios)
     
+    # Combine the rational prefactor with the base term for display purposes
+    # The true mathematical form is: (Root * M0 * sqrt(Rad)) * [1 + R1 + R1*R2 + ...]
+    overall_rat = res.pref_root * res.m_min
+    
+    # Check if the radical is exactly 1 (sign=1, z_pow=0, no Φ polynomials)
+    is_rad_one = res.pref_rad.sign == 1 && res.pref_rad.z_pow == 0 && isempty(res.pref_rad.exps)
+    
     println(io, "CycloResult (Hypergeometric Ratio Form)")
     println(io, "  ├─ Max Φ_d(q) required : d = ", res.max_d)
-    println(io, "  ├─ Δ (Root)       : ", res.pref_root)
-    println(io, "  ├─ Δ (Radical)    : √(", res.pref_rad, ")")
-    println(io, "  ├─ M₀ (Base Term) : ", res.m_min)
+    
+    if is_rad_one
+        println(io, "  ├─ Overall Prefactor : ", overall_rat)
+    else
+        println(io, "  ├─ Prefactor (Rational) : ", overall_rat)
+        println(io, "  ├─ Prefactor (Radical)  : √(", res.pref_rad, ")")
+    end
     
     if n_ratios == 0
         print(io,   "  └─ Ratios (R)     : [Empty Series]")
