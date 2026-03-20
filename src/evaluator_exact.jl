@@ -119,11 +119,11 @@ end
 
 
 
-export evaluate_level_exact
+export cyclo_to_exact
 
 
 """
-    evaluate_level_exact(res::CycloResult, k::Int)
+    cyclo_to_exact(res::CycloResult, k::Int)
 
 The master exact evaluator for quantum recoupling symbols.
 Takes a compiled, unevaluated `CycloResult` and projects it into the precise 
@@ -139,7 +139,7 @@ Extracts the perfect algebraic squares during the construction phase, this
 evaluator bypasses CAS square-root factorization entirely. The hypergeometric 
 loop itself executes using zero memory allocations and zero algebraic divisions.
 """
-function evaluate_level_exact(res::CycloResult, k::Int)
+function cyclo_to_exact(res::CycloResult, k::Int)
     h = k + 2
     _, z = cyclotomic_field(2 * h, "ζ")
     z_zero, z_one = zero(z), one(z)

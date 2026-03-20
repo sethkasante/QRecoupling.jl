@@ -1,7 +1,8 @@
-# ==============================================================================
+
+# ========================================================================================
 # Analytic Evaluator (Continuous & Complex Regimes)
-# Evaluates CycloResults for generic q ∈ C and along the unit circle q = exp(iθ).
-# ==============================================================================
+# Maps CycloResults to generic complex parameters (q ∈ ℂ) or the unit circle q = exp(iθ).
+# ========================================================================================
 
 const UNIT_CIRCLE_CACHE  = LRU{BigFloat, Tuple{Vector{BigFloat}, Vector{BigFloat}}}(maxsize=100)
 const ANALYTIC_CACHE     = LRU{Complex{BigFloat}, Tuple{Vector{BigFloat}, Vector{BigFloat}}}(maxsize=100)
@@ -36,7 +37,7 @@ function build_unit_circle_table(D_max::Int, theta::BigFloat)
     V_valid = trues(D_max)
     
     half_theta = theta / 2
-    pi_big = BigFloat(π) # Fixes catastrophic precision leak!
+    pi_big = BigFloat(π) 
     
     for n in 1:D_max
         val_sin = 2 * sin(BigFloat(n) * half_theta)
@@ -117,6 +118,15 @@ end
 
 export evaluate_unit_circle, evaluate_analytic
 
+
+"""
+    evaluate_unit_circle(res::CycloResult, theta::Real, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
+
+Evaluates a compiled `CycloResult` strictly along the unit circle where `q = exp(i * theta)`.
+
+It tracks continuous floating-point phases and seamlessly extracts the 
+analytic square root of the cyclotomic radical.
+"""
 function evaluate_unit_circle(res::CycloResult, theta::Real, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
     (res.pref_rad.sign == 0 || res.m_min.sign == 0) && return zero(T)
 
@@ -156,11 +166,15 @@ function evaluate_unit_circle(res::CycloResult, theta::Real, ::Type{T}=Complex{B
     end
 end
 
-"""
-    cyclo_to_analytic(res::CycloResult, q::Number, ::Type{T}=Complex{BigFloat}; prec=512)
 
-Analytically continues the `CycloResult` to an arbitrary complex parameter q ∈ C.
-Provides the foundational math engine for generic SL(2,C) representation theory.
+"""
+    evaluate_analytic(res::CycloResult, q::Number, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
+
+Evaluates a compiled `CycloResult` for an arbitrary complex parameter `q`.
+
+This function performs the full analytic continuation of the quantum 6j-symbol 
+into the SL(2, ℂ) regime. It utilizes a rolling complex iterator to prevent 
+O(N log N) exponentiation overhead during the table build phase.
 """
 function evaluate_analytic(res::CycloResult, q::Number, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
     (res.pref_rad.sign == 0 || res.m_min.sign == 0) && return zero(T)

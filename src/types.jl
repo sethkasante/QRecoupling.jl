@@ -62,29 +62,30 @@ function snapshot(buf::SymbolicBuffer)
 end
 
 
+
 """
     snapshot_square_root(buf::SymbolicBuffer)
 
 Intercepts the dense buffer and factorizes algebraic perfect squares in a single pass.
-It isolates the perfect square root from the strictly square-free remainder.
+It isolates the perfect square root from the strictly square-free radical.
 """
 function snapshot_square_root(buf::SymbolicBuffer)
     nnz_sq = 0
-    nnz_rem = 0
+    nnz_rad = 0
     
     @inbounds for e in buf.exps
         if e != 0
             q, r = divrem(e, 2)
             if q != 0; nnz_sq += 1; end
-            if r != 0; nnz_rem += 1; end
+            if r != 0; nnz_rad += 1; end
         end
     end
     
     sq_exps = Vector{Pair{Int, Int}}(undef, nnz_sq)
-    rem_exps = Vector{Pair{Int, Int}}(undef, nnz_rem)
+    rad_exps = Vector{Pair{Int, Int}}(undef, nnz_rad)
     
     idx_sq = 1
-    idx_rem = 1
+    idx_rad = 1
     @inbounds for d in 1:length(buf.exps)
         e = buf.exps[d]
         if e != 0
@@ -94,8 +95,8 @@ function snapshot_square_root(buf::SymbolicBuffer)
                 idx_sq += 1
             end
             if r != 0
-                rem_exps[idx_rem] = d => r
-                idx_rem += 1
+                rad_exps[idx_rad] = d => r
+                idx_rad += 1
             end
         end
     end
@@ -103,9 +104,9 @@ function snapshot_square_root(buf::SymbolicBuffer)
     q_z, r_z = divrem(buf.z_pow, 2)
     
     m_root = CycloMonomial(1, q_z, sq_exps)
-    m_rem  = CycloMonomial(buf.sign, r_z, rem_exps)
+    m_rad  = CycloMonomial(buf.sign, r_z, rad_exps)
     
-    return m_root, m_rem # returns root and remainder
+    return m_root, m_rad # returns root and radical
 end
 
 
@@ -214,7 +215,7 @@ Structures the evaluation as a hypergeometric ratio sequence to minimize algebra
 """
 struct CycloResult
     pref_root::CycloMonomial       # Triangle coefficients (square-rooted part)
-    pref_rad::CycloMonomial        # Remainder (square-free part inside the sqrt)
+    pref_rad::CycloMonomial        # Triangle coefficients Radical (the part inside the sqrt)
     m_min::CycloMonomial           # first term in Racah sum  
     ratios::Vector{CycloMonomial}  # ratios of hypergeometric steps
     z_range::UnitRange{Int}        # range of sum
@@ -225,9 +226,9 @@ function Base.show(io::IO, ::MIME"text/plain", res::CycloResult)
     n_ratios = length(res.ratios)
     
     println(io, "CycloResult (Hypergeometric Ratio Form)")
-    println(io, "  ├─ Max Φ_d(q) req : d = ", res.max_d)
-    println(io, "  ├─ Δ (Root Part)  : ", res.pref_root)
-    println(io, "  ├─ Δ (Rem Part)   : √(", res.pref_rad, ")")
+    println(io, "  ├─ Max Φ_d(q) required : d = ", res.max_d)
+    println(io, "  ├─ Δ (Root)       : ", res.pref_root)
+    println(io, "  ├─ Δ (Radical)    : √(", res.pref_rad, ")")
     println(io, "  ├─ M₀ (Base Term) : ", res.m_min)
     
     if n_ratios == 0
@@ -333,6 +334,9 @@ function Base.:+(a::ExactResult, b::ExactResult)
     end
 end
 
+# ------------------------------------------------------
+# Magic Multiplier (Extracts new squares dynamically!)
+# -----------------------------------------------------
 # ------------------------------------------------------------------------------
 # Magic Multiplier (Extracts new squares dynamically!)
 # ------------------------------------------------------------------------------
@@ -345,16 +349,16 @@ function Base.:*(a::ExactResult, b::ExactResult)
     m_prod = a.pref_rad * b.pref_rad
     
     sq_exps = Pair{Int,Int}[]
-    rem_exps = Pair{Int,Int}[]
+    rad_exps = Pair{Int,Int}[]
     for (d, e) in m_prod.exps
         q, r = divrem(e, 2)
         if q != 0; push!(sq_exps, d => q); end
-        if r != 0; push!(rem_exps, d => r); end
+        if r != 0; push!(rad_exps, d => r); end
     end
     q_z, r_z = divrem(m_prod.z_pow, 2)
     
     m_root = CycloMonomial(1, q_z, sq_exps)
-    m_rem  = CycloMonomial(m_prod.sign, r_z, rem_exps)
+    m_rad  = CycloMonomial(m_prod.sign, r_z, rad_exps)
     
     h = a.k + 2
     K = parent(a.sum_part)
@@ -368,76 +372,10 @@ function Base.:*(a::ExactResult, b::ExactResult)
     
     new_sum = exact_new_root * a.sum_part * b.sum_part
     
-    return ExactResult(a.k, m_rem, new_sum)
+    return ExactResult(a.k, m_rad, new_sum)
 end
 
 
 
 
 
-
-
-
-
-
-
-# function Base.show(io::IO, res::ExactResult)
-#     k_sub = to_subscript(res.k)
-#     print(io, "Exact SU(2)$k_sub Symbol:\n")
-    
-#     z = res.z
-#     zero_z= zero(z)
-#     if res.pref_rad.sign == 0 || iszero(res.sum_part)
-#         # print(io, "  0\n")
-#         return zero_z
-#     end
-
-#     # Evaluate the CycloMonomial into the Nemo field purely for printing
-#     # K = parent(res.sum_part)
-#     # z = gen(K)
-#     h = res.k + 2
-    
-#     # Safely get max_d to pull from our O(1) exact phase cache
-#     max_d = isempty(res.pref_rad.exps) ? 0 : res.pref_rad.exps[end].first
-    
-#     if max_d > 0
-#         V_exact = get_phi_exact_table(max_d, res.k, z)
-#         # Use our existing fast projector
-#         num, den = _project_ratio_nemo(res.pref_rad, V_exact, z, h, zero_z, one(z))
-#         A_val = divexact(num, den)
-#     else
-#         # Trivial case (empty remainder, just a sign or z power)
-#         A_val = z^(res.pref_rad.z_pow)
-#         res.pref_rad.sign == -1 && (A_val = -A_val)
-#     end
-
-#     # If the remainder evaluates exactly to 1, don't print the sqrt
-#     if isone(A_val)
-#         print(io, "  Val: ", res.sum_part)
-#     else
-#         print(io, "  Val: √(", A_val, ") * (", res.sum_part, ")")
-#     end
-# end
-
-
-
-
-
-
-# """
-#     ExactResult{T}
-# A rigorously exact representation of a quantum symbol. 
-# Maintains the exact algebraic square-free remainder separated from the evaluated sum.
-# """
-# struct ExactResult{T}
-#     k::Int
-#     pref_rad::CycloMonomial # The purely square-free algebraic remainder!
-#     sum_part::T
-# end
-
-# function Base.show(io::IO, res::ExactResult)
-#     k_sub = to_subscript(res.k)
-#     print(io, "Exact SU(2)$k_sub Symbol:\n")
-#     print(io, "  Prefactor: √(", res.pref_rad, ")\n")
-#     print(io, "  Sum(Σ):    ", res.sum_part)
-# end
