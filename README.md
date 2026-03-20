@@ -100,6 +100,15 @@ julia> gsymbol(1, 1, 1, 1, 1, 1, k; mode=:numeric)
 1.0000000000000002
 ```
 
+## Memory Management
+
+`QRacahSymbols.jl` caches prime sieves and cyclotomic phases under the hood when computing massive state sums over complex triangulations. If you change topological levels (k) drastically and need to free up RAM, you can clear the global caches dynamically.
+```julia
+clear_caches!()         # Clears all internal caches
+clear_numeric_caches!() # Clears the Log-Sum-Exp tables
+clear_exact_caches!()   # Clears dense Nemo.jl polynomials
+```
+
 ## Documentation
 
 For the complete API reference, interactive tutorials, and deep dives into the mathematical architecture, please see the [Official Documentation](https://sethkasante.github.io/QRacahSymbols.jl/).
