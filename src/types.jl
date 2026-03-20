@@ -222,7 +222,7 @@ struct CycloResult
 end
 
 
-function Base.show(io::IO, ::MIME"text/plain", res::CycloResult)
+function Base.show(io::IO, res::CycloResult)
     n_ratios = length(res.ratios)
     
     # Combine the rational prefactor with the base term for display purposes
@@ -245,14 +245,14 @@ function Base.show(io::IO, ::MIME"text/plain", res::CycloResult)
     if n_ratios == 0
         print(io,   "  └─ Ratios (R)     : [Empty Series]")
     elseif n_ratios <= 3
-        println(io, "  └─ Ratios (R)     : ", n_ratios, " terms")
+        println(io, "  └─ Ratios (R)     : ", n_ratios, " term(s)")
         for i in 1:n_ratios
             prefix = (i == n_ratios) ? "       └─ R" : "       ├─ R"
             print(io, prefix, to_subscript(i), " : ", res.ratios[i])
             i < n_ratios && println(io) 
         end
     else
-        println(io, "  └─ Ratios (R)     : ", n_ratios, " terms")
+        println(io, "  └─ Ratios (R)     : ", n_ratios, " term(s)")
         println(io, "       ├─ R", to_subscript(1), " : ", res.ratios[1])
         println(io, "       ├─ R", to_subscript(2), " : ", res.ratios[2])
         println(io, "       ├─ ... (", n_ratios - 3, " more) ...")
