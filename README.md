@@ -4,12 +4,14 @@
 [![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://sethkasante.github.io/QRacahSymbols.jl/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**QRacahSymbols.jl** is a high-performance, mathematically rigorous Julia library for the exact and numerically stable evaluation of quantum $\text{SU(2)}_k$ recoupling coefficients ($\{3j\}$- and $\{6j\}$-symbols and topological category) at arbitrary roots of unity.
+**QRacahSymbols.jl** is a high-performance, mathematically rigorous Julia library for the exact and numerically stable evaluation of quantum $\text{SU(2)}_k$ recoupling coefficients ($\{3j\}$- and $\{6j\}$-symbols and topological category) at arbitrary roots of unity. This package bridges the gap between **ultra-fast floating-point numerics** and **rigorous Computer Algebra System (CAS) exactness**.
 
-## The Catastrophic Cancellation Problem (and Solution)
+By representing quantum prime factorizations as deferred sparse cyclotomic arrays, `QRacahSymbols.jl` completely bypasses floating-point overflow and traditional algebraic bottlenecks, allowing for blazing-fast discrete evaluations and exact topological proofs.
+
+<!-- ## The Catastrophic Cancellation Problem (and Solution)
 Standard numerical implementations of the quantum Racah formula suffer from ***catastrophic cancellation*** at macroscopic spins due to the alternating summation of massive $q$-deformed factorials. This package (`QRacahSymbols.jl`) circumvents this crisis entirely using a novel **CycloMonomial architecture**, which rigorously factors the topological invariant into integer arrays of cyclotomic polynomials $(\Phi_d(q))$ prior to any floating-point evaluation.
 
-This guarantees mathematically exact, zero-drift computations of tensor network amplitudes even in the deep semiclassical limit ($j \ge 500$), unlocking extreme-spin probes for research in mathematics and physics.
+This guarantees mathematically exact, zero-drift computations of tensor network amplitudes even in the deep semiclassical limit ($j \ge 500$), unlocking extreme-spin probes for research in mathematics and physics. -->
 
 ## Core Features
 
