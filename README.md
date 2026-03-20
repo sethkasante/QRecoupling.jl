@@ -46,7 +46,7 @@ k = 10 # Level k
 julia> q6j(j, j, j, j, j, j, k; mode=:numeric)
 0.1547005383792515
 
-# 2. Exact algebraic evaluation in rational cyclotomic Fields
+# 2. Exact algebraic evaluation in rational cyclotomic fields (ζ)
 julia> q6j(j, j, j, j, j, j, k; mode=:exact)
 Exact SU(2)₁₀ Symbol:
   Value: -2//3*ζ^6 + 4//3*ζ^2 - 1
@@ -58,16 +58,13 @@ julia> q6j(j, j, j, j, j, j; mode=:classical_exact)
 ### The Polymorphic Architecture
 QRacahSymbols.jl utilizes different mathematically optimized engines invoked via the mode flag:
 * `mode=:numeric`: The absolute speed limit. Uses pre-cached dense logarithmic arrays and a Log-Sum-Exp hot loop to rapidly compute single-shot floating point values for $\text{SU(2)}_k$.
-
 * `mode=:exact`: The mathematician's tool. Maps the symbol into rigorous Nemo.jl cyclotomic fields. By extracting algebraic perfect squares symbolically, it provides $\mathcal{O}(1)$ radical extraction and impenetrable precision.
-
 * `mode=:classical_exact`: Evaluates the un-deformed Ponzano-Regge limit. Bypasses Julia's Garbage Collector entirely by executing GMP integer math strictly in-place, dramatically outperforming standard libraries.
-
 * `mode=:cyclo`: Builds the unevaluated algebraic graph of the symbol. Ideal for structural analysis of the hypergeometric ratio sequence.
 
 ### CycloMonomial Ouput
 
-When operating in `:cyclo` mode, the engine dynamically collapses perfect squares to provide a human-readable, minimal representation of the topological graph:
+When operating in `:cyclo` mode, the engine dynamically collapses perfect squares to provide a human-readable, minimal representation of the symbol.
 ```julia
 using QRacahSymbols
 
