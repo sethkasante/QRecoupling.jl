@@ -1,6 +1,5 @@
 # types.jl
 
-
 # -----------------------------------------------------
 # -- Core Symbolic Structures ---
 # The Cyclotomic representation of 3j and 6j symbols

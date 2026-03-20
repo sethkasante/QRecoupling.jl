@@ -85,7 +85,7 @@ function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::OptI
     # 4. Engine Dispatch
     if mode == :exact
         res_cyclo = q6j_cyclo(c_spins[1], c_spins[2], c_spins[3], c_spins[4], c_spins[5], c_spins[6])
-        return evaluate_level_exact(res_cyclo, k)
+        return cyclo_to_exact(res_cyclo, k)
         
     elseif mode == :numeric
         model = NumericSU2kModel(k; T=T, prec=prec)
@@ -135,7 +135,7 @@ function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin, k::OptI
 
     if mode == :exact
         res_cyclo = q3j_cyclo(j1, j2, j3, m1, m2, m3)
-        return evaluate_level_exact(res_cyclo, k)
+        return cyclo_to_exact(res_cyclo, k)
         
     elseif mode == :numeric
         model = NumericSU2kModel(k; T=T, prec=prec)
@@ -248,7 +248,7 @@ function fsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::
         return fsymbol_cyclo(j1, j2, j3, j4, j5, j6)
     elseif mode == :exact
         isnothing(k) && throw(ArgumentError("Mode :exact requires level k."))
-        return evaluate_level_exact(fsymbol_cyclo(j1, j2, j3, j4, j5, j6), k)
+        return cyclo_to_exact(fsymbol_cyclo(j1, j2, j3, j4, j5, j6), k)
     elseif mode == :numeric
         isnothing(k) && throw(ArgumentError("Mode :numeric requires level k."))
         model = NumericSU2kModel(k; T=T, prec=prec)
@@ -276,7 +276,7 @@ function gsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::
         return gsymbol_cyclo(j1, j2, j3, j4, j5, j6)
     elseif mode == :exact
         isnothing(k) && throw(ArgumentError("Mode :exact requires level k."))
-        return evaluate_level_exact(gsymbol_cyclo(j1, j2, j3, j4, j5, j6), k)
+        return cyclo_to_exact(gsymbol_cyclo(j1, j2, j3, j4, j5, j6), k)
     elseif mode == :numeric
         isnothing(k) && throw(ArgumentError("Mode :numeric requires level k."))
         model = NumericSU2kModel(k; T=T, prec=prec)
