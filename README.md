@@ -25,11 +25,8 @@ pkg> add QRacahSymbols
 `QRacahSymbols.jl` is built as a unified interface with highly specialized computational engines. 
 
 * **Multi-Paradigm Engine**: Compute symbols dynamically as fast floats, rigorous cyclotomic algebraic numbers, or exact zero-allocation rationals.
-
 * **Overflow Immunity**: Uses a specialized Log-Sum-Exp architecture and GMP C-calls to handle massive topological spins without NaN or Inf corruption.
-
 * **Zero-Division CAS**: Extracts perfect algebraic squares symbolically before summation, providing division-free loops in exact cyclotomic fields.
-
 * **TQFT Category Suite**: Support for quantum dimensions, R-matrices (braiding), F-symbols (fusion), and G-symbols (tetrahedral weights).
 
 
