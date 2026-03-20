@@ -89,7 +89,7 @@ using Nemo
         K, z = cyclotomic_field(2 * h, "ζ")
         
         # We will compute: Sum_x [2x+1]_q * {j1 j2 j3; j4 j5 x}^2
-        sum_val = QRacahSymbols.ExactResult(k, QRacahSymbols.EMPTY_MONOMIAL, K(0))
+        sum_val = ExactResult(k, QRacahSymbols.EMPTY_MONOMIAL, K(0))
         
         x_min = max(abs(j1 - j5), abs(j2 - j4))
         x_max = min(j1 + j5, j2 + j4, k - max(j1+j5, j2+j4))
