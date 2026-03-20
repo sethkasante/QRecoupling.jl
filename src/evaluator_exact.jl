@@ -164,7 +164,7 @@ function cyclo_to_exact(res::CycloResult, k::Int)
     return ExactResult(k, res.pref_rad, exact_root * c_mmin * sum_val)
 end
 
-export evaluate_level_exact
+# export evaluate_level_exact
 
 
 
