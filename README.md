@@ -8,11 +8,6 @@
 
 By representing quantum prime factorizations as deferred sparse cyclotomic arrays, `QRacahSymbols.jl` completely bypasses floating-point overflow and traditional algebraic bottlenecks, allowing for blazing-fast discrete evaluations and exact topological proofs.
 
-<!-- ## The Catastrophic Cancellation Problem (and Solution)
-Standard numerical implementations of the quantum Racah formula suffer from ***catastrophic cancellation*** at macroscopic spins due to the alternating summation of massive $q$-deformed factorials. This package (`QRacahSymbols.jl`) circumvents this crisis entirely using a novel **CycloMonomial architecture**, which rigorously factors the topological invariant into integer arrays of cyclotomic polynomials $(\Phi_d(q))$ prior to any floating-point evaluation.
-
-This guarantees mathematically exact, zero-drift computations of tensor network amplitudes even in the deep semiclassical limit ($j \ge 500$), unlocking extreme-spin probes for research in mathematics and physics. -->
-
 ## Installation
 
 ```julia
@@ -32,7 +27,7 @@ pkg> add QRacahSymbols
 
 ## Quick Start
 
-Evaluate the core quantum $6j$ and $3j$ (Racah-Wigner) symbols. The **mode** keyword controls the computational engine.
+Evaluate the core quantum $6j$ and $3j$ (Racah-Wigner) symbols. The **mode** keyword controls the computational engine. Output values may vary slightly based on the floating-point precision.
 ```julia
 using QRacahSymbols
 
@@ -114,4 +109,4 @@ For the complete API reference, interactive tutorials, and deep dives into the m
 
 If you use `QRacahSymbols.jl` in your research, please cite the following paper:
 
-> Seth K. Asante, *"Exact Algebraic Evaluation of Quantum Recoupling Coefficients using Cyclotomic Representation"* (To appear soon, 2026). arXiv:XXXX.XXXXX.
+> Seth K. Asante, *"QRacahSymbols.jl: Fast Exact Evaluation of Quantum Recoupling Coefficients using Cyclotomic Factorization"* (To appear soon, 2026). arXiv:XXXX.XXXXX.
