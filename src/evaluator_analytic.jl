@@ -128,7 +128,7 @@ It tracks continuous floating-point phases and seamlessly extracts the
 analytic square root of the cyclotomic radical.
 """
 function evaluate_unit_circle(res::CycloResult, theta::Real, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
-    (res.pref_rad.sign == 0 || res.m_min.sign == 0) && return zero(T)
+    (res.radical.sign == 0 || res.m_min.sign == 0) && return zero(T)
 
     return setprecision(BigFloat, prec) do
         theta_big = BigFloat(theta)
@@ -147,14 +147,14 @@ function evaluate_unit_circle(res::CycloResult, theta::Real, ::Type{T}=Complex{B
         end
 
         c_mmin = _project_to_complex_analytic(res.m_min, lmag_table, lphs_table, z_lmag, z_lphs)
-        c_root = _project_to_complex_analytic(res.pref_root, lmag_table, lphs_table, z_lmag, z_lphs)
+        c_root = _project_to_complex_analytic(res.root, lmag_table, lphs_table, z_lmag, z_lphs)
 
         # Extract analytic square root of the radical
-        rad_lm = res.pref_rad.z_pow * z_lmag
-        rad_lp = res.pref_rad.z_pow * z_lphs
-        res.pref_rad.sign == -1 && (rad_lp += BigFloat(π))
+        rad_lm = res.radical.z_pow * z_lmag
+        rad_lp = res.radical.z_pow * z_lphs
+        res.radical.sign == -1 && (rad_lp += BigFloat(π))
         
-        @inbounds for (d, e) in res.pref_rad.exps
+        @inbounds for (d, e) in res.radical.exps
             rad_lm += e * lmag_table[d]
             rad_lp += e * lphs_table[d]
         end
@@ -177,7 +177,7 @@ into the SL(2, ℂ) regime. It utilizes a rolling complex iterator to prevent
 O(N log N) exponentiation overhead during the table build phase.
 """
 function evaluate_analytic(res::CycloResult, q::Number, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
-    (res.pref_rad.sign == 0 || res.m_min.sign == 0) && return zero(T)
+    (res.radical.sign == 0 || res.m_min.sign == 0) && return zero(T)
 
     return setprecision(BigFloat, prec) do
         q_big = Complex{BigFloat}(q)
@@ -198,13 +198,13 @@ function evaluate_analytic(res::CycloResult, q::Number, ::Type{T}=Complex{BigFlo
         end
 
         c_mmin = _project_to_complex_analytic(res.m_min, lmag_table, lphs_table, z_lmag, z_lphs)
-        c_root = _project_to_complex_analytic(res.pref_root, lmag_table, lphs_table, z_lmag, z_lphs)
+        c_root = _project_to_complex_analytic(res.root, lmag_table, lphs_table, z_lmag, z_lphs)
 
-        rad_lm = res.pref_rad.z_pow * z_lmag
-        rad_lp = res.pref_rad.z_pow * z_lphs
-        res.pref_rad.sign == -1 && (rad_lp += BigFloat(π))
+        rad_lm = res.radical.z_pow * z_lmag
+        rad_lp = res.radical.z_pow * z_lphs
+        res.radical.sign == -1 && (rad_lp += BigFloat(π))
         
-        @inbounds for (d, e) in res.pref_rad.exps
+        @inbounds for (d, e) in res.radical.exps
             rad_lm += e * lmag_table[d]
             rad_lp += e * lphs_table[d]
         end

@@ -213,8 +213,8 @@ A high-performance, deferred-specialization representation of a quantum recoupli
 Structures the evaluation as a hypergeometric ratio sequence to minimize algebraic divisions.
 """
 struct CycloResult
-    pref_root::CycloMonomial       # Triangle coefficients (square-rooted part)
-    pref_rad::CycloMonomial        # Triangle coefficients Radical (the part inside the sqrt)
+    root::CycloMonomial       # Triangle coefficients (square-rooted part)
+    radical::CycloMonomial        # Triangle coefficients Radical (the part inside the sqrt)
     m_min::CycloMonomial           # first term in Racah sum  
     ratios::Vector{CycloMonomial}  # ratios of hypergeometric steps
     z_range::UnitRange{Int}        # range of sum
@@ -227,10 +227,10 @@ function Base.show(io::IO, res::CycloResult)
     
     # Combine the rational prefactor with the base term for display purposes
     # The true mathematical form is: (Root * M0 * sqrt(Rad)) * [1 + R1 + R1*R2 + ...]
-    overall_rat = res.pref_root * res.m_min
+    overall_rat = res.root * res.m_min
     
     # Check if the radical is exactly 1 (sign=1, z_pow=0, no Φ polynomials)
-    is_rad_one = res.pref_rad.sign == 1 && res.pref_rad.z_pow == 0 && isempty(res.pref_rad.exps)
+    is_rad_one = res.radical.sign == 1 && res.radical.z_pow == 0 && isempty(res.radical.exps)
     
     println(io, "CycloResult (Hypergeometric Ratio Form)")
     println(io, "  ├─ Max Φ_d(q) required : d = ", res.max_d)
@@ -239,7 +239,7 @@ function Base.show(io::IO, res::CycloResult)
         println(io, "  ├─ Overall Prefactor : ", overall_rat)
     else
         println(io, "  ├─ Prefactor (Rational) : ", overall_rat)
-        println(io, "  ├─ Prefactor (Radical)  : √(", res.pref_rad, ")")
+        println(io, "  ├─ Prefactor (Radical)  : √(", res.radical, ")")
     end
     
     if n_ratios == 0
@@ -272,13 +272,13 @@ end
     ExactResult{T}
 
 A rigorously exact representation of a quantum symbol in a cyclotomic number field.
-Maintains the exact algebraic square-free remainder symbolically (`pref_rad`) to 
+Maintains the exact algebraic square-free remainder symbolically (`radical`) to 
 allow O(1) square-root extraction during multiplication, bypassing heavy CAS factorization.
 """
 struct ExactResult{T}
     k::Int                  # Level k 
-    pref_rad::CycloMonomial # Stored symbolically for fast multiplication!
-    sum_part::T             # The evaluated Nemo sum (Type T is a Nemo field element)
+    radical::CycloMonomial # Square free part inside sqrt: stored symbolically for fast multiplication!
+    factor::T             # The evaluated Nemo sum (Type T is a Nemo field element)
 end
 
 # Helper function strictly for pretty-printing the square-free remainder
@@ -305,41 +305,41 @@ function Base.show(io::IO, res::ExactResult)
     k_sub = to_subscript(res.k)
     print(io, "Exact SU(2)$k_sub Symbol:\n")
     
-    if res.pref_rad.sign == 0 || iszero(res.sum_part)
+    if res.radical.sign == 0 || iszero(res.factor)
         print(io, "  0\n")
         return
     end
 
     # Dynamically extract the field and generator
-    K = parent(res.sum_part)
+    K = parent(res.factor)
     z = gen(K)
     
-    A_val = _eval_nemo_print(res.pref_rad, res.k, K, z)
+    A_val = _eval_nemo_print(res.radical, res.k, K, z)
 
     if isone(A_val)
-        print(io, "  Value: ", res.sum_part)
+        print(io, "  Value: ", res.factor)
     else
         print(io, "  Value: √(A) * B\n")
         print(io, "  ----------------\n")
         print(io, "  A (Radical) = ", A_val, "\n")
-        print(io, "  B (Sum)     = ", res.sum_part)
+        print(io, "  B (Sum)     = ", res.factor)
     end
 end
 
 function Base.:(==)(a::ExactResult, b::ExactResult)
     a.k == b.k || return false
-    iszero(a.sum_part) && return iszero(b.sum_part)
-    iszero(b.sum_part) && return false
-    return a.pref_rad == b.pref_rad && a.sum_part == b.sum_part
+    iszero(a.factor) && return iszero(b.factor)
+    iszero(b.factor) && return false
+    return a.radical == b.radical && a.factor == b.factor
 end
 
 function Base.:+(a::ExactResult, b::ExactResult)
     @assert a.k == b.k "Cannot add results from different levels k"
-    iszero(a.sum_part) && return b
-    iszero(b.sum_part) && return a
+    iszero(a.factor) && return b
+    iszero(b.factor) && return a
     
-    if a.pref_rad == b.pref_rad
-        return ExactResult(a.k, a.pref_rad, a.sum_part + b.sum_part)
+    if a.radical == b.radical
+        return ExactResult(a.k, a.radical, a.factor + b.factor)
     else
         error("Cannot add ExactResults: They do not belong to the same topological square-class.")
     end
@@ -354,10 +354,10 @@ end
 function Base.:*(a::ExactResult, b::ExactResult)
     @assert a.k == b.k "Cannot multiply different levels"
     
-    iszero(a.sum_part) && return a
-    iszero(b.sum_part) && return b
+    iszero(a.factor) && return a
+    iszero(b.factor) && return b
     
-    m_prod = a.pref_rad * b.pref_rad
+    m_prod = a.radical * b.radical
     
     sq_exps = Pair{Int,Int}[]
     rad_exps = Pair{Int,Int}[]
@@ -372,7 +372,7 @@ function Base.:*(a::ExactResult, b::ExactResult)
     m_rad  = CycloMonomial(m_prod.sign, r_z, rad_exps)
     
     h = a.k + 2
-    K = parent(a.sum_part)
+    K = parent(a.factor)
     z = gen(K)
     
     max_d = isempty(m_root.exps) ? 0 : m_root.exps[end].first
@@ -381,7 +381,7 @@ function Base.:*(a::ExactResult, b::ExactResult)
     # Evaluate the newly formed root using the ultra-fast division-free projector
     exact_new_root = _project_ratio_nemo(m_root, V_exact, V_inv, z, h, K(0), K(1))
     
-    new_sum = exact_new_root * a.sum_part * b.sum_part
+    new_sum = exact_new_root * a.factor * b.factor
     
     return ExactResult(a.k, m_rad, new_sum)
 end

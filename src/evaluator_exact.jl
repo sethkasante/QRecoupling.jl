@@ -131,8 +131,8 @@ algebraic cyclotomic field for SU(2)_k.
 
 # Returns:
 An `ExactResult{T}` containing:
-1. `pref_rad`: The strictly square-free remainder (kept symbolic for fast O(1) multiplication).
-2. `sum_part`: The evaluated rational sum (a Nemo field element).
+1. `radical`: The strictly square-free remainder (kept symbolic for fast O(1) multiplication).
+2. `factor`: The evaluated rational sum (a Nemo field element).
 
 # Architecture:
 Extracts the perfect algebraic squares during the construction phase, this 
@@ -144,7 +144,7 @@ function cyclo_to_exact(res::CycloResult, k::Int)
     _, z = cyclotomic_field(2 * h, "ζ")
     z_zero, z_one = zero(z), one(z)
     
-    if res.pref_rad.sign == 0 || res.m_min.sign == 0
+    if res.radical.sign == 0 || res.m_min.sign == 0
         return ExactResult(k, EMPTY_MONOMIAL, z_zero)
     end
     
@@ -159,9 +159,9 @@ function cyclo_to_exact(res::CycloResult, k::Int)
     end
 
     c_mmin = _project_ratio_nemo(res.m_min, V_exact, V_inv, z, h, z_zero, z_one)
-    exact_root = _project_ratio_nemo(res.pref_root, V_exact, V_inv, z, h, z_zero, z_one)
+    exact_root = _project_ratio_nemo(res.root, V_exact, V_inv, z, h, z_zero, z_one)
     
-    return ExactResult(k, res.pref_rad, exact_root * c_mmin * sum_val)
+    return ExactResult(k, res.radical, exact_root * c_mmin * sum_val)
 end
 
 # export evaluate_level_exact
@@ -212,14 +212,14 @@ function prove_orthogonality(j1::Spin, j2::Spin, j4::Spin, j5::Spin, j3::Spin, k
         dim_x = exact_qdim(x, k)
         
         # When exact_A * exact_B happens, the remainder squares itself,
-        # becomes perfect, and gets automatically sucked into the sum_part!
+        # becomes perfect, and gets automatically sucked into the factor!
         term = dim_x * exact_A * exact_B 
         
         total_sum = total_sum + term
     end
     
     dim_j3 = exact_qdim(j3, k)
-    theoretical_rhs = ExactResult(k, EMPTY_MONOMIAL, divexact(K(1), dim_j3.sum_part))
+    theoretical_rhs = ExactResult(k, EMPTY_MONOMIAL, divexact(K(1), dim_j3.factor))
     
     println("\n LHS (Summed over x): ", total_sum)
     println(" RHS (1 / [2j3+1]): ", theoretical_rhs)

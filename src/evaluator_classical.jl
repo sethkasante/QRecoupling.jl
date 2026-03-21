@@ -116,7 +116,7 @@ shifted summation to guarantee  immunity against `NaN` and `Inf` floating-point 
 at massive classical spins.
 """
 function evaluate_classical(res::CycloResult)
-    (res.pref_rad.sign == 0 || res.m_min.sign == 0) && return 0.0
+    (res.radical.sign == 0 || res.m_min.sign == 0) && return 0.0
     ensure_classical_sieve(res.max_d)
 
     max_lm = -Inf
@@ -128,8 +128,8 @@ function evaluate_classical(res::CycloResult)
         max_lm = max(max_lm, lm_curr)
     end
 
-    lm_root = evaluate_classical_log(res.pref_root)
-    lm_rem  = evaluate_classical_log(res.pref_rad)
+    lm_root = evaluate_classical_log(res.root)
+    lm_rem  = evaluate_classical_log(res.radical)
     v_pref = exp(lm_root + (lm_rem / 2))
     
     lm_curr = evaluate_classical_log(res.m_min)
@@ -316,21 +316,21 @@ By avoiding floating-point square roots entirely, this engine bypasses the 64-bi
 overflows found in standard libraries (like `WignerSymbols.jl`) to preserve infinite precision.
 """
 function evaluate_classical_exact(res::CycloResult)
-    (res.pref_rad.sign == 0 || res.m_min.sign == 0) && return ClassicalResult(0, 0//1)
+    (res.radical.sign == 0 || res.m_min.sign == 0) && return ClassicalResult(0, 0//1)
     ensure_classical_sieve(res.max_d)
 
     # 1. Evaluate the exact split prefactor
-    pref_root_rat = evaluate_to_rational(res.pref_root)
-    pref_rad_rat  = evaluate_to_rational(res.pref_rad)
+    root_rat = evaluate_to_rational(res.root)
+    radical_rat  = evaluate_to_rational(res.radical)
     
     # 2. Exact integer/rational evaluation of the hypergeometric series
     sum_val = _sum_hypergeometric_exact(res)
     
     # The sum cleanly absorbs the perfectly square-rooted prefactor!
-    total_sum = sum_val * pref_root_rat
+    total_sum = sum_val * root_rat
     
-    final_sign = sign(total_sum) * res.pref_rad.sign
-    final_sq_val = pref_rad_rat * (total_sum^2)
+    final_sign = sign(total_sum) * res.radical.sign
+    final_sq_val = radical_rat * (total_sum^2)
     
     return ClassicalResult(final_sign, final_sq_val)
 end

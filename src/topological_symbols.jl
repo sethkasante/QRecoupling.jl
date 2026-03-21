@@ -8,24 +8,24 @@
     _multiply_prefactors(res::CycloResult, extra_sq::CycloMonomial)
 
 Safely fuses a set of extra quantum dimensions into a 6j-symbol's prefactor remainder.
-Automatically extracts any newly formed algebraic perfect squares into `pref_root`.
+Automatically extracts any newly formed algebraic perfect squares into `root`.
 """
 function _multiply_prefactors(res::CycloResult, extra_sq::CycloMonomial)
     res.m_min.sign == 0 && return res # Fast path for topological zeros
     
     max_d = 0
-    !isempty(res.pref_rad.exps) && (max_d = max(max_d, res.pref_rad.exps[end].first))
+    !isempty(res.radical.exps) && (max_d = max(max_d, res.radical.exps[end].first))
     !isempty(extra_sq.exps) && (max_d = max(max_d, extra_sq.exps[end].first))
     
     buf = SymbolicBuffer(max_d)
-    buf.sign = res.pref_rad.sign * extra_sq.sign
-    buf.z_pow = res.pref_rad.z_pow + extra_sq.z_pow
+    buf.sign = res.radical.sign * extra_sq.sign
+    buf.z_pow = res.radical.z_pow + extra_sq.z_pow
     
-    @inbounds for (d, e) in res.pref_rad.exps; buf.exps[d] += e; end
+    @inbounds for (d, e) in res.radical.exps; buf.exps[d] += e; end
     @inbounds for (d, e) in extra_sq.exps; buf.exps[d] += e; end
     
     bonus_root, final_rad = snapshot_square_root(buf)
-    final_root = res.pref_root * bonus_root
+    final_root = res.root * bonus_root
     
     return CycloResult(final_root, final_rad, res.m_min, res.ratios, res.z_range, max(res.max_d, max_d))
 end
@@ -112,7 +112,7 @@ function fsymbol_cyclo(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spi
     phase_s = iseven(round(Int, j1 + j2 + j4 + j5)) ? 1 : -1
     new_m_min = CycloMonomial(res_f.m_min.sign * phase_s, res_f.m_min.z_pow, copy(res_f.m_min.exps))
     
-    return CycloResult(res_f.pref_root, res_f.pref_rad, new_m_min, res_f.ratios, res_f.z_range, res_f.max_d)
+    return CycloResult(res_f.root, res_f.radical, new_m_min, res_f.ratios, res_f.z_range, res_f.max_d)
 end
 
 function fsymbol_numeric(model::NumericSU2kModel{T}, j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)::T where {T}

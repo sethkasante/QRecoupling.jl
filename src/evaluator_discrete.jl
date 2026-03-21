@@ -107,7 +107,7 @@ Evaluates the quantum symbol at the exact discrete SU(2)_k root of unity.
 Employs pure integer phase tracking to guarantee immunity against Float64 sign corruption.
 """
 function evaluate_level(res::CycloResult, k::Int, ::Type{T}=Float64; prec=512) where {T}
-    (res.pref_rad.sign == 0 || res.m_min.sign == 0) && return zero(T)
+    (res.radical.sign == 0 || res.m_min.sign == 0) && return zero(T)
 
     return setprecision(BigFloat, prec) do
         h = k + 2
@@ -123,11 +123,11 @@ function evaluate_level(res::CycloResult, k::Int, ::Type{T}=Float64; prec=512) w
         end
 
         c_mmin = _project_to_real(res.m_min, lmag_table, lphs_table, h)
-        c_root = _project_to_real(res.pref_root, lmag_table, lphs_table, h)
+        c_root = _project_to_real(res.root, lmag_table, lphs_table, h)
         
         # Evaluate radical directly (Delta^2 is rigorously strictly positive)
         p_lm = zero(BigFloat)
-        @inbounds for (d, e) in res.pref_rad.exps
+        @inbounds for (d, e) in res.radical.exps
             d != h && (p_lm += e * lmag_table[d])
         end
         c_rad_sqrt = exp(p_lm / 2) 

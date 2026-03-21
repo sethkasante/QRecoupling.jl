@@ -12,7 +12,7 @@ using Nemo
         
         # Exact Dimension Check
         dim_ext = qdim(1/2, k; mode=:exact)
-        @test isempty(dim_ext.pref_rad.exps) # Should have no radical remainder
+        @test isempty(dim_ext.radical.exps) # Should have no radical remainder
         
         # R-Matrix Unitarity Check (|R| = 1)
         r_val = rmatrix(1, 1, 1, 10; mode=:numeric)
@@ -30,7 +30,7 @@ using Nemo
         
         # Ensure exact engine correctly catches the zero
         ext_zero = q6j(1, 1, 1, 1, 1, 1, 2; mode=:exact)
-        @test iszero(ext_zero.sum_part)
+        @test iszero(ext_zero.factor)
     end
 
     @testset "3. Engine Consistency (Cyclo vs Numeric)" begin
@@ -108,9 +108,9 @@ using Nemo
         
         # The exact right-hand side of Orthogonality: 1 / [2j3+1]_q
         dim_j3 = qdim(j3, k; mode=:exact)
-        expected_rhs = inv(dim_j3.sum_part)
+        expected_rhs = inv(dim_j3.factor)
         
-        @test sum_val.sum_part == expected_rhs
+        @test sum_val.factor == expected_rhs
     end
 
     @testset "7. Biedenharn-Elliott Pentagon Identity" begin
