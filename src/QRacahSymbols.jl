@@ -3,6 +3,7 @@ module QRacahSymbols
 # ---- Dependencies ----
 using LRUCache
 using Nemo
+using PrecompileTools
 
 
 # --- Global Type Aliases ----
@@ -61,5 +62,19 @@ export q6j_direct, q3j_direct
 
 #constructors for results
 export ExactResult, CycloResult, ClassicalResult
+
+
+
+
+# precompile these 
+@setup_workload begin
+    k = 3
+    @compile_workload begin
+        q6j(1, 1, 1, 1, 1, 1, k; mode=:numeric)
+        q6j(1, 1, 1, 1, 1, 1, k; mode=:exact)
+        q6j(1, 1, 1, 1, 1, 1; mode=:classical_exact)
+        q6j(1, 1, 1, 1, 1, 1; mode=:cyclo)
+    end
+end
 
 end # module QRacahSymbols
