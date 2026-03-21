@@ -2,7 +2,7 @@
 *.jl.cov
 *.jl.mem
 *.ji
-Manifest.toml
+!docs/Manifest.toml
 
 # OS
 .DS_Store
