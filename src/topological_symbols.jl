@@ -11,7 +11,7 @@ Safely fuses a set of extra quantum dimensions into a 6j-symbol's prefactor rema
 Automatically extracts any newly formed algebraic perfect squares into `root`.
 """
 function _multiply_prefactors(res::CycloResult, extra_sq::CycloMonomial)
-    res.m_min.sign == 0 && return res # Fast path for topological zeros
+    res.base_term.sign == 0 && return res # Fast path for topological zeros
     
     max_d = 0
     !isempty(res.radical.exps) && (max_d = max(max_d, res.radical.exps[end].first))
@@ -27,7 +27,7 @@ function _multiply_prefactors(res::CycloResult, extra_sq::CycloMonomial)
     bonus_root, final_rad = snapshot_square_root(buf)
     final_root = res.root * bonus_root
     
-    return CycloResult(final_root, final_rad, res.m_min, res.ratios, res.z_range, max(res.max_d, max_d))
+    return CycloResult(final_root, final_rad, res.base_term, res.ratios, res.z_range, max(res.max_d, max_d))
 end
 
 # ==============================================================================
@@ -100,7 +100,7 @@ end
 
 function fsymbol_cyclo(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
     res_6j = q6j_cyclo(j1, j2, j3, j4, j5, j6)
-    res_6j.m_min.sign == 0 && return res_6j 
+    res_6j.base_term.sign == 0 && return res_6j 
     
     buf = SymbolicBuffer(round(Int, max(2j3+1, 2j6+1)))
     add_qint!(buf, round(Int, 2j3+1), 1)
@@ -110,9 +110,9 @@ function fsymbol_cyclo(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spi
     res_f = _multiply_prefactors(res_6j, dims_mono)
     
     phase_s = iseven(round(Int, j1 + j2 + j4 + j5)) ? 1 : -1
-    new_m_min = CycloMonomial(res_f.m_min.sign * phase_s, res_f.m_min.z_pow, copy(res_f.m_min.exps))
+    new_base_term = CycloMonomial(res_f.base_term.sign * phase_s, res_f.base_term.z_pow, copy(res_f.base_term.exps))
     
-    return CycloResult(res_f.root, res_f.radical, new_m_min, res_f.ratios, res_f.z_range, res_f.max_d)
+    return CycloResult(res_f.root, res_f.radical, new_base_term, res_f.ratios, res_f.z_range, res_f.max_d)
 end
 
 function fsymbol_numeric(model::NumericSU2kModel{T}, j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)::T where {T}
@@ -127,7 +127,7 @@ end
 
 function gsymbol_cyclo(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
     res_6j = q6j_cyclo(j1, j2, j3, j4, j5, j6)
-    res_6j.m_min.sign == 0 && return res_6j
+    res_6j.base_term.sign == 0 && return res_6j
     
     max_spin = max(j1, j2, j3, j4, j5, j6)
     buf = SymbolicBuffer(round(Int, 2 * max_spin + 1))

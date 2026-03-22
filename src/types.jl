@@ -215,7 +215,7 @@ Structures the evaluation as a hypergeometric ratio sequence to minimize algebra
 struct CycloResult
     root::CycloMonomial       # Triangle coefficients (square-rooted part)
     radical::CycloMonomial        # Triangle coefficients Radical (the part inside the sqrt)
-    m_min::CycloMonomial           # first term in Racah sum  
+    base_term::CycloMonomial           # first term in Racah sum  
     ratios::Vector{CycloMonomial}  # ratios of hypergeometric steps
     z_range::UnitRange{Int}        # range of sum
     max_d::Int                     # maximum index d
@@ -227,7 +227,7 @@ function Base.show(io::IO, res::CycloResult)
     
     # Combine the rational prefactor with the base term for display purposes
     # The true mathematical form is: (Root * M0 * sqrt(Rad)) * [1 + R1 + R1*R2 + ...]
-    overall_rat = res.root * res.m_min
+    overall_rat = res.root * res.base_term
     
     # Check if the radical is exactly 1 (sign=1, z_pow=0, no Φ polynomials)
     is_rad_one = res.radical.sign == 1 && res.radical.z_pow == 0 && isempty(res.radical.exps)

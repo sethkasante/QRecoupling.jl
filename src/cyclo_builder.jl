@@ -138,7 +138,7 @@ function q6j_cyclo(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
     end
     
     max_d_tracker = max(max_d_tracker, get_max_d(buf))
-    m_min = snapshot(buf)
+    base_term = snapshot(buf)
     
     # hypergeometric ratios: R_z
     ratios = CycloMonomial[]
@@ -161,7 +161,7 @@ function q6j_cyclo(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
         push!(ratios, snapshot(buf))
     end
     
-    return CycloResult(root, radical, m_min, ratios, z_min:z_max, max_d_tracker)
+    return CycloResult(root, radical, base_term, ratios, z_min:z_max, max_d_tracker)
 end
 
 
@@ -222,7 +222,7 @@ function q3j_cyclo(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = 
     add_qfact!(buf, β3 - z_min, -1)
     
     max_d_tracker = max(max_d_tracker, get_max_d(buf))
-    m_min = snapshot(buf)
+    base_term = snapshot(buf)
 
     # --- 4. Recursive Ratios R_z ---
     ratios = CycloMonomial[]
@@ -242,5 +242,5 @@ function q3j_cyclo(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = 
         push!(ratios, snapshot(buf))
     end
 
-    return CycloResult(root, radical, m_min, ratios, z_min:z_max, max_d_tracker)
+    return CycloResult(root, radical, base_term, ratios, z_min:z_max, max_d_tracker)
 end

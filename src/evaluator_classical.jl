@@ -116,11 +116,11 @@ shifted summation to guarantee  immunity against `NaN` and `Inf` floating-point 
 at massive classical spins.
 """
 function evaluate_classical(res::CycloResult)
-    (res.radical.sign == 0 || res.m_min.sign == 0) && return 0.0
+    (res.radical.sign == 0 || res.base_term.sign == 0) && return 0.0
     ensure_classical_sieve(res.max_d)
 
     max_lm = -Inf
-    lm_curr = evaluate_classical_log(res.m_min)
+    lm_curr = evaluate_classical_log(res.base_term)
     max_lm = max(max_lm, lm_curr)
     
     for r in res.ratios
@@ -132,8 +132,8 @@ function evaluate_classical(res::CycloResult)
     lm_rem  = evaluate_classical_log(res.radical)
     v_pref = exp(lm_root + (lm_rem / 2))
     
-    lm_curr = evaluate_classical_log(res.m_min)
-    sign_curr = res.m_min.sign
+    lm_curr = evaluate_classical_log(res.base_term)
+    sign_curr = res.base_term.sign
     
     sum_val = sign_curr * exp(lm_curr - max_lm)
     
@@ -208,7 +208,7 @@ function _sum_hypergeometric_exact(res::CycloResult)
     fill!(view(min_exps, 1:max_d), 0)
     
     # PASS 1: Track Prime Exponent Valleys to find the Global Denominator
-    @inbounds for (d, e) in res.m_min.exps
+    @inbounds for (d, e) in res.base_term.exps
         p = CLASSICAL_SIEVE[d]
         if p > 1
             curr_exps[p] += e
@@ -230,7 +230,7 @@ function _sum_hypergeometric_exact(res::CycloResult)
     
     # PASS 2: Reconstruct N_0 and D_global
     fill!(view(curr_exps, 1:max_d), 0)
-    @inbounds for (d, e) in res.m_min.exps
+    @inbounds for (d, e) in res.base_term.exps
         p = CLASSICAL_SIEVE[d]
         p > 1 && (curr_exps[p] += e)
     end
@@ -255,11 +255,11 @@ function _sum_hypergeometric_exact(res::CycloResult)
     # PASS 3: The Hot Loop
     Sum_N = BigInt()
     Base.GMP.MPZ.set!(Sum_N, N_0)
-    res.m_min.sign < 0 && Base.GMP.MPZ.neg!(Sum_N, Sum_N)
+    res.base_term.sign < 0 && Base.GMP.MPZ.neg!(Sum_N, Sum_N)
     
     curr_N = BigInt()
     Base.GMP.MPZ.set!(curr_N, N_0)
-    curr_sign = res.m_min.sign
+    curr_sign = res.base_term.sign
     
     # Workspace variables to completely eliminate BigInt heap allocations
     r_num = BigInt()
@@ -316,7 +316,7 @@ By avoiding floating-point square roots entirely, this engine bypasses the 64-bi
 overflows found in standard libraries (like `WignerSymbols.jl`) to preserve infinite precision.
 """
 function evaluate_classical_exact(res::CycloResult)
-    (res.radical.sign == 0 || res.m_min.sign == 0) && return ClassicalResult(0, 0//1)
+    (res.radical.sign == 0 || res.base_term.sign == 0) && return ClassicalResult(0, 0//1)
     ensure_classical_sieve(res.max_d)
 
     # 1. Evaluate the exact split prefactor

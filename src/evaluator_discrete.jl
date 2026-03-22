@@ -107,7 +107,7 @@ Evaluates the quantum symbol at the exact discrete SU(2)_k root of unity.
 Employs pure integer phase tracking to guarantee immunity against Float64 sign corruption.
 """
 function evaluate_level(res::CycloResult, k::Int, ::Type{T}=Float64; prec=512) where {T}
-    (res.radical.sign == 0 || res.m_min.sign == 0) && return zero(T)
+    (res.radical.sign == 0 || res.base_term.sign == 0) && return zero(T)
 
     return setprecision(BigFloat, prec) do
         h = k + 2
@@ -122,7 +122,7 @@ function evaluate_level(res::CycloResult, k::Int, ::Type{T}=Float64; prec=512) w
             sum_val += curr_term
         end
 
-        c_mmin = _project_to_real(res.m_min, lmag_table, lphs_table, h)
+        c_mmin = _project_to_real(res.base_term, lmag_table, lphs_table, h)
         c_root = _project_to_real(res.root, lmag_table, lphs_table, h)
         
         # Evaluate radical directly (Delta^2 is rigorously strictly positive)
@@ -134,5 +134,28 @@ function evaluate_level(res::CycloResult, k::Int, ::Type{T}=Float64; prec=512) w
 
         final = c_root * c_rad_sqrt * c_mmin * sum_val
         return T <: Complex ? T(final, 0) : T(final)
+    end
+end
+
+"""
+    evaluate_level(m::CycloMonomial, k::Int, ::Type{T}=Float64; prec=512)
+
+Projects a single CycloMonomial into a numeric floating-point type at the specified root of unity.
+"""
+function evaluate_level(m::CycloMonomial, k::Int, ::Type{T}=Float64; prec=512) where {T}
+    m.sign == 0 && return zero(T)
+
+    return setprecision(BigFloat, prec) do
+        h = k + 2
+        # Determine the maximum polynomial degree needed for this monomial
+        max_d = isempty(m.exps) ? 1 : maximum(keys(m.exps))
+        
+        # Fetch the cached LSE tables
+        lmag_table, lphs_table = get_phi_table(k, max_d)
+        
+        # Project using your internal optimized projector
+        val_bf = _project_to_real(m, lmag_table, lphs_table, h)
+        
+        return T <: Complex ? T(val_bf, 0) : T(val_bf)
     end
 end

@@ -128,7 +128,7 @@ It tracks continuous floating-point phases and seamlessly extracts the
 analytic square root of the cyclotomic radical.
 """
 function evaluate_unit_circle(res::CycloResult, theta::Real, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
-    (res.radical.sign == 0 || res.m_min.sign == 0) && return zero(T)
+    (res.radical.sign == 0 || res.base_term.sign == 0) && return zero(T)
 
     return setprecision(BigFloat, prec) do
         theta_big = BigFloat(theta)
@@ -146,7 +146,7 @@ function evaluate_unit_circle(res::CycloResult, theta::Real, ::Type{T}=Complex{B
             sum_val += curr_term
         end
 
-        c_mmin = _project_to_complex_analytic(res.m_min, lmag_table, lphs_table, z_lmag, z_lphs)
+        c_mmin = _project_to_complex_analytic(res.base_term, lmag_table, lphs_table, z_lmag, z_lphs)
         c_root = _project_to_complex_analytic(res.root, lmag_table, lphs_table, z_lmag, z_lphs)
 
         # Extract analytic square root of the radical
@@ -177,7 +177,7 @@ into the SL(2, ℂ) regime. It utilizes a rolling complex iterator to prevent
 O(N log N) exponentiation overhead during the table build phase.
 """
 function evaluate_analytic(res::CycloResult, q::Number, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
-    (res.radical.sign == 0 || res.m_min.sign == 0) && return zero(T)
+    (res.radical.sign == 0 || res.base_term.sign == 0) && return zero(T)
 
     return setprecision(BigFloat, prec) do
         q_big = Complex{BigFloat}(q)
@@ -197,7 +197,7 @@ function evaluate_analytic(res::CycloResult, q::Number, ::Type{T}=Complex{BigFlo
             sum_val += curr_term
         end
 
-        c_mmin = _project_to_complex_analytic(res.m_min, lmag_table, lphs_table, z_lmag, z_lphs)
+        c_mmin = _project_to_complex_analytic(res.base_term, lmag_table, lphs_table, z_lmag, z_lphs)
         c_root = _project_to_complex_analytic(res.root, lmag_table, lphs_table, z_lmag, z_lphs)
 
         rad_lm = res.radical.z_pow * z_lmag

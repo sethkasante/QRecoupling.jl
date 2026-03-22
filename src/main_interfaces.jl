@@ -32,7 +32,7 @@ Aggressively clears all internal caches.
 clear_caches!() = (clear_numeric_caches!(); clear_sieve_caches!(); clear_exact_caches!(); nothing)
 
 
-# Notice m_min has sign = 0 to trigger the fast-fail in downstream evaluators!
+# Notice base_term has sign = 0 to trigger the fast-fail in downstream evaluators!
 const EMPTY_CYCLO_RESULT = CycloResult(
     EMPTY_MONOMIAL, EMPTY_MONOMIAL, ZERO_MONOMIAL, CycloMonomial[], 0:-1, 0
 )

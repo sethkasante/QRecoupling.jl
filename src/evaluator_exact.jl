@@ -144,7 +144,7 @@ function cyclo_to_exact(res::CycloResult, k::Int)
     _, z = cyclotomic_field(2 * h, "ζ")
     z_zero, z_one = zero(z), one(z)
     
-    if res.radical.sign == 0 || res.m_min.sign == 0
+    if res.radical.sign == 0 || res.base_term.sign == 0
         return ExactResult(k, EMPTY_MONOMIAL, z_zero)
     end
     
@@ -158,7 +158,7 @@ function cyclo_to_exact(res::CycloResult, k::Int)
         sum_val += curr_term
     end
 
-    c_mmin = _project_ratio_nemo(res.m_min, V_exact, V_inv, z, h, z_zero, z_one)
+    c_mmin = _project_ratio_nemo(res.base_term, V_exact, V_inv, z, h, z_zero, z_one)
     exact_root = _project_ratio_nemo(res.root, V_exact, V_inv, z, h, z_zero, z_one)
     
     return ExactResult(k, res.radical, exact_root * c_mmin * sum_val)
