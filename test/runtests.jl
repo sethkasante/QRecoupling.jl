@@ -22,7 +22,7 @@ using Nemo
     @testset "2. Admissibility & Topological Zeros" begin
         # Triangle inequality violation: |1 - 1| <= 3 <= 1 + 1 is FALSE
         res_cyclo = q6j(1, 1, 3, 1, 1, 1; mode=:cyclo)
-        @test res_cyclo.m_min.sign == 0
+        @test res_cyclo.base_term.sign == 0
         @test q6j(1, 1, 3, 1, 1, 1, 10; mode=:numeric) == 0.0
         
         # Level-k cutoff violation: j1+j2+j3 > k (1+1+1 = 3 > 2)
