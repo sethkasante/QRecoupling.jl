@@ -1,9 +1,17 @@
-# types.jl
 
-# -----------------------------------------------------
-# -- Core Symbolic Structures ---
-# The Cyclotomic representation of 3j and 6j symbols
-# -----------------------------------------------------
+# ----------------------------------------------------------
+#       --- Core Symbolic Types and Structures ---
+# The Cyclotomic representation ofquantum 3j and 6j symbols
+# ----------------------------------------------------------
+
+#subscripts and superscripts for nice printing in REPL
+const SUBSCRIPTS = Dict('0'=>'₀', '1'=>'₁', '2'=>'₂', '3'=>'₃', '4'=>'₄', 
+                        '5'=>'₅', '6'=>'₆', '7'=>'₇', '8'=>'₈', '9'=>'₉')
+const SUPERSCRIPTS = Dict('0'=>'⁰', '1'=>'¹', '2'=>'²', '3'=>'³', '4'=>'⁴', 
+                          '5'=>'⁵', '6'=>'⁶', '7'=>'⁷', '8'=>'⁸', '9'=>'⁹', '-'=>'⁻')
+
+to_subscript(n::Int) = map(c -> SUBSCRIPTS[c], string(n))
+to_superscript(n::Int) = map(c -> SUPERSCRIPTS[c], string(n))
 
 
 """
@@ -111,8 +119,7 @@ end
 
 # ------- CycloMonomial Arithmetic Overloads ---- 
 
-# ---- Base functions for products and divisions ---- 
-
+# ---- Base functions ---- 
 function Base.:*(a::CycloMonomial, b::CycloMonomial)
     a.sign == 0 && return a
     b.sign == 0 && return b
@@ -166,18 +173,7 @@ end
 
 
  
-# ----------------------------------------
-# Human-Readable Output (Pretty Printing)
-# ----------------------------------------
-
-const SUBSCRIPTS = Dict('0'=>'₀', '1'=>'₁', '2'=>'₂', '3'=>'₃', '4'=>'₄', 
-                        '5'=>'₅', '6'=>'₆', '7'=>'₇', '8'=>'₈', '9'=>'₉')
-const SUPERSCRIPTS = Dict('0'=>'⁰', '1'=>'¹', '2'=>'²', '3'=>'³', '4'=>'⁴', 
-                          '5'=>'⁵', '6'=>'⁶', '7'=>'⁷', '8'=>'⁸', '9'=>'⁹', '-'=>'⁻')
-
-to_subscript(n::Int) = map(c -> SUBSCRIPTS[c], string(n))
-to_superscript(n::Int) = map(c -> SUPERSCRIPTS[c], string(n))
-
+# printing
 function Base.show(io::IO, M::CycloMonomial)
     M.sign == 0 && return print(io, "0")
 
@@ -200,10 +196,10 @@ function Base.show(io::IO, M::CycloMonomial)
 end
 
 
-# ---------------------------------------
-# -- Constructors for main results 
-# (including 3j and 6j symbols) 
-# ---------------------------------------
+# -------------------------------------------
+# -- Constructors for main representation 
+#       (including 3j and 6j symbols) 
+# -------------------------------------------
 
 
 """
@@ -215,7 +211,7 @@ Structures the evaluation as a hypergeometric ratio sequence to minimize algebra
 struct CycloResult
     root::CycloMonomial       # Triangle coefficients (square-rooted part)
     radical::CycloMonomial        # Triangle coefficients Radical (the part inside the sqrt)
-    base_term::CycloMonomial           # first term in Racah sum  
+    base_term::CycloMonomial       # first term in Racah sum  
     ratios::Vector{CycloMonomial}  # ratios of hypergeometric steps
     z_range::UnitRange{Int}        # range of sum
     max_d::Int                     # maximum index d
@@ -261,25 +257,52 @@ function Base.show(io::IO, res::CycloResult)
 end
 
 
-
-
 # ------ Exact Algebraic Structures (using Nemo.jl)  ------------
-# ==============================================================================
-# Exact Algebraic Structures (Nemo.jl Engine)
-# ==============================================================================
 
-# """
-#     ExactResult{T}
+# Helper to prevent Nemo from flooding the terminal with massive polynomials
+function _print_truncated_nemo(io::IO, elem::nf_elem; max_chars=100)
+    str = string(elem)
+    if length(str) > max_chars
+        print(io, str[1:max_chars], " ... (truncated)")
+    else
+        print(io, str)
+    end
+end
 
-# A rigorously exact representation of a quantum symbol in a cyclotomic number field.
-# Maintains the exact algebraic square-free remainder symbolically (`radical`) to 
-# allow O(1) square-root extraction during multiplication, bypassing heavy CAS factorization.
-# """
-# struct ExactResult{T}
-#     k::Int                  # Level k 
-#     radical::CycloMonomial # Square free part inside sqrt: stored symbolically for fast multiplication!
-#     factor::T             # The evaluated Nemo sum (Type T is a Nemo field element)
-# end
+
+"""
+    ExactResult
+
+The exact topological invariant computed entirely via eager dense polynomial 
+arithmetic in a CAS. Because exact square roots are intractable in dense fields, 
+the Racah normalization is stored as its exact square.
+"""
+struct ExactResult # the exact result container
+    k::Int                
+    radical_sq::nf_elem   # Square of the prefactor (Δ)
+    factor_sum::nf_elem   # The exact hypergeometric alternating sum
+end
+
+function Base.show(io::IO, res::ExactResult)
+    k_sub = to_subscript(res.k)
+    print(io, "Exact SU(2)", k_sub, " Symbol:\n")
+    
+    K = parent(res.factor_sum)
+    
+    # Conditional formatting: hide the square root if it perfectly simplified to 1
+    if res.radical_sq == K(1)
+        print(io, "  Value: ")
+        _print_truncated_nemo(io, res.factor_sum)
+    else
+        print(io, "  Value: √(A) * B\n")
+        print(io, "  ----------------\n")
+        print(io, "  √[")
+        _print_truncated_nemo(io, res.radical_sq)
+        print(io, "] \n  × (")
+        _print_truncated_nemo(io, res.factor_sum)
+        print(io, ")")
+    end
+end
 
 
 """
@@ -360,11 +383,8 @@ function Base.:+(a::CycloExactResult, b::CycloExactResult)
 end
 
 # ------------------------------------------------------
-# Magic Multiplier (Extracts new squares dynamically!)
+# Cyclo Multiplier (Extracts new squares dynamically!)
 # -----------------------------------------------------
-# ------------------------------------------------------------------------------
-# Magic Multiplier (Extracts new squares dynamically!)
-# ------------------------------------------------------------------------------
 function Base.:*(a::CycloExactResult, b::CycloExactResult)
     @assert a.k == b.k "Cannot multiply different levels"
     
