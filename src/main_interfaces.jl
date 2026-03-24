@@ -187,25 +187,28 @@ Available modes:
 - `:cyclo`   (Deferred sparse directed acyclic graph)
 - `:exact`   (Hybrid exact Nemo cyclotomic field element)
 """
-function qint(n::Int, k::Int=0; mode=:numeric, T::Type{<:AbstractFloat}=Float64, prec=128)
+function qint(n::Int, k::OptInt=nothing; mode=nothing, T::Type{<:AbstractFloat}=Float64, prec=128)
+    mode = isnothing(mode) ? (isnothing(k) ? :cyclo : :numeric) : mode
+
+    if mode == :cyclo || mode == :classical
+        mode == :cyclo && return _qint_cyclo(n) 
+        return n
+    end
+    isnothing(k) && throw(ArgumentError("Mode :$mode requires a level k."))
+
     if mode == :exact
         k <= 0 && throw(ArgumentError("Mode :exact requires a valid level k > 0."))
         val = _qint_exact(n, k)
         return CycloExactResult(k, EMPTY_MONOMIAL, val)
-        
-    elseif mode == :cyclo
-        return qint_cyclo(n)
         
     elseif mode == :numeric
         k <= 0 && throw(ArgumentError("Mode :numeric requires a valid level k > 0."))
         return _qint_numeric(n, k, T, prec)
         
     else
-        throw(ArgumentError("Unknown mode: $mode. Valid modes are :numeric, :cyclo, :exact."))
+        throw(ArgumentError("Unknown mode: $mode. Choose :numeric, :cyclo, :exact."))
     end
 end
-
-qint(n::Int; mode=:cyclo) = mode == :cyclo ? qint_cyclo(n) : throw(ArgumentError("provide k for modes other than :cyclo."))
 
 """
     qdim(j::Spin, [k::Int]; mode=:cyclo, T=Float64, prec=256)
@@ -222,7 +225,7 @@ function qdim(j::Spin, k::OptInt=nothing; mode=nothing, T::Type{<:AbstractFloat}
             mode == :cyclo && return ZERO_MONOMIAL
             return zero(T)
         end
-        mode == :cyclo && return qint_cyclo(n) 
+        mode == :cyclo && return _qint_cyclo(n) 
         return T(n)
     end
 
@@ -236,7 +239,7 @@ function qdim(j::Spin, k::OptInt=nothing; mode=nothing, T::Type{<:AbstractFloat}
     if mode == :exact
         return qint(n, k; mode=:exact)
     elseif mode == :numeric
-        return qint(n, j; mode=:numeric, T=T,prec=prec)
+        return qint(n, k; mode=:numeric, T=T,prec=prec)
     end
     error("Unknown mode: $mode")
 end
