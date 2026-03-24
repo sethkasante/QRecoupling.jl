@@ -268,17 +268,31 @@ end
 # Exact Algebraic Structures (Nemo.jl Engine)
 # ==============================================================================
 
-"""
-    ExactResult{T}
+# """
+#     ExactResult{T}
 
-A rigorously exact representation of a quantum symbol in a cyclotomic number field.
-Maintains the exact algebraic square-free remainder symbolically (`radical`) to 
-allow O(1) square-root extraction during multiplication, bypassing heavy CAS factorization.
+# A rigorously exact representation of a quantum symbol in a cyclotomic number field.
+# Maintains the exact algebraic square-free remainder symbolically (`radical`) to 
+# allow O(1) square-root extraction during multiplication, bypassing heavy CAS factorization.
+# """
+# struct ExactResult{T}
+#     k::Int                  # Level k 
+#     radical::CycloMonomial # Square free part inside sqrt: stored symbolically for fast multiplication!
+#     factor::T             # The evaluated Nemo sum (Type T is a Nemo field element)
+# end
+
+
 """
-struct ExactResult{T}
-    k::Int                  # Level k 
-    radical::CycloMonomial # Square free part inside sqrt: stored symbolically for fast multiplication!
-    factor::T             # The evaluated Nemo sum (Type T is a Nemo field element)
+    HybridNemoResult{T}
+
+The result of projecting a deferred CycloResult DAG into a exact cyclotomic field. 
+To bypass dense polynomial square roots, the square-free radical geometry is 
+preserved sparsely, while the rational remainder is evaluated into a dense field element.
+"""
+struct HybridNemoResult{T}
+    k::Int                  # Topological level k
+    radical::CycloMonomial  # The strictly square-free geometry (sparse)
+    rational_factor::T      # The evaluated exact rational part (dense Nemo element)
 end
 
 # Helper function strictly for pretty-printing the square-free remainder
@@ -301,7 +315,7 @@ function _eval_nemo_print(m::CycloMonomial, k::Int, K, z)
     return m.sign == 1 ? A_val : -A_val
 end
 
-function Base.show(io::IO, res::ExactResult)
+function Base.show(io::IO, res::HybridNemoResult)
     k_sub = to_subscript(res.k)
     print(io, "Exact SU(2)$k_sub Symbol:\n")
     
@@ -326,20 +340,20 @@ function Base.show(io::IO, res::ExactResult)
     end
 end
 
-function Base.:(==)(a::ExactResult, b::ExactResult)
+function Base.:(==)(a::HybridNemoResult, b::HybridNemoResult)
     a.k == b.k || return false
     iszero(a.factor) && return iszero(b.factor)
     iszero(b.factor) && return false
     return a.radical == b.radical && a.factor == b.factor
 end
 
-function Base.:+(a::ExactResult, b::ExactResult)
+function Base.:+(a::HybridNemoResult, b::HybridNemoResult)
     @assert a.k == b.k "Cannot add results from different levels k"
     iszero(a.factor) && return b
     iszero(b.factor) && return a
     
     if a.radical == b.radical
-        return ExactResult(a.k, a.radical, a.factor + b.factor)
+        return HybridNemoResult(a.k, a.radical, a.factor + b.factor)
     else
         error("Cannot add ExactResults: They do not belong to the same topological square-class.")
     end
@@ -351,7 +365,7 @@ end
 # ------------------------------------------------------------------------------
 # Magic Multiplier (Extracts new squares dynamically!)
 # ------------------------------------------------------------------------------
-function Base.:*(a::ExactResult, b::ExactResult)
+function Base.:*(a::HybridNemoResult, b::HybridNemoResult)
     @assert a.k == b.k "Cannot multiply different levels"
     
     iszero(a.factor) && return a
@@ -383,7 +397,7 @@ function Base.:*(a::ExactResult, b::ExactResult)
     
     new_sum = exact_new_root * a.factor * b.factor
     
-    return ExactResult(a.k, m_rad, new_sum)
+    return HybridNemoResult(a.k, m_rad, new_sum)
 end
 
 
