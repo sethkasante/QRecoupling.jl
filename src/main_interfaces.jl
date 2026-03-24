@@ -1,8 +1,9 @@
-# ==============================================================================
+
+# -----------------------------------------------------------
 # Interface.jl
 # Master public-facing API for QRacahSymbols.jl.
-# Handles mode routing, precision management, and cache lifecycles.
-# ==============================================================================
+# Handles mode routing, precision management, and caches.
+# -----------------------------------------------------------
 
 export clear_caches!, clear_numeric_caches!, clear_sieve_caches!, clear_exact_caches!
 

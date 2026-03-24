@@ -154,7 +154,7 @@ end
 
 Evaluates the quantum 6j-symbol using a direct Log-Sum-Exp (LSE) alternating summation.
 
-# Performance Note
+# Performance Note:
 This function is optimized for single-shot floating-point evaluations. 
 It bypasses all abstract cyclotomic algebra, jumping straight into a pre-allocated 
 CPU register hot-loop. It is mathematically immune to `NaN` and `Inf` overflows 
