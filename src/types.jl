@@ -292,7 +292,7 @@ preserved sparsely, while the rational remainder is evaluated into a dense field
 struct HybridNemoResult{T}
     k::Int                  # Topological level k
     radical::CycloMonomial  # The strictly square-free geometry (sparse)
-    rational_factor::T      # The evaluated exact rational part (dense Nemo element)
+    factor::T      # The evaluated exact rational part (dense Nemo element) #rational_factor?
 end
 
 # Helper function strictly for pretty-printing the square-free remainder
