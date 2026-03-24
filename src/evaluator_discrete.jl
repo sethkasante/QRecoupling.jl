@@ -144,3 +144,26 @@ function evaluate_level(m::CycloMonomial, k::Int, ::Type{T}=Float64; prec=512) w
         return T <: Complex ? T(val_bf, 0) : T(val_bf)
     end
 end
+
+
+
+"""
+    cyclo_to_numeric(res::CycloResult, [T=Float64]; k=nothing, q=nothing, theta=nothing, prec=512)
+
+Internal numeric projection engine. Maps the deferred graph into high-performance 
+floating-point arithmetic (hardware or arbitrary precision).
+"""
+function cyclo_to_numeric(res::CycloResult, ::Type{T}=Float64; k=nothing, q=nothing, theta=nothing, prec=512) where {T}
+    targets_defined = (!isnothing(k)) + (!isnothing(q)) + (!isnothing(theta))
+    if targets_defined != 1
+        throw(ArgumentError("Specify exactly one evaluation target: k (integer), theta (real), or q (complex)."))
+    end
+
+    if !isnothing(k)
+        return evaluate_level(res, Int(k), T; prec=prec)
+    elseif !isnothing(theta)
+        return evaluate_unit_circle(res, theta, T; prec=prec)
+    else
+        return evaluate_analytic(res, q, T; prec=prec)
+    end
+end

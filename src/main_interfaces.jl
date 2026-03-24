@@ -1,6 +1,6 @@
 
 # -----------------------------------------------------------
-# Interface.jl
+#              ----  Main APIs ----
 # Master public-facing API for QRacahSymbols.jl.
 # Handles mode routing, precision management, and caches.
 # -----------------------------------------------------------
@@ -146,35 +146,57 @@ function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin, k::OptI
     end
 end
 
-"""
-    cyclo_to_numeric(res::CycloResult, ::Type{T}=Float64; k=nothing, q=nothing, theta=nothing, prec=512)
 
-The master numeric dispatcher for `QRacahSymbols`.
-Takes a compiled `CycloResult` and safely projects it into the requested numeric regime.
-
-# Targeting Options
-- `k=val`: Fast discrete evaluation at SU(2)_k root of unity (Topological regime).
-- `theta=val`: Fast continuous evaluation on the unit circle q = exp(iθ).
-- `q=val`: Full analytic continuation to arbitrary complex parameter q ∈ C (SL(2,C) regime).
 """
-function cyclo_to_numeric(res::CycloResult, ::Type{T}=Float64; k=nothing, q=nothing, theta=nothing, prec=512) where {T}
-    targets_defined = (!isnothing(k)) + (!isnothing(q)) + (!isnothing(theta))
-    if targets_defined != 1
-        throw(ArgumentError("Specify exactly one evaluation target: k (integer), theta (real), or q (complex)."))
+    evaluate_cyclo(res::CycloResult, k::OptInt, [T=Float64]; prec=512, kwargs...)
+
+Projects a deferred `CycloResult` into a concrete numerical value or exact 
+algebraic field element for a given discrete level `k`.
+
+### Arguments
+- `res`: The `CycloResult` DAG to project.
+- `k`: The topological level.
+- `T`: The target evaluation type (defaults to `Float64`). 
+  - Use `Float64`, `BigFloat`, or `Complex` for standard numeric evaluation.
+  - Use `ExactResult` or `CycloExactResult` for exact algebraic evaluation in Nemo.
+
+### Examples
+    evaluate_cyclo(res, 5)                # Numeric projection at SU(2)_5 (Float64)
+    evaluate_cyclo(res, 5, BigFloat)      # High-precision numeric at SU(2)_5
+    evaluate_cyclo(res, 5, ExactResult)   # Exact algebraic evaluation
+"""
+function evaluate_cyclo(res::CycloResult, k::OptInt=nothing, ::Type{T}=Float64; 
+                        q=nothing, theta=nothing, prec=512) where {T}
+    
+    # 1. Exact Algebraic Evaluation
+    if T == ExactResult || T == CycloExactResult || T == Nemo.nf_elem
+        isnothing(k) && throw(ArgumentError("Exact projection strictly requires a topological level k."))
+        return _cyclo_to_exact(res, k, T)
     end
 
-    if !isnothing(k)
-        return evaluate_level(res, Int(k), T; prec=prec)
-    elseif !isnothing(theta)
-        return evaluate_unit_circle(res, theta, T; prec=prec)
-    else
-        return evaluate_analytic(res, q, T; prec=prec)
+    # 2. Numeric Evaluation
+    if T <: Number
+        if !isnothing(k)
+            return evaluate_level(res, k, T; prec=prec)
+        elseif !isnothing(theta)
+            # q on unit circle 
+            return evaluate_unit_circle(res, Float64(theta), T; prec=prec)
+        elseif !isnothing(q)
+            # generic q (analytic continuation)
+            return evaluate_analytic(res, q, T; prec=prec)
+        else
+            throw(ArgumentError("Must provide a valid level k, or use hidden kwargs q/theta."))
+        end
     end
+
+    throw(ArgumentError("Unsupported evaluation target type: $T"))
 end
 
-# ==============================================================================
-# Topological Tensors API (Dimensions, Braiding, F/G Symbols)
-# ==============================================================================
+
+# ----------------------------------------------------------------------
+# Topological Tensors API (Integer, dimensions, braiding, F/G Symbols)
+# ----------------------------------------------------------------------
+
 export qint, qdim, rmatrix, fsymbol, gsymbol
 
 
