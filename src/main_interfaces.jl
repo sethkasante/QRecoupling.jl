@@ -74,7 +74,7 @@ function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::OptI
     if !qδtet(j1, j2, j3, j4, j5, j6, k) 
         if mode == :exact
             _, z = Nemo.cyclotomic_field(2 * (k + 2), "ζ")
-            return HybridNemoResult(k, EMPTY_MONOMIAL, zero(z))
+            return CycloExactResult(k, EMPTY_MONOMIAL, zero(z))
         else
             return zero(T)
         end
@@ -127,7 +127,7 @@ function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin, k::OptI
     if !qδ(j1, j2, j3, k) || !iszero(m1 + m2 + m3) 
         if mode == :exact
             _, z = Nemo.cyclotomic_field(2 * (k + 2), "ζ")
-            return HybridNemoResult(k, EMPTY_MONOMIAL, zero(z))
+            return CycloExactResult(k, EMPTY_MONOMIAL, zero(z))
         else
             return zero(T)
         end
@@ -196,7 +196,7 @@ function qdim(j::Spin, k::OptInt=nothing; mode=nothing, T::Type{<:AbstractFloat}
     isnothing(k) && throw(ArgumentError("Mode :$mode requires a level k."))
     
     if !ishalfInt(j) || (2j > k)
-        mode == :exact && return HybridNemoResult(k, EMPTY_MONOMIAL, Nemo.QQFieldElem(0))
+        mode == :exact && return CycloExactResult(k, EMPTY_MONOMIAL, Nemo.QQFieldElem(0))
         return zero(T)
     end
 
@@ -226,7 +226,7 @@ function rmatrix(j1::Spin, j2::Spin, j3::Spin, k::OptInt=nothing;
 
     isnothing(k) && throw(ArgumentError("Mode :$mode requires level k."))
     
-    !(abs(j1-j2) <= j3 <= min(j1+j2, k - (j1+j2))) && return (mode == :exact ? HybridNemoResult(k, EMPTY_MONOMIAL, Nemo.QQFieldElem(0)) : zero(T))
+    !(abs(j1-j2) <= j3 <= min(j1+j2, k - (j1+j2))) && return (mode == :exact ? CycloExactResult(k, EMPTY_MONOMIAL, Nemo.QQFieldElem(0)) : zero(T))
 
     mode == :exact && return rmatrix_exact(j1, j2, j3, k)
     mode == :numeric && return rmatrix_numeric(j1, j2, j3, k; T=T)

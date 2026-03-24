@@ -283,13 +283,13 @@ end
 
 
 """
-    HybridNemoResult{T}
+    CycloExactResult{T}
 
 The result of projecting a deferred CycloResult DAG into a exact cyclotomic field. 
 To bypass dense polynomial square roots, the square-free radical geometry is 
 preserved sparsely, while the rational remainder is evaluated into a dense field element.
 """
-struct HybridNemoResult{T}
+struct CycloExactResult{T}
     k::Int                  # Topological level k
     radical::CycloMonomial  # The strictly square-free geometry (sparse)
     factor::T      # The evaluated exact rational part (dense Nemo element) #rational_factor?
@@ -315,7 +315,7 @@ function _eval_nemo_print(m::CycloMonomial, k::Int, K, z)
     return m.sign == 1 ? A_val : -A_val
 end
 
-function Base.show(io::IO, res::HybridNemoResult)
+function Base.show(io::IO, res::CycloExactResult)
     k_sub = to_subscript(res.k)
     print(io, "Exact SU(2)$k_sub Symbol:\n")
     
@@ -340,20 +340,20 @@ function Base.show(io::IO, res::HybridNemoResult)
     end
 end
 
-function Base.:(==)(a::HybridNemoResult, b::HybridNemoResult)
+function Base.:(==)(a::CycloExactResult, b::CycloExactResult)
     a.k == b.k || return false
     iszero(a.factor) && return iszero(b.factor)
     iszero(b.factor) && return false
     return a.radical == b.radical && a.factor == b.factor
 end
 
-function Base.:+(a::HybridNemoResult, b::HybridNemoResult)
+function Base.:+(a::CycloExactResult, b::CycloExactResult)
     @assert a.k == b.k "Cannot add results from different levels k"
     iszero(a.factor) && return b
     iszero(b.factor) && return a
     
     if a.radical == b.radical
-        return HybridNemoResult(a.k, a.radical, a.factor + b.factor)
+        return CycloExactResult(a.k, a.radical, a.factor + b.factor)
     else
         error("Cannot add ExactResults: They do not belong to the same topological square-class.")
     end
@@ -365,7 +365,7 @@ end
 # ------------------------------------------------------------------------------
 # Magic Multiplier (Extracts new squares dynamically!)
 # ------------------------------------------------------------------------------
-function Base.:*(a::HybridNemoResult, b::HybridNemoResult)
+function Base.:*(a::CycloExactResult, b::CycloExactResult)
     @assert a.k == b.k "Cannot multiply different levels"
     
     iszero(a.factor) && return a
@@ -397,7 +397,7 @@ function Base.:*(a::HybridNemoResult, b::HybridNemoResult)
     
     new_sum = exact_new_root * a.factor * b.factor
     
-    return HybridNemoResult(a.k, m_rad, new_sum)
+    return CycloExactResult(a.k, m_rad, new_sum)
 end
 
 

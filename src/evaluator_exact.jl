@@ -130,7 +130,7 @@ Takes a compiled, unevaluated `CycloResult` and projects it into the precise
 algebraic cyclotomic field for SU(2)_k.
 
 # Returns:
-An `HybridNemoResult{T}` containing:
+An `CycloExactResult{T}` containing:
 1. `radical`: The strictly square-free remainder (kept symbolic for fast O(1) multiplication).
 2. `factor`: The evaluated rational sum (a Nemo field element).
 
@@ -145,7 +145,7 @@ function cyclo_to_exact(res::CycloResult, k::Int)
     z_zero, z_one = zero(z), one(z)
     
     if res.radical.sign == 0 || res.base_term.sign == 0
-        return HybridNemoResult(k, EMPTY_MONOMIAL, z_zero)
+        return CycloExactResult(k, EMPTY_MONOMIAL, z_zero)
     end
     
     V_exact, V_inv = get_phi_exact_table(res.max_d, k, z)
@@ -161,7 +161,7 @@ function cyclo_to_exact(res::CycloResult, k::Int)
     c_mmin = _project_ratio_nemo(res.base_term, V_exact, V_inv, z, h, z_zero, z_one)
     exact_root = _project_ratio_nemo(res.root, V_exact, V_inv, z, h, z_zero, z_one)
     
-    return HybridNemoResult(k, res.radical, exact_root * c_mmin * sum_val)
+    return CycloExactResult(k, res.radical, exact_root * c_mmin * sum_val)
 end
 
 # export evaluate_level_exact
@@ -181,49 +181,49 @@ function exact_qdim(j::Spin, k::Int)
     dim_val = divexact(num, den) * z^(-Int(2j))
     
     # Quantum dimension has no prefactor root, so we pass EMPTY_MONOMIAL (i.e. '1')
-    return HybridNemoResult(k, EMPTY_MONOMIAL, dim_val)
+    return CycloExactResult(k, EMPTY_MONOMIAL, dim_val)
 end
 
-export prove_orthogonality
+# export prove_orthogonality
 
-function prove_orthogonality(j1::Spin, j2::Spin, j4::Spin, j5::Spin, j3::Spin, k::Int)
-    println("======================================================")
-    println(" Proving Exact Quantum Orthogonality (Bubble Move)")
-    println("======================================================")
+# function prove_orthogonality(j1::Spin, j2::Spin, j4::Spin, j5::Spin, j3::Spin, k::Int)
+#     println("======================================================")
+#     println(" Proving Exact Quantum Orthogonality (Bubble Move)")
+#     println("======================================================")
     
-    h = k + 2
-    K, z = cyclotomic_field(2 * h, "ζ")
+#     h = k + 2
+#     K, z = cyclotomic_field(2 * h, "ζ")
     
-    # Accumulate starting at 0 (empty monomial remainder)
-    total_sum = HybridNemoResult(k, EMPTY_MONOMIAL, K(0))
+#     # Accumulate starting at 0 (empty monomial remainder)
+#     total_sum = CycloExactResult(k, EMPTY_MONOMIAL, K(0))
     
-    x_min = max(abs(j1 - j5), abs(j2 - j4))
-    x_max = min(j1 + j5, j2 + j4, k - max(j1+j5, j2+j4))
+#     x_min = max(abs(j1 - j5), abs(j2 - j4))
+#     x_max = min(j1 + j5, j2 + j4, k - max(j1+j5, j2+j4))
     
-    println("Summing over internal spin x from $x_min to $x_max at level k=$k...")
+#     println("Summing over internal spin x from $x_min to $x_max at level k=$k...")
     
-    for x in x_min:1:x_max
-        res_A = q6j_cyclo(j1, j2, j3, j4, j5, x)
-        res_B = q6j_cyclo(j1, j2, j3, j4, j5, x)
+#     for x in x_min:1:x_max
+#         res_A = q6j_cyclo(j1, j2, j3, j4, j5, x)
+#         res_B = q6j_cyclo(j1, j2, j3, j4, j5, x)
         
-        exact_A = evaluate_level_exact(res_A, k)
-        exact_B = evaluate_level_exact(res_B, k)
+#         exact_A = evaluate_level_exact(res_A, k)
+#         exact_B = evaluate_level_exact(res_B, k)
         
-        dim_x = exact_qdim(x, k)
+#         dim_x = exact_qdim(x, k)
         
-        # When exact_A * exact_B happens, the remainder squares itself,
-        # becomes perfect, and gets automatically sucked into the factor!
-        term = dim_x * exact_A * exact_B 
+#         # When exact_A * exact_B happens, the remainder squares itself,
+#         # becomes perfect, and gets automatically sucked into the factor!
+#         term = dim_x * exact_A * exact_B 
         
-        total_sum = total_sum + term
-    end
+#         total_sum = total_sum + term
+#     end
     
-    dim_j3 = exact_qdim(j3, k)
-    theoretical_rhs = HybridNemoResult(k, EMPTY_MONOMIAL, divexact(K(1), dim_j3.factor))
+#     dim_j3 = exact_qdim(j3, k)
+#     theoretical_rhs = CycloExactResult(k, EMPTY_MONOMIAL, divexact(K(1), dim_j3.factor))
     
-    println("\n LHS (Summed over x): ", total_sum)
-    println(" RHS (1 / [2j3+1]): ", theoretical_rhs)
+#     println("\n LHS (Summed over x): ", total_sum)
+#     println(" RHS (1 / [2j3+1]): ", theoretical_rhs)
     
-    is_proven = (total_sum == theoretical_rhs)
-    println("\n Identity Proven? => ", is_proven ? "✅ YES" : "❌ NO")
-end
+#     is_proven = (total_sum == theoretical_rhs)
+#     println("\n Identity Proven? => ", is_proven ? "✅ YES" : "❌ NO")
+# end

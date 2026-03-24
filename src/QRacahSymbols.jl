@@ -62,7 +62,7 @@ export q6j_direct, q3j_direct
 
 
 #constructors for results
-export ExactResult, CycloResult, ClassicalResult
+export ExactResult, CycloResult, ClassicalResult, CycloExactResult
 
 
 

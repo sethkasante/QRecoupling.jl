@@ -43,8 +43,8 @@ function qint_cyclo(n::Int)
 end
 
 function qint_exact(n::Int, k::Int)
-    n == 0 && return ExactResult(k, EMPTY_MONOMIAL, Nemo.QQFieldElem(0))
-    n == 1 && return ExactResult(k, EMPTY_MONOMIAL, Nemo.QQFieldElem(1))
+    n == 0 && return CycloExactResult(k, EMPTY_MONOMIAL, Nemo.QQFieldElem(0))
+    n == 1 && return CycloExactResult(k, EMPTY_MONOMIAL, Nemo.QQFieldElem(1))
     
     h = k + 2
     K, z = Nemo.cyclotomic_field(2 * h, "ζ")
@@ -52,7 +52,7 @@ function qint_exact(n::Int, k::Int)
     den = z^2 - K(1)
     val = divexact(num, den) * z^(1-n)
     
-    return ExactResult(k, EMPTY_MONOMIAL, val)
+    return CycloExactResult(k, EMPTY_MONOMIAL, val)
 end
 
 function qdim_exact(j::Spin, k::Int)
@@ -61,7 +61,7 @@ function qdim_exact(j::Spin, k::Int)
     num = z^(round(Int, 4j + 2)) - K(1)
     den = z^2 - K(1)
     val = divexact(num, den) * z^(-round(Int, 2j))
-    return ExactResult(k, EMPTY_MONOMIAL, val)
+    return CycloExactResult(k, EMPTY_MONOMIAL, val)
 end
 
 function qdim_numeric(model::NumericSU2kModel{T}, j::Spin)::T where {T}
@@ -85,7 +85,7 @@ function rmatrix_exact(j1::Spin, j2::Spin, j3::Spin, k::Int)
     z_pow_val = round(Int, 2 * (j3*(j3+1) - j1*(j1+1) - j2*(j2+1)))
     s = iseven(round(Int, j1 + j2 - j3)) ? 1 : -1
     res = s == 1 ? z^z_pow_val : -(z^z_pow_val)
-    return ExactResult(k, EMPTY_MONOMIAL, res)
+    return CycloExactResult(k, EMPTY_MONOMIAL, res)
 end
 
 function rmatrix_numeric(j1::Spin, j2::Spin, j3::Spin, k::Int; T::Type{<:AbstractFloat}=Float64)
