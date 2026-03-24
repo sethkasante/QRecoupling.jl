@@ -263,7 +263,7 @@ end
 function _print_truncated_nemo(io::IO, elem::nf_elem; max_chars=100)
     str = string(elem)
     if length(str) > max_chars
-        print(io, str[1:max_chars], " ... (truncated)")
+        print(io, first(str, max_chars), " ... (truncated)")
     else
         print(io, str)
     end

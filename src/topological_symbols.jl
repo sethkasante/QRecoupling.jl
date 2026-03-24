@@ -30,11 +30,11 @@ function _multiply_prefactors(res::CycloResult, extra_sq::CycloMonomial)
     return CycloResult(final_root, final_rad, res.base_term, res.ratios, res.z_range, max(res.max_d, max_d))
 end
 
-# ==============================================================================
+# -------------------------------------------------
 # Quantum Integers [n]_q and Dimensions [2j+1]_q
-# ==============================================================================
+# -------------------------------------------------
 
-function qint_cyclo(n::Int)
+function _qint_cyclo(n::Int)
     n == 0 && return CycloMonomial(0, 0, Pair{Int,Int}[]) 
     n == 1 && return EMPTY_MONOMIAL
     buf = SymbolicBuffer(n)
@@ -42,36 +42,49 @@ function qint_cyclo(n::Int)
     return snapshot(buf)
 end
 
-function qint_exact(n::Int, k::Int)
-    n == 0 && return CycloExactResult(k, EMPTY_MONOMIAL, Nemo.QQFieldElem(0))
-    n == 1 && return CycloExactResult(k, EMPTY_MONOMIAL, Nemo.QQFieldElem(1))
+"""
+    _qint_exact(n::Int, k::Int)
+
+Internal fast-path for exact cyclotomic integers. Returns a raw `nf_elem`.
+Uses EXACT_MODEL_CACHE if available, otherwise computes in isolated O(1) memory 
+using Nemo's highly optimized `divexact`.
+"""
+function _qint_exact(n::Int, k::Int)
+    if haskey(EXACT_MODEL_CACHE, k)
+        return EXACT_MODEL_CACHE[k].q_ints[n+1]
+    end
     
     h = k + 2
     K, z = Nemo.cyclotomic_field(2 * h, "ζ")
+    
+    # Must use K(0) and K(1) to guarantee type stability!
+    n == 0 && return K(0)
+    n == 1 && return K(1)
+    
     num = z^(2n) - K(1)
     den = z^2 - K(1)
-    val = divexact(num, den) * z^(1-n)
+    return Nemo.divexact(num, den) * z^(1-n)
+end
+
+"""
+    _qint_numeric(n::Int, k::Int, T::Type, prec::Int)
+
+Evaluates [n]_q directly using arbitrary precision.
+"""
+function _qint_numeric(n::Int, k::Int, ::Type{T}, prec::Int) where {T <: AbstractFloat}
+    n == 0 && return zero(T)
+    n == 1 && return one(T)
     
-    return CycloExactResult(k, EMPTY_MONOMIAL, val)
+    return setprecision(BigFloat, prec) do
+        h_bf = BigFloat(k + 2)
+        val = sinpi(BigFloat(n) / h_bf) / sinpi(one(BigFloat) / h_bf)
+        return T(val)
+    end
 end
 
-function qdim_exact(j::Spin, k::Int)
-    h = k + 2
-    K, z = Nemo.cyclotomic_field(2 * h, "ζ")
-    num = z^(round(Int, 4j + 2)) - K(1)
-    den = z^2 - K(1)
-    val = divexact(num, den) * z^(-round(Int, 2j))
-    return CycloExactResult(k, EMPTY_MONOMIAL, val)
-end
-
-function qdim_numeric(model::NumericSU2kModel{T}, j::Spin)::T where {T}
-    n = round(Int, 2j + 1)
-    return exp(model.logqnfact[n+1] - model.logqnfact[n])
-end
-
-# ==============================================================================
+# -------------------------------------
 # R-Matrix (Braiding / Framing Phase)
-# ==============================================================================
+# -------------------------------------
 
 function rmatrix_cyclo(j1::Spin, j2::Spin, j3::Spin)
     z_pow_val = round(Int, 2 * (j3*(j3+1) - j1*(j1+1) - j2*(j2+1)))

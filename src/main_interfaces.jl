@@ -175,23 +175,55 @@ end
 # ==============================================================================
 # Topological Tensors API (Dimensions, Braiding, F/G Symbols)
 # ==============================================================================
-export qdim, rmatrix, fsymbol, gsymbol
+export qint, qdim, rmatrix, fsymbol, gsymbol
+
+
+"""
+    qint(n::Int, k::Int=0; mode=:numeric, T=Float64, prec=256)
+
+Evaluates the symmetric quantum integer [n]_q. 
+Available modes: 
+- `:numeric` (Hardware or arbitrary precision float)
+- `:cyclo`   (Deferred sparse directed acyclic graph)
+- `:exact`   (Hybrid exact Nemo cyclotomic field element)
+"""
+function qint(n::Int, k::Int=0; mode=:numeric, T::Type{<:AbstractFloat}=Float64, prec=128)
+    if mode == :exact
+        k <= 0 && throw(ArgumentError("Mode :exact requires a valid level k > 0."))
+        val = _qint_exact(n, k)
+        return CycloExactResult(k, EMPTY_MONOMIAL, val)
+        
+    elseif mode == :cyclo
+        return qint_cyclo(n)
+        
+    elseif mode == :numeric
+        k <= 0 && throw(ArgumentError("Mode :numeric requires a valid level k > 0."))
+        return _qint_numeric(n, k, T, prec)
+        
+    else
+        throw(ArgumentError("Unknown mode: $mode. Valid modes are :numeric, :cyclo, :exact."))
+    end
+end
+
+qint(n::Int; mode=:cyclo) = mode == :cyclo ? qint_cyclo(n) : throw(ArgumentError("provide k for modes other than :cyclo."))
 
 """
     qdim(j::Spin, [k::Int]; mode=:cyclo, T=Float64, prec=256)
 
 Evaluates the quantum dimension `[2j+1]_q` of a spin `j` representation.
 """
-function qdim(j::Spin, k::OptInt=nothing; mode=nothing, T::Type{<:AbstractFloat}=Float64, prec=256)
+function qdim(j::Spin, k::OptInt=nothing; mode=nothing, T::Type{<:AbstractFloat}=Float64, prec=128)
     mode = isnothing(mode) ? (isnothing(k) ? :cyclo : :numeric) : mode
+
+    n = round(Int, 2j + 1)
 
     if mode == :cyclo || mode == :classical
         if !ishalfInt(j)
-            mode == :cyclo && return CycloMonomial(0, 0, Pair{Int,Int}[])
-            return 0.0
+            mode == :cyclo && return ZERO_MONOMIAL
+            return zero(T)
         end
-        mode == :cyclo && return qint_cyclo(round(Int, 2j + 1)) 
-        return Float64(2j + 1)
+        mode == :cyclo && return qint_cyclo(n) 
+        return T(n)
     end
 
     isnothing(k) && throw(ArgumentError("Mode :$mode requires a level k."))
@@ -202,10 +234,9 @@ function qdim(j::Spin, k::OptInt=nothing; mode=nothing, T::Type{<:AbstractFloat}
     end
 
     if mode == :exact
-        return qdim_exact(j, k)
+        return qint(n, k; mode=:exact)
     elseif mode == :numeric
-        model = NumericSU2kModel(k; T=T, prec=prec)
-        return qdim_numeric(model, j)
+        return qint(n, j; mode=:numeric, T=T,prec=prec)
     end
     error("Unknown mode: $mode")
 end
@@ -220,7 +251,7 @@ function rmatrix(j1::Spin, j2::Spin, j3::Spin, k::OptInt=nothing;
     mode = isnothing(mode) ? (isnothing(k) ? :cyclo : :numeric) : mode
 
     if mode == :cyclo || mode == :classical
-        !(abs(j1-j2) <= j3 <= j1+j2 && isinteger(j1+j2+j3)) && return (mode == :cyclo ? CycloMonomial(0,0,Pair{Int,Int}[]) : 0.0)
+        !(abs(j1-j2) <= j3 <= j1+j2 && isinteger(j1+j2+j3)) && return (mode == :cyclo ? ZERO_MONOMIAL : 0.0)
         mode == :cyclo && return rmatrix_cyclo(j1, j2, j3)
         return iseven(round(Int, j1 + j2 - j3)) ? 1.0 : -1.0
     end
