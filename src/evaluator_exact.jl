@@ -91,7 +91,7 @@ Small powers are explicitly unrolled to prevent generic allocation overhead.
     # Fixed early exit return type
     m.sign == 0 && return z_zero
     
-    val = z_one
+    val = one(z) #sz_one
     @inbounds for (d, e) in m.exps
         if d == h
             e > 0 && return z_zero
@@ -99,21 +99,16 @@ Small powers are explicitly unrolled to prevent generic allocation overhead.
             continue
         end
         
-        # Multiply by V_exact for positive powers, V_inv for negative powers
+        # multiply by V_exact for positive powers, V_inv for negative powers
         base = e > 0 ? V_exact[d] : V_inv[d]
-        abs_e = abs(e)
-        
-        # Explicit unrolling for small powers to avoid generic `^` allocations
-        if abs_e == 1
-            val *= base
-        elseif abs_e == 2
-            val *= base * base
-        else
-            val *= base^abs_e
+
+        for _ in 1:abs(e)
+            Nemo.mul!(val, val, base)
         end
+
+        
     end
-    
-    val *= z^(m.z_pow)
+    Nemo.mul!(val, val, z^(m.z_pow)) # global z^p
     return m.sign == 1 ? val : -val
 end
 
