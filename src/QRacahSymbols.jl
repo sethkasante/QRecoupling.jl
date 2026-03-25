@@ -64,7 +64,17 @@ export evaluate_cyclo
 #constructors for results
 export ExactResult, CycloResult, ClassicalResult, CycloExactResult
 
-
+export q6j_exact, q3j_exact
+export q6j_direct, q3j_direct
+export evaluate_unit_circle, evaluate_analytic
+export ensure_classical_sieve
+export evaluate_classical_exact
+export build_phi_table, get_phi_table
+export evaluate_level
+export cyclo_to_exact
+export qint, qdim, rmatrix, fsymbol, gsymbol
+export clear_caches!, clear_numeric_caches!, clear_sieve_caches!, clear_exact_caches!
+export q6j, q3j, cyclo_to_numeric
 
 
 # precompile these 

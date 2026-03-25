@@ -150,8 +150,6 @@ function q6j_exact(j1::Real, j2::Real, j3::Real, j4::Real, j5::Real, j6::Real,k:
     return q6j_exact(model, j1, j2, j3, j4, j5, j6)
 end
 
-export q6j_exact, q3j_exact
-
 # ============================================================
 # Exact Quantum 3j Symbol
 # ============================================================

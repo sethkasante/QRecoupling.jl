@@ -216,5 +216,3 @@ Automatically manages the `NumericSU2kModel` caching behind the scenes.
 """   
 q6j_direct(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::Int; T::Type{<:AbstractFloat}=Float64, prec::Int=256) = 
     _q6j_stable(NumericSU2kModel(k; T=T, prec=prec), j1, j2, j3, j4, j5, j6)
-
-export q6j_direct, q3j_direct

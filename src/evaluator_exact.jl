@@ -119,9 +119,6 @@ end
 
 
 
-export cyclo_to_exact
-
-
 """
     cyclo_to_exact(res::CycloResult, k::Int)
 

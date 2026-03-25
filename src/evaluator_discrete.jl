@@ -6,8 +6,6 @@
 # Cache the magnitude table
 const GLOBAL_SIEVE_CACHE = LRU{Int, Vector{BigFloat}}(maxsize=4096)
 
-export build_phi_table, get_phi_table
-
 """
     build_phi_table(D_max::Int, k::Int)
 
@@ -88,7 +86,6 @@ Gracefully detects topological zeros if d >= h.
     return m.sign == -1 ? -val : val
 end
 
-export evaluate_level
 
 """
     evaluate_level(res::CycloResult, k::Int, ::Type{T}=Float64; prec=512)

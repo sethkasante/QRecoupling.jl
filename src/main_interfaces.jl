@@ -5,7 +5,6 @@
 # Handles mode routing, precision management, and caches.
 # -----------------------------------------------------------
 
-export clear_caches!, clear_numeric_caches!, clear_sieve_caches!, clear_exact_caches!
 
 """
     clear_numeric_caches!()
@@ -41,7 +40,6 @@ const EMPTY_CYCLO_RESULT = CycloResult(
 # -------------------------------------
 #  ---- Core 6j and 3j Symbols ---
 # -------------------------------------
-export q6j, q3j, cyclo_to_numeric
 
 """
     q6j(j1, j2, j3, j4, j5, j6, [k]; mode=:cyclo, T=Float64, prec=256)
@@ -197,7 +195,6 @@ end
 # Topological Tensors API (Integer, dimensions, braiding, F/G Symbols)
 # ----------------------------------------------------------------------
 
-export qint, qdim, rmatrix, fsymbol, gsymbol
 
 
 """

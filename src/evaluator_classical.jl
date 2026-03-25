@@ -6,8 +6,6 @@
 const CLASSICAL_SIEVE = Int[]
 const CLASSICAL_LOG   = Float64[]
 
-export ensure_classical_sieve
-
 
 """
     ensure_classical_sieve(max_d::Int)
@@ -300,7 +298,6 @@ function _sum_hypergeometric_exact(res::CycloResult)
     return Sum_N // D_global
 end
 
-export evaluate_classical_exact
 
 
 """
