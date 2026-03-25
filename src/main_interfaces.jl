@@ -33,14 +33,14 @@ Aggressively clears all internal caches.
 clear_caches!() = (clear_numeric_caches!(); clear_sieve_caches!(); clear_exact_caches!(); nothing)
 
 
-# Notice base_term has sign = 0 to trigger the fast-fail in downstream evaluators!
+# Note: base_term has sign = 0 to trigger the fast-fail in downstream evaluators!
 const EMPTY_CYCLO_RESULT = CycloResult(
     EMPTY_MONOMIAL, EMPTY_MONOMIAL, ZERO_MONOMIAL, CycloMonomial[], 0:-1, 0
 )
 
-# ==============================================================================
-# Core 6j and 3j Symbols
-# ==============================================================================
+# -------------------------------------
+#  ---- Core 6j and 3j Symbols ---
+# -------------------------------------
 export q6j, q3j, cyclo_to_numeric
 
 """
@@ -165,16 +165,16 @@ algebraic field element for a given discrete level `k`.
     evaluate_cyclo(res, 5, BigFloat)      # High-precision numeric at SU(2)_5
     evaluate_cyclo(res, 5, ExactResult)   # Exact algebraic evaluation
 """
-function evaluate_cyclo(res::CycloResult, k::OptInt=nothing, ::Type{T}=Float64; 
-                        q=nothing, theta=nothing, prec=512) where {T}
-    
-    # 1. Exact Algebraic Evaluation
+function evaluate_cyclo(res::CycloResult, k::OptInt=nothing, ::Type{T}=Float64; q=nothing, theta=nothing, prec=512) where {T}
+    #we don't check the quantum level bound here j1+j2+j3 <k  
+    # ---- Exact Algebraic Evaluation -----
+
     if T == ExactResult || T == CycloExactResult || T == Nemo.nf_elem
-        isnothing(k) && throw(ArgumentError("Exact projection strictly requires a topological level k."))
+        isnothing(k) && throw(ArgumentError("Exact projection requires a level k."))
         return _cyclo_to_exact(res, k, T)
     end
 
-    # 2. Numeric Evaluation
+    # ---- Numeric Evaluation -----
     if T <: Number
         if !isnothing(k)
             return evaluate_level(res, k, T; prec=prec)
@@ -185,7 +185,7 @@ function evaluate_cyclo(res::CycloResult, k::OptInt=nothing, ::Type{T}=Float64;
             # generic q (analytic continuation)
             return evaluate_analytic(res, q, T; prec=prec)
         else
-            throw(ArgumentError("Must provide a valid level k, or use hidden kwargs q/theta."))
+            throw(ArgumentError("Must provide a valid level k, or use kwargs q/theta."))
         end
     end
 
