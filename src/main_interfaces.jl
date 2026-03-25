@@ -190,6 +190,9 @@ function evaluate_cyclo(res::CycloResult, k::OptInt=nothing, ::Type{T}=Float64; 
     throw(ArgumentError("Unsupported evaluation target type: $T"))
 end
 
+function evaluate_cyclo(res::CycloResult, ::Type{T}=Float64; k=nothing, q=nothing, theta=nothing, prec=512) where {T}
+    return evaluate_cyclo(res, k, T; q=q, theta=theta, prec=prec)
+end
 
 # ----------------------------------------------------------------------
 # Topological Tensors API (Integer, dimensions, braiding, F/G Symbols)

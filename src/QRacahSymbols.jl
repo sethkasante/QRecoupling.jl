@@ -41,40 +41,26 @@ include("main_interfaces.jl")
 
 export q3j, 
        q6j, 
+       qint,
        qdim, 
        rmatrix, 
        fsymbol, 
        gsymbol
 
-# export cyclo_to_numeric, evaluate_level_exact
+#constructors for results
+export ExactResult, 
+       CycloResult, 
+       ClassicalResult, 
+       CycloExactResult
+
+#evaluation of cyclotomic representation
+export evaluate_cyclo
 
 #clear caches 
 export clear_caches!, 
        clear_numeric_caches!, 
        clear_sieve_caches!, 
        clear_exact_caches!
-
-# Builders and classical specific exports (for internal use)
-export q6j_cyclo, q3j_cyclo
-export q6j_classical, q3j_classical, q6j_classical_exact, q3j_classical_exact
-export q6j_direct, q3j_direct
-export evaluate_cyclo
-
-
-#constructors for results
-export ExactResult, CycloResult, ClassicalResult, CycloExactResult
-
-export q6j_exact, q3j_exact
-export q6j_direct, q3j_direct
-export evaluate_unit_circle, evaluate_analytic
-export ensure_classical_sieve
-export evaluate_classical_exact
-export build_phi_table, get_phi_table
-export evaluate_level
-export cyclo_to_exact
-export qint, qdim, rmatrix, fsymbol, gsymbol
-export clear_caches!, clear_numeric_caches!, clear_sieve_caches!, clear_exact_caches!
-export q6j, q3j, cyclo_to_numeric
 
 
 # precompile these 

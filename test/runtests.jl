@@ -41,7 +41,7 @@ using Nemo
         
         # Compute by building the CycloResult first, then mapping to Floats
         res_cyclo = q6j(j, j, j, j, j, j; mode=:cyclo)
-        val_mapped = cyclo_to_numeric(res_cyclo, Float64; k=k)
+        val_mapped = evaluate_cyclo(res_cyclo,k)
         
         # They must match perfectly
         @test isapprox(val_direct, val_mapped, atol=1e-12)
@@ -50,8 +50,8 @@ using Nemo
         theta_val = π/4
         q_val = exp(im * theta_val)
         
-        val_unit = cyclo_to_numeric(res_cyclo, ComplexF64; theta=theta_val)
-        val_analytic = cyclo_to_numeric(res_cyclo, ComplexF64; q=q_val)
+        val_unit = evaluate_cyclo(res_cyclo, ComplexF64; theta=theta_val)
+        val_analytic = evaluate_cyclo(res_cyclo, ComplexF64; q=q_val)
         
         @test isapprox(val_unit, val_analytic, atol=1e-12)
     end
