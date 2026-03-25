@@ -3,22 +3,22 @@
 # Maps symbolic CycloResults into high-precision floats at exact roots of unity.
 # -------------------------------------------------------------------------------
 
-# Cache the magnitude table
-const GLOBAL_SIEVE_CACHE = LRU{Int, Vector{BigFloat}}(maxsize=4096)
+# Cache the magnitude table based on type T and level k. 
+const GLOBAL_SIEVE_CACHE = LRU{Tuple{DataType, Int}, Vector}(maxsize=4096)
+# const GLOBAL_SIEVE_CACHE = LRU{Int, Vector{BigFloat}}(maxsize=4096)
 
 """
     build_phi_table(D_max::Int, k::Int)
 
 Computes the log-magnitude for cyclotomic polynomials Φ_d(q) using a 
-Fast Möbius Transform. Phase tracking is analytically omitted as admissible 
-SU(2)_k ratios are mathematically guaranteed to be positive reals.
+Fast Möbius Transform natively in the precision of `T`.
 """
-function build_phi_table(D_max::Int, k::Int)
+function build_phi_table(D_max::Int, k::Int, ::Type{T}) where {T}
     h = k + 2
-    V_mag = zeros(BigFloat, D_max)
+    V_mag = zeros(T, D_max)
     V_valid = trues(D_max) 
     
-    h_big = BigFloat(h)
+    h_T = T(h)
     
     for n in 1:D_max
         if n % h == 0
@@ -26,8 +26,8 @@ function build_phi_table(D_max::Int, k::Int)
             continue
         end
 
-        # We strictly take the absolute value, magnitudes only
-        val_sin = 2 * sinpi(BigFloat(n) / h_big)
+        # Natively compute in T to ensure fair precision benchmarking
+        val_sin = 2 * sinpi(n / h_T)
         V_mag[n] = log(abs(val_sin))
     end
     
@@ -44,16 +44,17 @@ function build_phi_table(D_max::Int, k::Int)
     return V_mag
 end
 
-function get_phi_table(k::Int, D_max::Int)
-    if haskey(GLOBAL_SIEVE_CACHE, k)
-        lmag = GLOBAL_SIEVE_CACHE[k]
+function get_phi_table(k::Int, D_max::Int, ::Type{T}) where {T}
+    key = (T, k)
+    if haskey(GLOBAL_SIEVE_CACHE, key)
+        lmag = GLOBAL_SIEVE_CACHE[key]::Vector{T}
         if length(lmag) >= D_max
             return lmag
         end
     end
     
-    lmag = build_phi_table(max(D_max, k + 2), k)
-    GLOBAL_SIEVE_CACHE[k] = lmag
+    lmag = build_phi_table(max(D_max, k + 2), k, T)
+    GLOBAL_SIEVE_CACHE[key] = lmag
     return lmag
 end
 
@@ -62,30 +63,68 @@ end
 # -------------------------------------------
 
 """
-    _project_to_real(m::CycloMonomial, lmag_table::Vector{BigFloat}, h::Int)
+    _project_to_real(m::CycloMonomial, lmag_table::Vector{T}, h::Int, ::Type{T})
 
-The ultra-fast hot loop. Evaluates the cyclotomic log-magnitudes. 
-Gracefully detects topological zeros if d >= h.
+The ultra-fast hot loop. Evaluates the cyclotomic log-magnitudes strictly in `T`.
 """
-@inline function _project_to_real(m::CycloMonomial, lmag_table::Vector{BigFloat}, h::Int)
-    m.sign == 0 && return zero(BigFloat)
-    
-    lm = zero(BigFloat)
-    
-    @inbounds for (d, e) in m.exps
+@inline function _project_to_real(m::CycloMonomial, lmag_table::Vector{T}, h::Int, ::Type{T}) where {T}
+    m.sign == 0 && return zero(T)
+
+    exps = m.exps
+
+    @inbounds for i in eachindex(exps)
+        d, e = exps[i]
         if d >= h
-            e > 0 && return zero(BigFloat) # Topological zero (Admissibility violated or pole hit)
+            e > 0 && return zero(T)
             e < 0 && throw(DomainError(h-2, "Topological pole: Level k=$(h-2)."))
-            continue
         end
+    end
+    
+    lm = zero(T)
+    @inbounds @simd for i in eachindex(exps)
+        d, e = exps[i]
         lm += e * lmag_table[d]
     end
     
-    # Exponentiate the magnitude and apply the analytical algebraic sign
     val = exp(lm)
     return m.sign == -1 ? -val : val
 end
 
+
+#core evaluation function
+function _eval_cresult(res::CycloResult, k::Int, ::Type{T}) where {T}
+    h = k + 2
+    lmag_table = get_phi_table(k, res.max_d, T)
+
+    sum_val = one(T)
+    curr_term = one(T)
+    
+    @inbounds for r in res.ratios
+        r_val = _project_to_real(r, lmag_table, h, T)
+        curr_term *= r_val
+        sum_val += curr_term
+    end
+
+    c_base = _project_to_real(res.base_term, lmag_table, h, T)
+    c_root = _project_to_real(res.root, lmag_table, h, T)
+    
+    # compute radicals
+    exps = res.radical.exps
+
+    @inbounds for i in eachindex(exps)
+        d, e = exps[i]
+        d >= h && return zero(T) # topological zero 
+    end
+
+    p_lm = zero(T)
+    @inbounds @simd for i in eachindex(exps)
+        d, e = exps[i]
+        p_lm += e * lmag_table[d]
+    end
+    c_rad_sqrt = exp(p_lm / 2) 
+
+    return c_root * c_rad_sqrt * c_base * sum_val
+end
 
 """
     evaluate_level(res::CycloResult, k::Int, ::Type{T}=Float64; prec=512)
@@ -95,36 +134,24 @@ Evaluates the quantum symbol at the exact discrete SU(2)_k root of unity.
 function evaluate_level(res::CycloResult, k::Int, ::Type{T}=Float64; prec=512) where {T}
     (res.radical.sign == 0 || res.base_term.sign == 0) && return zero(T)
 
-    return setprecision(BigFloat, prec) do
-        h = k + 2
-        lmag_table = get_phi_table(k, res.max_d)
+    #extract type of real
+    RealT = T <: Complex ? real(T) : T
 
-        sum_val = one(BigFloat)
-        curr_term = one(BigFloat)
-        
-        # The Hot Loop: Now purely vectorized float addition
-        @inbounds for r in res.ratios
-            r_val = _project_to_real(r, lmag_table, h)
-            curr_term *= r_val
-            sum_val += curr_term
+    val_real = if RealT == BigFloat
+        setprecision(BigFloat, prec) do 
+            _eval_cresult(res,k,RealT) 
         end
-
-        c_base = _project_to_real(res.base_term, lmag_table, h)
-        c_root = _project_to_real(res.root, lmag_table, h)
-        
-        # Evaluate radical directly (Delta^2 is rigorously strictly positive)
-        p_lm = zero(BigFloat)
-        @inbounds for (d, e) in res.radical.exps
-            if d >= h
-                return zero(T) # Topological zero safety net
-            end
-            p_lm += e * lmag_table[d]
-        end
-        c_rad_sqrt = exp(p_lm / 2) 
-
-        final = c_root * c_rad_sqrt * c_base * sum_val
-        return T <: Complex ? T(final, 0) : T(final)
+    else
+        _eval_cresult(res,k,RealT)
     end
+    return T <: Complex ? T(val_real, 0) : T(val_real)
+end
+
+function _eval_cmonomial(m::CycloMonomial, k::Int,::Type{T}) where {T}
+    h = k + 2
+    max_d = isempty(m.exps) ? 1 : maximum(keys(m.exps))
+    lmag_table = get_phi_table(k, max_d, T)
+    return _project_to_real(m, lmag_table, h, T)
 end
 
 """
@@ -133,13 +160,16 @@ end
 function evaluate_level(m::CycloMonomial, k::Int, ::Type{T}=Float64; prec=512) where {T}
     m.sign == 0 && return zero(T)
 
-    return setprecision(BigFloat, prec) do
-        h = k + 2
-        max_d = isempty(m.exps) ? 1 : maximum(keys(m.exps))
-        lmag_table = get_phi_table(k, max_d)
-        val_bf = _project_to_real(m, lmag_table, h)
-        return T <: Complex ? T(val_bf, 0) : T(val_bf)
+    RealT = T <: Complex ? real(T) : T
+
+    val_real = if RealT == BigFloat
+        setprecision(BigFloat, prec) do 
+            _eval_cmonomial(m, k, RealT) 
+        end
+    else
+        _eval_cmonomial(m, k, T)
     end
+    return T <: Complex ? T(val_real, 0) : T(val_real)
 end
 
 
