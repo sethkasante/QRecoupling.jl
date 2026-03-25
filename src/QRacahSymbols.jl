@@ -47,6 +47,8 @@ export q3j,
        fsymbol, 
        gsymbol
 
+export q6j_exact, q3j_exact
+
 #constructors for results
 export ExactResult, 
        CycloResult, 
