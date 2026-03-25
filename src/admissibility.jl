@@ -1,4 +1,5 @@
-# src/admissible.jl
+
+#admissibility tests for classical and quantum symbols
 
 @inline ishalfInt(j::Spin)::Bool = isinteger(2*j) && j ≥ 0
 

@@ -1,9 +1,9 @@
-# ==============================================================================
-# TopologicalSymbols.jl
-# Internal engines for higher-order composite tensors:
-# Quantum Dimensions, R-Matrices, F-Symbols, and G-Symbols.
-# ==============================================================================
 
+# ----------------------------------------------------------------------
+#                   ---- Topological Symbols -----
+# Internal engines for higher-order composite tensors:
+# Quantum Integers, Dimensions, R-Matrices, F-Symbols, and G-Symbols.
+# ----------------------------------------------------------------------
 """
     _multiply_prefactors(res::CycloResult, extra_sq::CycloMonomial)
 
@@ -30,9 +30,9 @@ function _multiply_prefactors(res::CycloResult, extra_sq::CycloMonomial)
     return CycloResult(final_root, final_rad, res.base_term, res.ratios, res.z_range, max(res.max_d, max_d))
 end
 
-# -------------------------------------------------
-# Quantum Integers [n]_q and Dimensions [2j+1]_q
-# -------------------------------------------------
+# -----------------------------------------------------
+#  --- Quantum Integers [n]_q and Dimensions [2j+1]_q
+# ------------------------------------------------------
 
 function _qint_cyclo(n::Int)
     n == 0 && return CycloMonomial(0, 0, Pair{Int,Int}[]) 
@@ -82,9 +82,9 @@ function _qint_numeric(n::Int, k::Int, ::Type{T}, prec::Int) where {T <: Abstrac
     end
 end
 
-# -------------------------------------
-# R-Matrix (Braiding / Framing Phase)
-# -------------------------------------
+# ------------------------------------------
+#  -- R-Matrix (Braiding / Framing Phase)
+# ------------------------------------------
 
 function rmatrix_cyclo(j1::Spin, j2::Spin, j3::Spin)
     z_pow_val = round(Int, 2 * (j3*(j3+1) - j1*(j1+1) - j2*(j2+1)))
@@ -107,9 +107,8 @@ function rmatrix_numeric(j1::Spin, j2::Spin, j3::Spin, k::Int; T::Type{<:Abstrac
     return s * cispi(T(phase_val) / T(2 * (k + 2))) 
 end
 
-# ==============================================================================
-# F-Symbol (Unitary Fusion Crossing)
-# ==============================================================================
+
+# ------ F-Symbol (Unitary Fusion Crossing) ------
 
 function fsymbol_cyclo(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
     res_6j = q6j_cyclo(j1, j2, j3, j4, j5, j6)
@@ -134,9 +133,8 @@ function fsymbol_numeric(model::NumericSU2kModel{T}, j1::Spin, j2::Spin, j3::Spi
     return phase * sqrt(qdim_numeric(model, j3) * qdim_numeric(model, j6)) * val_6j
 end
 
-# ==============================================================================
-# G-Symbol (Symmetric Tetrahedral Weight)
-# ==============================================================================
+
+#  ----- G-Symbol (Symmetric Tetrahedral Weight) -----
 
 function gsymbol_cyclo(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
     res_6j = q6j_cyclo(j1, j2, j3, j4, j5, j6)

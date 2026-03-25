@@ -1,4 +1,5 @@
-# src/symmetry.jl
+
+#  canonical symmetries
 
 @inline function canonical_spins(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
     if all(x -> x == j1, (j2, j3, j4, j5, j6))

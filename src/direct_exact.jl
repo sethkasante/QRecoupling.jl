@@ -150,9 +150,9 @@ function q6j_exact(j1::Real, j2::Real, j3::Real, j4::Real, j5::Real, j6::Real,k:
     return q6j_exact(model, j1, j2, j3, j4, j5, j6)
 end
 
-# ============================================================
+# ------------------------
 # Exact Quantum 3j Symbol
-# ============================================================
+# ------------------------
 
 @inline function q3j_pref_sq_exact(model::ExactSU2kModel, j1::Real, j2::Real, j3::Real, m1::Real, m2::Real)
     num, den = qΔ2_exact_numden(model, j1, j2, j3) # FIXED OUTDATED NAME
@@ -209,7 +209,7 @@ end
 
 
 
-
+# -------------------------------------------------
 # ---- Exact Field Evaluation Engine ------
 # These functions are used to convert cyclotomic fields to complex or reals for consistency check
 

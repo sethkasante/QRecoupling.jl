@@ -152,9 +152,10 @@ function q3j_classical(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spi
     return evaluate_classical(q3j_cyclo(j1, j2, j3, m1, m2, m3))
 end
 
-# ==============================================================================
+
+# --------------------------------------------------------------
 # Exact Rational Evaluators (Zero-Allocation Architecture)
-# ==============================================================================
+# --------------------------------------------------------------
 
 # Thread-safe global workspaces for exact summation to prevent array allocations
 const EXACT_WORKSPACE_CURR = Int[]

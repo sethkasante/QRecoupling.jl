@@ -1,8 +1,8 @@
 
-# ========================================================================================
-# Analytic Evaluator (Continuous & Complex Regimes)
+# ---------------------------------------------------------------------------------------------
+# Analytic Evaluator (Analytic continuation  & Complex regimes)
 # Maps CycloResults to generic complex parameters (q ∈ ℂ) or the unit circle q = exp(iθ).
-# ========================================================================================
+# ---------------------------------------------------------------------------------------------
 
 const UNIT_CIRCLE_CACHE  = LRU{BigFloat, Tuple{Vector{BigFloat}, Vector{BigFloat}}}(maxsize=100)
 const ANALYTIC_CACHE     = LRU{Complex{BigFloat}, Tuple{Vector{BigFloat}, Vector{BigFloat}}}(maxsize=100)
@@ -96,9 +96,9 @@ function build_analytic_table(D_max::Int, q::Complex{BigFloat})
     return V_mag, V_phs
 end
 
-# ------------------------------------------------------------------------------
+# --------------------------------------------
 # High-Performance Continuous Projections
-# ------------------------------------------------------------------------------
+# --------------------------------------------
 
 @inline function _project_to_complex_analytic(m::CycloMonomial, lmag_table::Vector{BigFloat}, lphs_table::Vector{BigFloat}, 
                                               z_lmag_base::BigFloat, z_lphs_base::BigFloat)
@@ -116,7 +116,6 @@ end
     return exp(lm) * cis(lp)
 end
 
-export evaluate_unit_circle, evaluate_analytic
 
 
 """
