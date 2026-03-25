@@ -169,7 +169,7 @@ function evaluate_cyclo(res::CycloResult, k::OptInt=nothing, ::Type{T}=Float64; 
 
     if T == ExactResult || T == CycloExactResult || T == Nemo.nf_elem
         isnothing(k) && throw(ArgumentError("Exact projection requires a level k."))
-        return cyclo_to_exact(res, k, T)
+        return cyclo_to_exact(res, k)
     end
 
     # ---- Numeric Evaluation -----
