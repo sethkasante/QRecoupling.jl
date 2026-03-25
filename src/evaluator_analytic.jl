@@ -4,51 +4,53 @@
 # Maps CycloResults to generic complex parameters (q ∈ ℂ) or the unit circle q = exp(iθ).
 # ---------------------------------------------------------------------------------------------
 
-const UNIT_CIRCLE_CACHE  = LRU{BigFloat, Tuple{Vector{BigFloat}, Vector{BigFloat}}}(maxsize=100)
-const ANALYTIC_CACHE     = LRU{Complex{BigFloat}, Tuple{Vector{BigFloat}, Vector{BigFloat}}}(maxsize=100)
+const UNIT_CIRCLE_CACHE  = LRU{Tuple{DataType, Any}, Tuple{Vector, Vector}}(maxsize=256)
+const ANALYTIC_CACHE     = LRU{Tuple{DataType, Any}, Tuple{Vector, Vector}}(maxsize=256)
 
-function get_unit_circle_table(theta::BigFloat, D_max::Int)
-    if haskey(UNIT_CIRCLE_CACHE, theta)
-        lmag, lphs = UNIT_CIRCLE_CACHE[theta]
+function get_unit_circle_table(theta::T, D_max::Int, ::Type{T}) where {T}
+    key = (T, theta)
+    if haskey(UNIT_CIRCLE_CACHE, key)
+        lmag, lphs = UNIT_CIRCLE_CACHE[key]
         if length(lmag) >= D_max
-            return lmag, lphs
+            return lmag::Vector{T}, lphs::Vector{T}
         end
     end
-    lmag, lphs = build_unit_circle_table(D_max, theta)
-    UNIT_CIRCLE_CACHE[theta] = (lmag, lphs)
+    lmag, lphs = build_unit_circle_table(D_max, theta, T)
+    UNIT_CIRCLE_CACHE[key] = (lmag, lphs)
     return lmag, lphs
 end
 
-function get_analytic_table(q::Complex{BigFloat}, D_max::Int)
-    if haskey(ANALYTIC_CACHE, q)
-        lmag, lphs = ANALYTIC_CACHE[q]
+function get_analytic_table(q::Complex{T}, D_max::Int, ::Type{T}) where {T}
+    key = (T, q)
+    if haskey(ANALYTIC_CACHE, key)
+        lmag, lphs = ANALYTIC_CACHE[key]
         if length(lmag) >= D_max
-            return lmag, lphs
+            return lmag::Vector{T}, lphs::Vector{T}
         end
     end
-    lmag, lphs = build_analytic_table(D_max, q)
-    ANALYTIC_CACHE[q] = (lmag, lphs)
+    lmag, lphs = build_analytic_table(D_max, q, T)
+    ANALYTIC_CACHE[key] = (lmag, lphs)
     return lmag, lphs
 end
 
-function build_unit_circle_table(D_max::Int, theta::BigFloat)
-    V_mag = zeros(BigFloat, D_max)
-    V_phs = zeros(BigFloat, D_max) 
+function build_unit_circle_table(D_max::Int, theta::T, ::Type{T}) where {T}
+    V_mag = zeros(T, D_max)
+    V_phs = zeros(T, D_max) 
     V_valid = trues(D_max)
     
     half_theta = theta / 2
-    pi_big = BigFloat(π) 
+    pi_val = T(π) 
     
     for n in 1:D_max
-        val_sin = 2 * sin(BigFloat(n) * half_theta)
+        val_sin = 2 * sin(T(n) * half_theta)
         
         if iszero(val_sin)
             V_valid[n] = false
         else
             V_mag[n] = log(abs(val_sin))
-            p_n = BigFloat(n) * half_theta + (pi_big / 2) 
+            p_n = T(n) * half_theta + (pi_val / 2) 
             if val_sin < 0
-                p_n += pi_big
+                p_n += pi_val
             end
             V_phs[n] = p_n
         end
@@ -66,15 +68,15 @@ function build_unit_circle_table(D_max::Int, theta::BigFloat)
     return V_mag, V_phs
 end
 
-function build_analytic_table(D_max::Int, q::Complex{BigFloat})
-    V_mag = zeros(BigFloat, D_max)
-    V_phs = zeros(BigFloat, D_max)
+function build_analytic_table(D_max::Int, q::Complex{T}, ::Type{T}) where {T}
+    V_mag = zeros(T, D_max)
+    V_phs = zeros(T, D_max)
     V_valid = trues(D_max)
     
-    # Rolling iterator avoids O(D log D) complex exponentiation overhead
     q_curr = q
+    one_q = one(q)
     for n in 1:D_max
-        term = q_curr - one(q)
+        term = q_curr - one_q
         if iszero(term)
             V_valid[n] = false
         else
@@ -100,15 +102,18 @@ end
 # High-Performance Continuous Projections
 # --------------------------------------------
 
-@inline function _project_to_complex_analytic(m::CycloMonomial, lmag_table::Vector{BigFloat}, lphs_table::Vector{BigFloat}, 
-                                              z_lmag_base::BigFloat, z_lphs_base::BigFloat)
-    m.sign == 0 && return zero(Complex{BigFloat})
+@inline function _project_to_complex_analytic(m::CycloMonomial, lmag_table::Vector{T}, lphs_table::Vector{T}, 
+                                              z_lmag_base::T, z_lphs_base::T, ::Type{T}) where {T}
+    m.sign == 0 && return zero(Complex{T})
     
     lm = m.z_pow * z_lmag_base
     lp = m.z_pow * z_lphs_base
-    m.sign == -1 && (lp += BigFloat(π)) 
+    m.sign == -1 && (lp += T(π)) 
     
-    @inbounds for (d, e) in m.exps
+    # Pure SIMD math loop (No d >= h check because k doesn't exist here!)
+    exps = m.exps
+    @inbounds @simd ivdep for i in eachindex(exps)
+        d, e = exps[i]
         lm += e * lmag_table[d]
         lp += e * lphs_table[d]
     end
@@ -117,6 +122,39 @@ end
 end
 
 
+function _eval_unit_circle_core(res::CycloResult, theta::T, ::Type{T}) where {T}
+    lmag_table, lphs_table = get_unit_circle_table(theta, res.max_d, T)
+
+    z_lmag = zero(T) 
+    z_lphs = theta / 2
+
+    sum_val = one(Complex{T})
+    curr_term = one(Complex{T})
+    
+    @inbounds for r in res.ratios
+        r_val = _project_to_complex_analytic(r, lmag_table, lphs_table, z_lmag, z_lphs, T)
+        curr_term *= r_val
+        sum_val += curr_term
+    end
+
+    c_mmin = _project_to_complex_analytic(res.base_term, lmag_table, lphs_table, z_lmag, z_lphs, T)
+    c_root = _project_to_complex_analytic(res.root, lmag_table, lphs_table, z_lmag, z_lphs, T)
+
+    rad_lm = res.radical.z_pow * z_lmag
+    rad_lp = res.radical.z_pow * z_lphs
+    res.radical.sign == -1 && (rad_lp += T(π))
+    
+    exps = res.radical.exps
+    @inbounds @simd ivdep for i in eachindex(exps)
+        d, e = exps[i]
+        rad_lm += e * lmag_table[d]
+        rad_lp += e * lphs_table[d]
+    end
+    
+    c_rad_sqrt = exp(rad_lm / 2) * cis(rad_lp / 2) 
+
+    return c_root * c_rad_sqrt * c_mmin * sum_val
+end
 
 """
     evaluate_unit_circle(res::CycloResult, theta::Real, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
@@ -126,43 +164,59 @@ Evaluates a compiled `CycloResult` strictly along the unit circle where `q = exp
 It tracks continuous floating-point phases and seamlessly extracts the 
 analytic square root of the cyclotomic radical.
 """
-function evaluate_unit_circle(res::CycloResult, theta::Real, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
+function evaluate_unit_circle(res::CycloResult, theta::Real, ::Type{T}=ComplexF64; prec=512) where {T}
     (res.radical.sign == 0 || res.base_term.sign == 0) && return zero(T)
 
-    return setprecision(BigFloat, prec) do
-        theta_big = BigFloat(theta)
-        lmag_table, lphs_table = get_unit_circle_table(theta_big, res.max_d)
+    RealT = T <: Complex ? real(T) : T
+    theta_T = RealT(theta)
 
-        z_lmag = zero(BigFloat) 
-        z_lphs = theta_big / 2
-
-        sum_val = one(Complex{BigFloat})
-        curr_term = one(Complex{BigFloat})
-        
-        @inbounds for r in res.ratios
-            r_val = _project_to_complex_analytic(r, lmag_table, lphs_table, z_lmag, z_lphs)
-            curr_term *= r_val
-            sum_val += curr_term
+    final = if RealT == BigFloat
+        setprecision(BigFloat, prec) do 
+            _eval_unit_circle_core(res, theta_T, RealT)
         end
-
-        c_mmin = _project_to_complex_analytic(res.base_term, lmag_table, lphs_table, z_lmag, z_lphs)
-        c_root = _project_to_complex_analytic(res.root, lmag_table, lphs_table, z_lmag, z_lphs)
-
-        # Extract analytic square root of the radical
-        rad_lm = res.radical.z_pow * z_lmag
-        rad_lp = res.radical.z_pow * z_lphs
-        res.radical.sign == -1 && (rad_lp += BigFloat(π))
-        
-        @inbounds for (d, e) in res.radical.exps
-            rad_lm += e * lmag_table[d]
-            rad_lp += e * lphs_table[d]
-        end
-        
-        c_rad_sqrt = exp(rad_lm / 2) * cis(rad_lp / 2) 
-
-        final = c_root * c_rad_sqrt * c_mmin * sum_val
-        return T <: Real ? T(real(final)) : T(final)
+    else
+        _eval_unit_circle_core(res, theta_T, RealT)
     end
+    
+    return T <: Real ? T(real(final)) : T(final)
+end
+
+
+
+function _eval_analytic_core(res::CycloResult, q::Complex{T}, ::Type{T}) where {T}
+    lmag_table, lphs_table = get_analytic_table(q, res.max_d, T)
+
+    r_q = abs(q)
+    phi_q = angle(q)
+    z_lmag = log(r_q) / 2
+    z_lphs = phi_q / 2
+
+    sum_val = one(Complex{T})
+    curr_term = one(Complex{T})
+    
+    @inbounds for r in res.ratios
+        r_val = _project_to_complex_analytic(r, lmag_table, lphs_table, z_lmag, z_lphs, T)
+        curr_term *= r_val
+        sum_val += curr_term
+    end
+
+    c_mmin = _project_to_complex_analytic(res.base_term, lmag_table, lphs_table, z_lmag, z_lphs, T)
+    c_root = _project_to_complex_analytic(res.root, lmag_table, lphs_table, z_lmag, z_lphs, T)
+
+    rad_lm = res.radical.z_pow * z_lmag
+    rad_lp = res.radical.z_pow * z_lphs
+    res.radical.sign == -1 && (rad_lp += T(π))
+    
+    exps = res.radical.exps
+    @inbounds @simd ivdep for i in eachindex(exps)
+        d, e = exps[i]
+        rad_lm += e * lmag_table[d]
+        rad_lp += e * lphs_table[d]
+    end
+    
+    c_rad_sqrt = exp(rad_lm / 2) * cis(rad_lp / 2) 
+
+    return c_root * c_rad_sqrt * c_mmin * sum_val
 end
 
 
@@ -172,46 +226,22 @@ end
 Evaluates a compiled `CycloResult` for an arbitrary complex parameter `q`.
 
 This function performs the full analytic continuation of the quantum 6j-symbol 
-into the SL(2, ℂ) regime. It utilizes a rolling complex iterator to prevent 
-O(N log N) exponentiation overhead during the table build phase.
+into the SL(2, ℂ) regime. 
 """
-function evaluate_analytic(res::CycloResult, q::Number, ::Type{T}=Complex{BigFloat}; prec=512) where {T}
+function evaluate_analytic(res::CycloResult, q::Number, ::Type{T}=ComplexF64; prec=512) where {T}
     (res.radical.sign == 0 || res.base_term.sign == 0) && return zero(T)
 
-    return setprecision(BigFloat, prec) do
-        q_big = Complex{BigFloat}(q)
-        lmag_table, lphs_table = get_analytic_table(q_big, res.max_d)
+    RealT = T <: Complex ? real(T) : T
+    q_T = Complex{RealT}(q)
 
-        r_q = abs(q_big)
-        phi_q = angle(q_big)
-        z_lmag = log(r_q) / 2
-        z_lphs = phi_q / 2
-
-        sum_val = one(Complex{BigFloat})
-        curr_term = one(Complex{BigFloat})
-        
-        @inbounds for r in res.ratios
-            r_val = _project_to_complex_analytic(r, lmag_table, lphs_table, z_lmag, z_lphs)
-            curr_term *= r_val
-            sum_val += curr_term
+    final = if RealT == BigFloat
+        setprecision(BigFloat, prec) do 
+            _eval_analytic_core(res, q_T, RealT)
         end
-
-        c_mmin = _project_to_complex_analytic(res.base_term, lmag_table, lphs_table, z_lmag, z_lphs)
-        c_root = _project_to_complex_analytic(res.root, lmag_table, lphs_table, z_lmag, z_lphs)
-
-        rad_lm = res.radical.z_pow * z_lmag
-        rad_lp = res.radical.z_pow * z_lphs
-        res.radical.sign == -1 && (rad_lp += BigFloat(π))
-        
-        @inbounds for (d, e) in res.radical.exps
-            rad_lm += e * lmag_table[d]
-            rad_lp += e * lphs_table[d]
-        end
-        
-        c_rad_sqrt = exp(rad_lm / 2) * cis(rad_lp / 2) 
-
-        final = c_root * c_rad_sqrt * c_mmin * sum_val
-        return T <: Real ? T(real(final)) : T(final)
+    else
+        _eval_analytic_core(res, q_T, RealT)
     end
+    
+    return T <: Real ? T(real(final)) : T(final)
 end
 
