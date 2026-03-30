@@ -25,7 +25,6 @@ function build_phi_table(D_max::Int, k::Int, ::Type{T}) where {T}
             continue
         end
 
-        # Natively compute in T to ensure fair precision benchmarking
         val_sin = 2 * sinpi(n / h_T)
         V_mag[n] = log(abs(val_sin))
     end
@@ -61,36 +60,32 @@ end
 # High-Performance Discrete Projection
 # -------------------------------------------
 
-"""
-    _project_to_real(m::CycloMonomial, lmag_table::Vector{T}, h::Int, ::Type{T})
+#old
+# @inline function _project_to_real(m::CycloMonomial, lmag_table::Vector{T}, h::Int, ::Type{T}) where {T}
+#     m.sign == 0 && return zero(T)
 
-The ultra-fast hot loop. Evaluates the cyclotomic log-magnitudes strictly in `T`.
-"""
-@inline function _project_to_real(m::CycloMonomial, lmag_table::Vector{T}, h::Int, ::Type{T}) where {T}
-    m.sign == 0 && return zero(T)
+#     exps = m.exps
 
-    exps = m.exps
-
-    @inbounds for i in eachindex(exps)
-        d, e = exps[i]
-        if d >= h
-            e > 0 && return zero(T)
-            e < 0 && throw(DomainError(h-2, "Topological pole: Level k=$(h-2)."))
-        end
-    end
+#     @inbounds for i in eachindex(exps)
+#         d, e = exps[i]
+#         if d >= h
+#             e > 0 && return zero(T)
+#             e < 0 && throw(DomainError(h-2, "Topological pole: Level k=$(h-2)."))
+#         end
+#     end
     
-    lm = zero(T)
-    @inbounds @simd for i in eachindex(exps)
-        d, e = exps[i]
-        lm += e * lmag_table[d]
-    end
+#     lm = zero(T)
+#     @inbounds @simd for i in eachindex(exps)
+#         d, e = exps[i]
+#         lm += e * lmag_table[d]
+#     end
     
-    val = exp(lm)
-    return m.sign == 1 ? val : -val
-end
+#     val = exp(lm)
+#     return m.sign == 1 ? val : -val
+# end
 
 @inline function _project_to_log(m::CycloMonomial, lmag_table::Vector{T}, h::Int, ::Type{T}) where {T}
-    # If the base monomial is zero, its log is -Infinity
+    # If the base monomial is zero, its log is -Inf
     m.sign == 0 && return typemin(T) 
     
     lm = zero(T)
@@ -100,7 +95,7 @@ end
     @inbounds for i in eachindex(exps)
         d, e = exps[i]
         if d >= h
-            e > 0 && return typemin(T) # zero -> log_mag = -Inf
+            e > 0 && return typemin(T) # 0 -> log_mag = -Inf
             e < 0 && throw(DomainError(h-2, "Topological pole: Level k=$(h-2)."))
         end
     end
