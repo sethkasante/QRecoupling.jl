@@ -88,10 +88,10 @@ Maps a sparse `CycloMonomial` into an exact Nemo number field element.
 Small powers are explicitly unrolled to prevent generic allocation overhead.
 """
 @inline function _project_ratio_nemo(m::CycloMonomial, V_exact::Vector{T}, V_inv::Vector{T}, z::T, h::Int, z_zero::T, z_one::T) where {T}
-    # Fixed early exit return type
+    # early exit return type
     m.sign == 0 && return z_zero
     
-    val = one(z) #sz_one
+    val = z_one
     @inbounds for (d, e) in m.exps
         if d == h
             e > 0 && return z_zero
@@ -99,16 +99,21 @@ Small powers are explicitly unrolled to prevent generic allocation overhead.
             continue
         end
         
-        # multiply by V_exact for positive powers, V_inv for negative powers
+        # Multiply by V_exact for positive powers, V_inv for negative powers
         base = e > 0 ? V_exact[d] : V_inv[d]
-
-        for _ in 1:abs(e)
-            Nemo.mul!(val, val, base)
-        end
-
+        abs_e = abs(e)
         
+        # explicit perform small powers to avoid generic `^` allocations
+        if abs_e == 1
+            val *= base
+        elseif abs_e == 2
+            val *= base * base
+        else
+            val *= base^abs_e
+        end
     end
-    Nemo.mul!(val, val, z^(m.z_pow)) # global z^p
+    
+    val *= z^(m.z_pow)
     return m.sign == 1 ? val : -val
 end
 
