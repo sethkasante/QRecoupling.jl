@@ -22,7 +22,7 @@ end
 const EXACT_MODEL_CACHE = LRU{Int, ExactSU2kModel}(maxsize=50)
 
 function ExactSU2kModel(k::Int)
-    @warn "Building ExactSU2kModel for SU(2)_{$k}. Dense polynomial caching can trigger memory exhaustion for k > 100." maxlog=3
+    # @warn "Building ExactSU2kModel for SU(2)_{$k}. Dense polynomial caching can trigger memory exhaustion for k > 100." maxlog=3
     get!(EXACT_MODEL_CACHE, k) do
         N = k + 2
         # The cyclotomic field of order 2N
@@ -127,7 +127,7 @@ function q6jseries_exact(model::ExactSU2kModel, j1::Real, j2::Real, j3::Real, j4
     
     # Iteratively update the term using the exact algebraic ratio R_z
     @inbounds for z in z_min : (z_max - 1)
-        #Direct lookup of quantum integers to bypass GCD inverses!
+        #Direct lookup of quantum integers 
         num_ratio = -(model.q_ints[z+3]) * (model.q_ints[β1-z+1]) * (model.q_ints[β2-z+1]) * (model.q_ints[β3-z+1])
         den_ratio = (model.q_ints[z-α1+2]) * (model.q_ints[z-α2+2]) * (model.q_ints[z-α3+2]) * (model.q_ints[z-α4+2])
                     
@@ -150,9 +150,9 @@ function q6j_exact(j1::Real, j2::Real, j3::Real, j4::Real, j5::Real, j6::Real,k:
     return q6j_exact(model, j1, j2, j3, j4, j5, j6)
 end
 
-# ------------------------
-# Exact Quantum 3j Symbol
-# ------------------------
+# ------------------------------
+#  -- Exact Quantum 3j Symbol
+# ------------------------------
 
 @inline function q3j_pref_sq_exact(model::ExactSU2kModel, j1::Real, j2::Real, j3::Real, m1::Real, m2::Real)
     num, den = qΔ2_exact_numden(model, j1, j2, j3) # FIXED OUTDATED NAME
