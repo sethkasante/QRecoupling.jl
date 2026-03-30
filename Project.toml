@@ -1,6 +1,6 @@
 name = "QRacahSymbols"
 uuid = "13c27e9b-5f68-43dc-97e8-482e821abd98"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["Seth K. Asante <seth.kurankyi@gmail.com>"]
 
 [deps]
