@@ -202,7 +202,7 @@ function q3j_cyclo(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = 
     z_max = min(β1, β2, β3)
 
     if z_min > z_max
-        empty_m = CycloMonomial(0, 0, Pair{Int,Int}[])
+        empty_m = ZERO_MONOMIAL
         return CycloResult(root, radical, empty_m, CycloMonomial[], 0:-1, max_d_tracker)
     end
 
