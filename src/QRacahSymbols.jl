@@ -26,7 +26,7 @@ include("evaluator_discrete.jl")   # Exact Roots of Unity Sieve
 include("evaluator_analytic.jl")   # Continuous Complex sweeps
 include("evaluator_classical.jl")  # q=1 Limits & Zero-Allocation GMP
 include("evaluator_exact.jl")      # Rigorous Nemo.jl Cyclotomic Fields
-include("direct_exact.jl")          # Fast Nemo computation
+include("eager_exact.jl")          # Fast Nemo computation
 
 # tqft symbols 
 include("topological_symbols.jl")
