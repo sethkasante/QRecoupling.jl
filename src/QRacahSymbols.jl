@@ -21,18 +21,18 @@ include("symmetries.jl")
 include("cyclo_builder.jl")
 
 # Computation Engines
-include("direct_numeric.jl")     # Fast Log-Sum-Exp Floats
-include("evaluator_discrete.jl")   # Exact Roots of Unity Sieve
-include("evaluator_analytic.jl")   # Continuous Complex sweeps
+include("direct_numeric.jl")     # Fast Log-Sum-Exp 
+include("evaluator_discrete.jl")   # level k
+include("evaluator_analytic.jl")   #complex sweeps
 include("evaluator_classical.jl")  # q=1 Limits & Zero-Allocation GMP
-include("evaluator_exact.jl")      # Rigorous Nemo.jl Cyclotomic Fields
-include("eager_exact.jl")          # Fast Nemo computation
+include("evaluator_exact.jl")      # project to cyclotomic using Nemo
+include("eager_exact.jl")          # eager Nemo computation
 
 # tqft symbols 
 include("topological_symbols.jl")
 
 # Public User Interface
-# Contains the master dispatchers and cache-clearing API
+# Contains the master dispatchers and caches
 include("main_interfaces.jl")
 
 
