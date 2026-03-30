@@ -5,7 +5,6 @@
 
 # Cache the magnitude table based on type T and level k. 
 const GLOBAL_SIEVE_CACHE = LRU{Tuple{DataType, Int}, Vector}(maxsize=4096)
-# const GLOBAL_SIEVE_CACHE = LRU{Int, Vector{BigFloat}}(maxsize=4096)
 
 """
     build_phi_table(D_max::Int, k::Int)
@@ -87,43 +86,78 @@ The ultra-fast hot loop. Evaluates the cyclotomic log-magnitudes strictly in `T`
     end
     
     val = exp(lm)
-    return m.sign == -1 ? -val : val
+    return m.sign == 1 ? val : -val
 end
 
+@inline function _project_to_log(m::CycloMonomial, lmag_table::Vector{T}, h::Int, ::Type{T}) where {T}
+    # If the base monomial is zero, its log is -Infinity
+    m.sign == 0 && return typemin(T) 
+    
+    lm = zero(T)
+    exps = m.exps
+    
+    # Check for topological zeros/poles
+    @inbounds for i in eachindex(exps)
+        d, e = exps[i]
+        if d >= h
+            e > 0 && return typemin(T) # zero -> log_mag = -Inf
+            e < 0 && throw(DomainError(h-2, "Topological pole: Level k=$(h-2)."))
+        end
+    end
+    
+    @inbounds @simd ivdep for i in eachindex(exps)
+        d, e = exps[i]
+        lm += e * lmag_table[d]
+    end
+    
+    return lm
+end
 
-#core evaluation function
-function _eval_cresult(res::CycloResult, k::Int, ::Type{T}) where {T}
+#core evaluation of CycloResult
+function _eval_cresult(res::CycloResult, k::Int, ::Type{T}, buffer::Vector{T}) where {T}
     h = k + 2
     lmag_table = get_phi_table(k, res.max_d, T)
 
-    sum_val = one(T)
-    curr_term = one(T)
+    base_lm = _project_to_log(res.base_term, lmag_table, h, T)
+    base_lm == typemin(T) && return zero(T)
     
-    @inbounds for r in res.ratios
-        r_val = _project_to_real(r, lmag_table, h, T)
-        curr_term *= r_val
-        sum_val += curr_term
-    end
-
-    c_base = _project_to_real(res.base_term, lmag_table, h, T)
-    c_root = _project_to_real(res.root, lmag_table, h, T)
+    root_lm = _project_to_log(res.root, lmag_table, h, T)
+    root_lm == typemin(T) && return zero(T)
     
-    # compute radicals
-    exps = res.radical.exps
+    rad_lm = _project_to_log(res.radical, lmag_table, h, T)
+    rad_lm == typemin(T) && return zero(T) 
+    
+    pref_lm = root_lm + (rad_lm / 2) + base_lm
+    pref_sign = res.root.sign * res.base_term.sign 
 
-    @inbounds for i in eachindex(exps)
-        d, e = exps[i]
-        d >= h && return zero(T) # topological zero 
+    num_ratios = length(res.ratios)
+    
+    max_lm = pref_lm
+    curr_lm = pref_lm
+    actual_len = num_ratios
+    
+    @inbounds for i in 1:num_ratios
+        r_lm = _project_to_log(res.ratios[i], lmag_table, h, T)
+        if r_lm == typemin(T)
+            actual_len = i - 1 
+            break 
+        end
+        buffer[i] = r_lm  # ZERO allocations here now!
+        curr_lm += r_lm
+        max_lm = max(max_lm, curr_lm)
     end
 
-    p_lm = zero(T)
-    @inbounds @simd for i in eachindex(exps)
-        d, e = exps[i]
-        p_lm += e * lmag_table[d]
+    curr_lm = pref_lm
+    curr_sign = pref_sign
+    sum_val = curr_sign * exp(curr_lm - max_lm)
+    
+    @inbounds for i in 1:actual_len
+        curr_lm += buffer[i]
+        curr_sign *= res.ratios[i].sign
+        sum_val += curr_sign * exp(curr_lm - max_lm)
     end
-    c_rad_sqrt = exp(p_lm / 2) 
 
-    return c_root * c_rad_sqrt * c_base * sum_val
+    return exp(max_lm) * sum_val
 end
 
 """
@@ -136,22 +170,25 @@ function evaluate_level(res::CycloResult, k::Int, ::Type{T}=Float64; prec=512) w
 
     #extract type of real
     RealT = T <: Complex ? real(T) : T
+    buff = Vector{T}(undef, length(res.ratios))
 
     val_real = if RealT == BigFloat
         setprecision(BigFloat, prec) do 
-            _eval_cresult(res,k,RealT) 
+            _eval_cresult(res,k,RealT,buff) 
         end
     else
-        _eval_cresult(res,k,RealT)
+        _eval_cresult(res,k,RealT,buff)
     end
     return T <: Complex ? T(val_real, 0) : T(val_real)
 end
 
+#evaluation of CycloMonomial
 function _eval_cmonomial(m::CycloMonomial, k::Int,::Type{T}) where {T}
     h = k + 2
     max_d = isempty(m.exps) ? 1 : maximum(keys(m.exps))
     lmag_table = get_phi_table(k, max_d, T)
-    return _project_to_real(m, lmag_table, h, T)
+    lmag = _project_to_log(m, lmag_table, h, T)
+    return m.sign * exp(lmag)
 end
 
 """
