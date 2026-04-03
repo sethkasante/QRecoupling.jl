@@ -1,18 +1,18 @@
 module QRacahSymbols
 
-# ---- Dependencies ----
+# ---- dependencies ----
 using LRUCache
 using Nemo
 using PrecompileTools
 
 
-# --- Global Type Aliases ----
+# --- global type aliases ----
 # Define spin as Real to allow for both Integer and Half-Integer (Float) representations.
 const Spin = Real
 const OptInt = Union{Nothing, Int}
 
 
-# -----  Core Architecture & Data Structures ------
+# -----  core architecture & data structures ------
 include("types.jl")
 include("admissibility.jl")
 include("symmetries.jl")
@@ -21,15 +21,16 @@ include("symmetries.jl")
 include("cyclo_builder.jl")
 
 # Computation Engines
-include("direct_numeric.jl")     # fast Log-Sum-Exp algo
-include("evaluator_discrete.jl")   # level k
-include("evaluator_analytic.jl")   #complex sweeps
-include("evaluator_classical.jl")  # q=1 Limits & Zero-Allocation GMP
-include("evaluator_exact.jl")      # project to cyclotomic using Nemo
+include("direct_numeric_lse.jl")     # fast Log-Sum-Exp algo
+include("projection_discrete.jl")   # level k
+include("projection_analytic.jl")   #complex sweeps
+include("projection_classical.jl")  # q→1 limit 
+include("projection_exact.jl")      # project DCR to cyclotomic field using Nemo
 include("eager_exact.jl")          # eager Nemo computation
 
-# tqft symbols 
+# tqft categories
 include("topological_symbols.jl")
+
 
 # Public User Interface
 # Contains the master dispatchers and caches
