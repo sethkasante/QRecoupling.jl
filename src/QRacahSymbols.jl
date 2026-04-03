@@ -17,11 +17,11 @@ include("types.jl")
 include("admissibility.jl")
 include("symmetries.jl")
 
-# Abstract Math Builders
+# DCR builders 
 include("cyclo_builder.jl")
 
 # Computation Engines
-include("direct_numeric.jl")     # Fast Log-Sum-Exp 
+include("direct_numeric.jl")     # fast Log-Sum-Exp algo
 include("evaluator_discrete.jl")   # level k
 include("evaluator_analytic.jl")   #complex sweeps
 include("evaluator_classical.jl")  # q=1 Limits & Zero-Allocation GMP
