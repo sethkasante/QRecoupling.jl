@@ -1,7 +1,7 @@
 
 # ---------------------------------------------------------------------------
-# :numeric builder - uses (Log-Sum-Exp for Hypergeometric Summation)
-# `Brute force` numerical computation of the Racah-Wigner 3j and 6j symbols 
+# :numeric builder - uses Log-Sum-Exp (LSE) for Hypergeometric Summation
+# `Direct or eager` numerical computation of the Racah-Wigner 3j and 6j symbols 
 # ---------------------------------------------------------------------------
 
 
@@ -83,7 +83,7 @@ function build_logqnfact_table(k::Int, T::Type{<:AbstractFloat})::Vector{T}
 end
 
 
-# Computes log(Δ) for a valid triangular coefficients.
+# Computes log(Δ) for a admissible triangular coefficients.
 @inline function log_qΔ(j1::Spin, j2::Spin, j3::Spin, tab::Vector{T})::T where {T}
     a = Int(j1 + j2 - j3)
     b = Int(j1 - j2 + j3)
@@ -131,7 +131,7 @@ function _q3j_stable(model::NumericSU2kModel{T}, j1::Spin, j2::Spin, j3::Spin, m
         logmax = max(logmax, log_sz)
     end
 
-    # perform summation
+    # perform summation 
     res_scaled = zero(T)
     phase_offset = α1 - α2 
     curr_sign = isodd(z_min + phase_offset) ? -one(T) : one(T)
@@ -156,7 +156,7 @@ Evaluates the quantum 6j-symbol using a direct Log-Sum-Exp (LSE) alternating sum
 
 # Performance Note:
 This function is optimized for single-shot floating-point evaluations. 
-It bypasses all abstract cyclotomic algebra, jumping straight into a pre-allocated 
+It bypasses all abstract algebra, jumping straight into a pre-allocated 
 CPU register hot-loop. It is mathematically immune to `NaN` and `Inf` overflows 
 at large levels k.
 """
