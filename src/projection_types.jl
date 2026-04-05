@@ -62,6 +62,28 @@ function Base.:(==)(a::CycloExactResult, b::CycloExactResult)
     return a.radical == b.radical && a.sum_factor == b.sum_factor
 end
 
+# Add two exact results if they share the same radical.
+function Base.:+(a::CycloExactResult, b::CycloExactResult)
+    a.k != b.k && error("Level mismatch")
+    if a.radical == b.radical
+        return CycloExactResult(a.k, a.radical, a.sum_factor + b.sum_factor)
+    elseif iszero(a.sum_factor)
+        return b
+    elseif iszero(b.sum_factor)
+        return a
+    else
+        # If radicals differ, verification is done by checking if Sum(res_i) is zero.
+        # This usually requires moving radicals into the field (if they are perfect squares).
+        error("Cannot sum exact results with different radicals algebraically.")
+    end
+end
+
+Base.:-(a::CycloExactResult, b::CycloExactResult) = a + CycloExactResult(b.k, b.radical, -b.sum_factor)
+Base.iszero(res::CycloExactResult) = iszero(res.sum_factor)
+
+# Scalar multiplication
+Base.:*(c::Number, res::CycloExactResult) = CycloExactResult(res.k, res.radical, c * res.sum_factor)
+
 #  --- Conversion to Float64 for sanity checks ---
 # function Base.Complex{T}(res::CycloExactResult) where T <: AbstractFloat
 #     # Project radical to numeric and multiply by the evaluated factor
@@ -130,13 +152,18 @@ Base.:*(x::Number, res::ClassicalResult) = Float64(res) * x
 
 function Base.show(io::IO, res::CycloExactResult)
     k_sub = to_subscript(res.k)
-    print(io, "Exact SU(2)$k_sub Symbol: ")
+    print(io, "Exact SU(2)$k_sub Symbol: \n")
     if iszero(res.sum_factor)
         print(io, "0")
     elseif is_identity(res.radical)
         print(io, res.sum_factor)
     else
-        print(io, "√(", res.radical, ") × [Nemo Element]")
+        rad = project_exact(res.radical,res.k)
+        print(io, "  Value: √(A) * B\n")
+        print(io, "  ----------------\n")
+        print(io, "  A (Radical) = ", rad, "\n")
+        # print(io, "√(", res.radical, ") × ")
+        print(io, "  B (Sum)     = ", res.sum_factor)
     end
 end
 
