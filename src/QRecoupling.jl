@@ -9,8 +9,8 @@ include("cyclotomic_types.jl")
 include("projection_types.jl")  
 include("admissibility.jl")    # δ and δtet checks
 include("symmetries.jl")       # canonical_spins
-include("cyclo_builder2.jl")    # DCR constructors
-include("cyclo_build3.jl")
+include("assembler_dcr.jl")   
+include("builders_dcr.jl") # symbols and invariants
 include("project_cl.jl")
 include("project_dir.jl")
 include("project_ex.jl")

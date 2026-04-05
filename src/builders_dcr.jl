@@ -1,26 +1,24 @@
 
 # builders.jl
 
-# -----------------------------------------------------------
-#  ----- DCR construction of Quantum Recoupling Symbols ----
-# -----------------------------------------------------------
+
+# --------------------------------------------------------------
+#  -- Combinatorial Builders for Quantum Recoupling Symbols --
+# --------------------------------------------------------------
 
 
 
 
 
+# --- Atomic Units: Dimensions & Phases ---
 
-# ---------------------------------------------
-#  --- Quantum dimensions & phases ---- 
-# These are cyclotomic monomials 
-# ---------------------------------------------
 
 """
     qint_mono(n::Int) -> CyclotomicMonomial
 Returns the algebraic representation of the quantum integer [n]q.
 """
 function qint_mono(n::Int)
-    n == 0 && return ZERO_MONOMIAL
+    n <= 0 && return ZERO_MONOMIAL
     n == 1 && return ONE_MONOMIAL
     buf = CycloBuffer(n)
     add_qint!(buf, n, 1)
@@ -31,12 +29,11 @@ end
 
 """
     rmatrix_mono(j1, j2, j3) -> CyclotomicMonomial
-Algebraic R-matrix phase for braiding j1, j2 into j3.
+The algebraic phase for the R-matrix braiding j1, j2 into j3:
 Uses the q^{1/2} power convention.
 """
 function rmatrix_mono(j1::Spin, j2::Spin, j3::Spin)
-    # Phase = (-1)^{j1+j2-j3} * q^{ (j3(j3+1) - j1(j1+1) - j2(j2+1))/2 }
-    # Tracking in q^{1/2} units: P = j3(j3+1) - j1(j1+1) - j2(j2+1)
+    # p is power of q^(1/2)
     p = round(Int, (j3*(j3+1) - j1*(j1+1) - j2*(j2+1)) * 2) ÷ 2
     s = iseven(round(Int, j1 + j2 - j3)) ? 1 : -1
     return CyclotomicMonomial(s, p, Pair{Int,Int}[], 0)
@@ -44,7 +41,7 @@ end
 
 
 
-# --- Builders for 3j & 6j ----
+# --- buffers for multiplying integers, factorials ----
 
 function add_qint!(buf::CycloBuffer, n::Int, p::Int=1)
     n <= 1 && return
@@ -67,6 +64,7 @@ function add_qfact!(buf::CycloBuffer, n::Int, p::Int=1)
 end
 
 
+# --- buffers for triangle coefficients ----
 
 @inline function qtriangle!(buf, j1, j2, j3)
     add_qfact!(buf, round(Int, j1 + j2 - j3))
@@ -80,49 +78,40 @@ end
     qtriangle!(buf, j2, j4, j6); qtriangle!(buf, j3, j4, j5)
 end
 
+# --- Recoupling Symbols (3j & 6j) ---
+
 function q3j_dcr(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = -m1-m2)
     # 1. Topological & Selection Rule Admissibility
     #move admissible conditions to thre top of main api
     # (!δ(j1, j2, j3) || m1 + m2 + m3 != 0) && return ZERO_DCR 
 
-    
     # Standard summation bounds for Wigner 3j
     α = (round(Int, j3 - j2 + m1), round(Int, j3 - j1 - m2))
     β = (round(Int, j1 + j2 - j3), round(Int, j1 - m1), round(Int, j2 + m2))
     z_min, z_max = max(0, -α[1], -α[2]), min(β[1], β[2], β[3])
     
-    # Initialize buffer with sufficient capacity
+    # Initialize buffer 
     buf = CycloBuffer(max(z_max + 2, round(Int, j1 + j2 + j3 + 1)))
 
     return build_dcr!(buf,
-        # Prefactor: Triangle factorials * (j ± m) factorials
+        # Prefactor: triangle factorials * (j ± m) factorials
         b -> begin
             qtriangle!(b, j1, j2, j3)
-            # Add (j ± m)! terms explicitly for clarity and speed
+            # Add (j ± m)! terms explicitly 
             add_qfact!(b, round(Int, j1 + m1)); add_qfact!(b, round(Int, j1 - m1))
             add_qfact!(b, round(Int, j2 + m2)); add_qfact!(b, round(Int, j2 - m2))
             add_qfact!(b, round(Int, j3 + m3)); add_qfact!(b, round(Int, j3 - m3))
         end,
         # Base Term (at z_min)
-        (b, z) -> begin
-            add_qfact!(b, z, -1)
-            for a in α 
-                add_qfact!(b, a + z, -1)
-            end
-            for bv in β
-                add_qfact!(b, bv - z, -1)
-            end
-        end,
+        (b, z) -> (add_qfact!(b, z, -1); 
+                    map(a -> add_qfact!(b, a+z, -1), α); 
+                    map(bv -> add_qfact!(b, bv-z, -1), β)
+                   ),
         # Ratio R_z = Term(z+1)/Term(z)
-        (b, z) -> begin
-            for bv in β
-                add_qint!(b, bv - z)
-            end
-            add_qint!(b, z + 1, -1)
-            for a in α
-                add_qint!(b, a + z + 1, -1)
-            end
-        end,
+        (b, z) -> (map(bv -> add_qint!(b, bv-z), β); 
+                    add_qint!(b, z+1, -1); 
+                    map(a -> add_qint!(b, a+z+1, -1), α)
+                   ),
         z_min, z_max
     )
 end
@@ -139,33 +128,27 @@ function q6j_dcr(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
 
     return build_dcr!(buf,
         b -> qtetrahedron!(b, j1, j2, j3, j4, j5, j6),
-        (b, z) -> ( add_qfact!(b, z+1); 
-                    for a in α
-                        add_qfact!(b, z-a, -1)
-                    end;
-                    for bv in β
-                        add_qfact!(b, bv-z, -1)
-                    end
-                  ),
-        (b, z) -> ( add_qint!(b, z+2); 
-                    for bv in β
-                        add_qint!(b, bv-z) 
-                    end; 
-                    for a in α
-                        add_qint!(b, z+1-a, -1)
-                    end
-                  ),
+        # base term 
+        (b, z) -> (add_qfact!(b, z+1); 
+                    map(a -> add_qfact!(b, z-a, -1), α); 
+                    map(bv -> add_qfact!(b, bv-z, -1), β)
+                   ),
+        # ratios 
+        (b, z) -> (add_qint!(b, z+2); 
+                    map(bv -> add_qint!(b, bv-z), β); 
+                    map(a -> add_qint!(b, z+1-a, -1), α)
+                   ),
         z_min, z_max
     )
 end
 
 
 
-#  ---- TQFT  (F & G Symbols) ---
+#  ---- TQFT invariants (F & G Symbols) ---
 
 """
     fsymbol_dcr(j1, j2, j3, j4, j5, j6)
-Algebraically fused F-symbol: sqrt([2j3+1][2j6+1]) * {6j}.
+Algebraically fused F-symbol: sqrt([2j3+1][2j6+1]) * {6j}, fuses √([d3][d6]) into the radical.
 Matches the unitary crossing matrix in Spin Networks.
 """
 function fsymbol_dcr(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
@@ -175,11 +158,13 @@ function fsymbol_dcr(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
     dims = qdim_mono(j3) * qdim_mono(j6)
     res = fuse_radical(dcr, dims)
     
+    #phase factor 
     phase = iseven(round(Int, j1 + j2 + j4 + j5)) ? 1 : -1
-    # Inline sign update to avoid full DCR copy
     new_base = CyclotomicMonomial(res.base.sign * phase, res.base.q_pow, res.base.phi_exps, res.base.max_d)
+
     return DCR(res.root, res.radical, new_base, res.ratios, res.z_range, res.max_d)
 end
+
 
 """
     gsymbol_dcr(j1, j2, j3, j4, j5, j6)
