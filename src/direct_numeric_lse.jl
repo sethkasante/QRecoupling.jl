@@ -182,7 +182,7 @@ function _q6j_stable(model::NumericSU2kModel{T}, j1::Spin, j2::Spin, j3::Spin, j
     z_min > z_max && return zero(T)
     
     # find maximum of log
-    logmax = typemin(T)
+    logmax = -T(Inf)
     @inbounds for z in z_min:z_max
         log_sz = table[z+2] - (table[z-α1+1] + table[z-α2+1] + table[z-α3+1] + table[z-α4+1] + table[β1-z+1] + table[β2-z+1] + table[β3-z+1])
         logmax = max(logmax, log_sz)

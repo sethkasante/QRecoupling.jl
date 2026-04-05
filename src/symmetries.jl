@@ -21,4 +21,17 @@
     return reduce(max, all_perms)
 end 
 
+
+@inline function regge_symmetries(t::NTuple{6, Float64})
+    s = (t[1]+t[2]+t[4]+t[5])/2
+    # The Regge symmetry maps (j1,j2,j3,j4,j5,j6) -> (s-j4, s-j5, j3, s-j1, s-j2, j6)
+    r1 = (s-t[4], s-t[5], t[3], s-t[1], s-t[2], t[6])
+    # ... there are 144 such combinations in total
+    # For now, your tetrahedral canonical_spins is the high-priority one.
+end
+
+
 #TODO: implement symmetries of 3j and other Regge symmetries?
+
+
+

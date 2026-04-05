@@ -1,8 +1,9 @@
 
-# ----------------------------------------------------------
-#       --- Core Symbolic Types and Structures ---
-# The Cyclotomic representation ofquantum 3j and 6j symbols
-# ----------------------------------------------------------
+# ---------------------------------------------------------------------
+#               --- Core Symbolic Types and Structures ---
+# The deferred cyclotomic representation for q-hypergeometric series.
+# Evaluation is performed by projection to target fields.  
+# ---------------------------------------------------------------------
 
 #subscripts and superscripts for nice printing in REPL
 const SUBSCRIPTS = Dict('0'=>'₀', '1'=>'₁', '2'=>'₂', '3'=>'₃', '4'=>'₄', 
@@ -17,10 +18,10 @@ to_superscript(n::Int) = map(c -> SUPERSCRIPTS[c], string(n))
 """
     CycloMonomial
 
-Represents a quantum prime factorization of basic objects (like q-integers and q-factorials) 
-in terms of products of  `q` and irreducible cyclotomic polynomials Φ_d(q). 
-Uses a sparse representation, storing ONLY non-zero exponents as a strictly ordered `Vector` 
-of Pairs to guarantee O(1) cache-friendly loops during evaluation.
+Represents a cyclotomic factorization of basic objects (like q-integers and q-factorials) 
+in terms of products of  `q` and irreducible cyclotomic polynomials Φ_d(q). These objects are 
+called cyclotomic monomials. Uses a sparse representation, storing ONLY non-zero exponents as 
+a strictly ordered `Vector` of Pairs to guarantee O(1) cache-friendly loops during evaluation.
 """
 struct CycloMonomial
     sign::Int
@@ -67,6 +68,8 @@ function snapshot(buf::SymbolicBuffer)
     
     return CycloMonomial(buf.sign, buf.z_pow, sparse_exps)
 end
+
+
 
 
 
