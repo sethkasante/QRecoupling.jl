@@ -6,7 +6,7 @@ const Spin = Real
 
 # --- Internal Includes ---
 include("cyclotomic_types.jl")
-include("types1.jl")  
+include("projection_types.jl")  
 include("admissibility.jl")    # δ and δtet checks
 include("symmetries.jl")       # canonical_spins
 include("cyclo_builder2.jl")    # DCR constructors
