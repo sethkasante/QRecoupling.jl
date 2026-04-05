@@ -1,13 +1,12 @@
-# ==============================================================================
-# File: types.jl
-# Core symbolic types for Deferred Cyclotomic Representation (DCR).
-# Author: Gemini-Adaptive-Collaborator
-# ==============================================================================
 
-# ------------------------------------------------------------------------------
-# 1. Unicode Printing Utilities
-# ------------------------------------------------------------------------------
+# -------------------------------------------------------------------------
+#            --- Main symbolic types and structures for DRC ---
+# Deferred cyclotomic representation (DRC) for q-hypergeometric series.
+# -------------------------------------------------------------------------
 
+
+
+# Printing utilities
 const SUBSCRIPTS = Dict('0'=>'₀','1'=>'₁','2'=>'₂','3'=>'₃','4'=>'₄',
                         '5'=>'₅','6'=>'₆','7'=>'₇','8'=>'₈','9'=>'₉')
 
@@ -17,29 +16,37 @@ const SUPERSCRIPTS = Dict('0'=>'⁰','1'=>'¹','2'=>'²','3'=>'³','4'=>'⁴',
 to_subscript(n::Integer)   = map(c -> SUBSCRIPTS[c], string(n))
 to_superscript(n::Integer) = map(c -> SUPERSCRIPTS[c], string(n))
 
-# ------------------------------------------------------------------------------
-# 2. Core Struct Definitions
-# ------------------------------------------------------------------------------
+
+
+
+# ---- Struct Definitions ----- 
 
 """
     CyclotomicMonomial
 An unspecialized algebraic term: M(q) = σ * qᴾ * Π Φ_d(q)ᵉᵈ.
 Stored as a sparse, sorted vector of (d => exponent) pairs for efficiency.
+Φ_d(q) are cyclotomic polynomials.
 """
 struct CyclotomicMonomial
-    sign::Int                       # ∈ {-1, 0, 1}
-    q_pow::Int                      # Power P of q (often in q^{1/2} units)
+    sign::Int     # σ∈{-1,0,1}
+    q_pow::Int    # Power P of q 
     phi_exps::Vector{Pair{Int,Int}}  # Sparse representation (d => exponent)
-    max_d::Int                      # Cached maximum cyclotomic index d
+    max_d::Int    # maximum cyclotomic index d
 end
 
-# Default Identity Constructor
-CyclotomicMonomial() = CyclotomicMonomial(1, 0, Pair{Int,Int}[], 0)
+
+
+# ---- Constants -----
+const ZERO_MONOMIAL = CyclotomicMonomial(0, 0, Pair{Int,Int}[], 0)
+const ONE_MONOMIAL  = CyclotomicMonomial(1, 0, Pair{Int,Int}[], 0)
+# Identity cyclotomic monomial
+CyclotomicMonomial() = ONE_MONOMIAL
+
 
 """
     CycloBuffer
 A dense mutable accumulator used during DCR compilation to avoid 
-intermediate sparse allocations. Tracks 'max_d' for O(d) resets.
+intermediate sparse allocations. 
 """
 mutable struct CycloBuffer
     sign::Int
@@ -56,20 +63,20 @@ The Deferred Cyclotomic Representation: A combinatorial skeleton of a q-hypergeo
 series. Separates combinatorial summation from numerical/geometrical projection.
 """
 struct DCR
-    root::CyclotomicMonomial         # Perfectly square-rooted prefactor
-    radical::CyclotomicMonomial      # Square-free radical (terms under the sqrt)
-    base::CyclotomicMonomial         # Initial term at z_min
-    ratios::Vector{CyclotomicMonomial} # Sequence of update ratios {R_z}
-    z_range::UnitRange{Int}          # Bounds of the summation
-    max_d::Int                       # Global maximum cyclotomic index
+    root::CyclotomicMonomial     # perfect square-rooted prefactor
+    radical::CyclotomicMonomial   # square-free radical (terms under the sqrt)
+    base::CyclotomicMonomial      # initial term at z_min
+    ratios::Vector{CyclotomicMonomial} # sequence of update ratios {R_z}
+    z_range::UnitRange{Int}       # summation bounds
+    max_d::Int                    # global maximum cyclotomic index
 end
 
-# ------------------------------------------------------------------------------
-# 3. Buffer Management & Snapshot Logic
-# ------------------------------------------------------------------------------
+
+# ----- Buffer management & snapshots ------ 
 
 @inline function ensure_capacity!(buf::CycloBuffer, d_req::Int)
     curr = length(buf.exps)
+    #extend capacity if current size of exps < max d
     if d_req > curr
         new_cap = max(d_req + 10, curr * 2)
         resize!(buf.exps, new_cap)
@@ -78,6 +85,7 @@ end
 end
 
 @inline function reset!(buf::CycloBuffer, sign::Int=1)
+    #reset buf
     buf.sign = sign
     buf.q_pow = 0
     @inbounds fill!(view(buf.exps, 1:buf.max_d), 0)
@@ -85,34 +93,16 @@ end
 end
 
 @inline function update_exps!(buf::CycloBuffer, d::Int, p::Int)
+    #update exponents of Φ_d
     @inbounds buf.exps[d] += p
     d > buf.max_d && (buf.max_d = d)
 end
 
-
-function add_qint!(buf::CycloBuffer, n::Int, p::Int=1)
-    n <= 1 && return
-    buf.q_pow += p * (1 - n) 
-    ensure_capacity!(buf, n)
-    @inbounds for d in 2:n
-        (n % d == 0) && (buf.exps[d] += p)
-    end
-    n > buf.max_d && (buf.max_d = n)
-end
-
-function add_qfact!(buf::CycloBuffer, n::Int, p::Int=1)
-    n <= 1 && return
-    buf.q_pow += p * (n * (1 - n) ÷ 2)
-    ensure_capacity!(buf, n)
-    @inbounds for d in 2:n
-        buf.exps[d] += p * (n ÷ d)
-    end
-    n > buf.max_d && (buf.max_d = n)
-end
-
+#get sparse representation in CyclotomicMonomial form
 function snapshot(buf::CycloBuffer)
     buf.sign == 0 && return ZERO_MONOMIAL
     
+    #count non-zero exponents
     nnz = 0
     @inbounds for d in 1:buf.max_d
         buf.exps[d] != 0 && (nnz += 1)
@@ -130,15 +120,19 @@ function snapshot(buf::CycloBuffer)
     return CyclotomicMonomial(buf.sign, buf.q_pow, sparse_exps, buf.max_d)
 end
 
+#split exps as e = 2q + r, r∈{-1,0,1}
 @inline function split_exp(e::Int)
-    # Symmetric split: e = 2q + r where r ∈ {-1, 0, 1}
-    # Stabilizes complex phases compared to standard floor division.
     r = (e & 1) == 0 ? 0 : (e > 0 ? 1 : -1)
     q = (e - r) >> 1
     return q, r
 end
 
+#snapshot for square root of cyclotomic monomials
+#split into perfect square and radical
 function snapshot_square_root(buf::CycloBuffer)
+    buf.sign == 0 && return ZERO_MONOMIAL
+
+    #count number of perfect squares and radicals 
     nnz_sq, nnz_rad = 0, 0
     @inbounds for d in 1:buf.max_d
         e = buf.exps[d]
@@ -157,52 +151,80 @@ function snapshot_square_root(buf::CycloBuffer)
         e = buf.exps[d]
         if e != 0
             q, r = split_exp(e)
-            if q != 0; sq_exps[idx_sq] = d => q; idx_sq += 1; end
-            if r != 0; rad_exps[idx_rad] = d => r; idx_rad += 1; end
+            if q != 0 
+                sq_exps[idx_sq] = d => q 
+                idx_sq += 1 
+            end
+            if r != 0
+                rad_exps[idx_rad] = d => r 
+                idx_rad += 1 
+            end
         end
     end
     
     q_q, q_r = split_exp(buf.q_pow)
-    return (
-        CyclotomicMonomial(buf.sign, q_q, sq_exps, buf.max_d), 
-        CyclotomicMonomial(1, q_r, rad_exps, buf.max_d)
-    )
+    return ( CyclotomicMonomial(buf.sign, q_q, sq_exps, buf.max_d), 
+                CyclotomicMonomial(1, q_r, rad_exps, buf.max_d) )
 end
 
-# ------------------------------------------------------------------------------
-# 4. Arithmetic Operations
-# ------------------------------------------------------------------------------
+
+
+
+#  --- Arithmetic operations on Cyclotomic monomials ----- 
 
 function mul!(buf::CycloBuffer, a::CyclotomicMonomial, b::CyclotomicMonomial)
     (a.sign == 0 || b.sign == 0) && (buf.sign = 0; return buf)
+
     ensure_capacity!(buf, max(a.max_d, b.max_d))
     reset!(buf, a.sign * b.sign)
     buf.q_pow = a.q_pow + b.q_pow
-    @inbounds for (d, e) in a.phi_exps; update_exps!(buf, d, e); end
-    @inbounds for (d, e) in b.phi_exps; update_exps!(buf, d, e); end
+
+    @inbounds for (d, e) in a.phi_exps 
+        update_exps!(buf, d, e) 
+    end
+
+    @inbounds for (d, e) in b.phi_exps 
+        update_exps!(buf, d, e) 
+    end
     return buf
 end
 
 function div!(buf::CycloBuffer, a::CyclotomicMonomial, b::CyclotomicMonomial)
     b.sign == 0 && throw(DivideError())
     a.sign == 0 && (buf.sign = 0; return buf)
+
     ensure_capacity!(buf, max(a.max_d, b.max_d))
     reset!(buf, a.sign * b.sign)
     buf.q_pow = a.q_pow - b.q_pow
-    @inbounds for (d, e) in a.phi_exps; update_exps!(buf, d, e); end
-    @inbounds for (d, e) in b.phi_exps; update_exps!(buf, d, -e); end
+
+    @inbounds for (d, e) in a.phi_exps 
+        update_exps!(buf, d, e)
+    end
+
+    @inbounds for (d, e) in b.phi_exps 
+        update_exps!(buf, d, -e)
+    end
     return buf
 end
 
+# (M_a * M_b )/ M_c
 function mul_div!(buf::CycloBuffer, a::CyclotomicMonomial, b::CyclotomicMonomial, c::CyclotomicMonomial)
     (a.sign == 0 || b.sign == 0) && (buf.sign = 0; return buf)
     c.sign == 0 && throw(DivideError())
+
     ensure_capacity!(buf, max(a.max_d, b.max_d, c.max_d))
     reset!(buf, a.sign * b.sign * c.sign)
     buf.q_pow = a.q_pow + b.q_pow - c.q_pow
-    @inbounds for (d, e) in a.phi_exps; update_exps!(buf, d, e); end
-    @inbounds for (d, e) in b.phi_exps; update_exps!(buf, d, e); end
-    @inbounds for (d, e) in c.phi_exps; update_exps!(buf, d, -e); end
+
+    @inbounds for (d, e) in a.phi_exps
+        update_exps!(buf, d, e)
+    end
+    @inbounds for (d, e) in b.phi_exps
+        update_exps!(buf, d, e)
+    end
+    @inbounds for (d, e) in c.phi_exps
+        update_exps!(buf, d, -e)
+    end
     return buf
 end
 
@@ -210,10 +232,9 @@ Base.:*(a::CyclotomicMonomial, b::CyclotomicMonomial) = snapshot(mul!(CycloBuffe
 Base.:/(a::CyclotomicMonomial, b::CyclotomicMonomial) = snapshot(div!(CycloBuffer(max(a.max_d, b.max_d)), a, b))
 Base.inv(m::CyclotomicMonomial) = CyclotomicMonomial(m.sign, -m.q_pow, [d => -e for (d, e) in m.phi_exps], m.max_d)
 
-# ------------------------------------------------------------------------------
-# 5. Utilities & Comparisons
-# ------------------------------------------------------------------------------
 
+# ----- Comparisons ----- 
+# utilities for comparing cyclotomic monomials 
 @inline Base.iszero(m::CyclotomicMonomial) = m.sign == 0
 @inline Base.isone(m::CyclotomicMonomial)  = m.sign == 1 && m.q_pow == 0 && isempty(m.phi_exps)
 
@@ -231,16 +252,9 @@ function Base.hash(m::CyclotomicMonomial, h::UInt)
     return hash(m.phi_exps, h)
 end
 
-# ------------------------------------------------------------------------------
-# 6. Constants
-# ------------------------------------------------------------------------------
 
-const ZERO_MONOMIAL = CyclotomicMonomial(0, 0, Pair{Int,Int}[], 0)
-const ONE_MONOMIAL  = CyclotomicMonomial(1, 0, Pair{Int,Int}[], 0)
 
-# ------------------------------------------------------------------------------
-# 7. REPL Display Logic
-# ------------------------------------------------------------------------------
+# ---- REPL ---- 
 
 function Base.show(io::IO, M::CyclotomicMonomial)
     M.sign == 0 && return print(io, "0")

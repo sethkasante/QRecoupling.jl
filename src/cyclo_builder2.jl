@@ -100,9 +100,35 @@ function build_dcr!(buf, pre_func, base_func, ratio_func, z_min::Int, z_max::Int
     return DCR(m_root, m_rad, m_base, ratios, z_min:z_max, g_max_d)
 end
 
+
+
+
 # ==============================================================================
 # 4. SYMBOL BUILDERS (3j & 6j)
 # ==============================================================================
+
+
+function add_qint!(buf::CycloBuffer, n::Int, p::Int=1)
+    n <= 1 && return
+    buf.q_pow += p * (1 - n) 
+    ensure_capacity!(buf, n)
+    @inbounds for d in 2:n
+        (n % d == 0) && (buf.exps[d] += p)
+    end
+    n > buf.max_d && (buf.max_d = n)
+end
+
+function add_qfact!(buf::CycloBuffer, n::Int, p::Int=1)
+    n <= 1 && return
+    buf.q_pow += p * (n * (1 - n) ÷ 2)
+    ensure_capacity!(buf, n)
+    @inbounds for d in 2:n
+        buf.exps[d] += p * (n ÷ d)
+    end
+    n > buf.max_d && (buf.max_d = n)
+end
+
+
 
 @inline function qtriangle!(buf, j1, j2, j3)
     add_qfact!(buf, round(Int, j1 + j2 - j3))

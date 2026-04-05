@@ -5,7 +5,7 @@ using Nemo, LRUCache, Base.GMP.MPZ
 const Spin = Real
 
 # --- Internal Includes ---
-include("types2.jl")            # Structs & Buffers
+include("cyclotomic_types.jl")
 include("types1.jl")  
 include("admissibility.jl")    # δ and δtet checks
 include("symmetries.jl")       # canonical_spins
