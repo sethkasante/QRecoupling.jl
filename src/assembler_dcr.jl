@@ -1,7 +1,6 @@
 
-#assembler_dcr.jl
 # ---------------------------------------------------------------------
-# High-level builders for DCR Symbols 
+# Generic Skeletal Assembler for Deferred Cyclotomic Representations
 # ---------------------------------------------------------------------
 
 
