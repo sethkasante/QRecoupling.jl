@@ -81,9 +81,8 @@ end
 # --- Recoupling Symbols (3j & 6j) ---
 
 function q3j_dcr(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = -m1-m2)
-    # 1. Topological & Selection Rule Admissibility
-    #move admissible conditions to thre top of main api
-    # (!δ(j1, j2, j3) || m1 + m2 + m3 != 0) && return ZERO_DCR 
+    # admissibile conditions
+    (!δ(j1, j2, j3) || m1 + m2 + m3 != 0) && return ZERO_DCR 
 
     # Standard summation bounds for Wigner 3j
     α = (round(Int, j3 - j2 + m1), round(Int, j3 - j1 - m2))
@@ -118,8 +117,7 @@ end
 
 function q6j_dcr(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
 
-    #move admissible conditions to thre top of main api
-    # !δtet(j1, j2, j3, j4, j5, j6) && return ZERO_DCR
+    !δtet(j1, j2, j3, j4, j5, j6) && return ZERO_DCR
 
     α = (round(Int, j1+j2+j3), round(Int, j1+j5+j6), round(Int, j2+j4+j6), round(Int, j3+j4+j5))
     β = (round(Int, j1+j2+j4+j5), round(Int, j1+j3+j4+j6), round(Int, j2+j3+j5+j6))
