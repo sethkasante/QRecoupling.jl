@@ -6,7 +6,7 @@
 
 
 # -------------------------------------------------------------------------------
-# !!! note  PERFORMANCE NOTE FOR HIGH LEVELS (k):
+# !!! note  Performance note for high level k:
 # 
 # This exact engine maps a deferred cyclotomic representation (DCR) into Nemo.jl 
 # cyclotomic number fields. It is optimized to use zero-division hot loops.
@@ -102,13 +102,12 @@ function project_exact(m::CyclotomicMonomial, k::Int)
     return _project_monomial_nemo_internal(m, V_exact, V_inv, ζ, h)
 end
 
-# ==============================================================================
-# 2. DCR PROJECTOR
-# ==============================================================================
+
+# -- Project cyclotomic monomials and DCR to exact cyclotomic field ---
 
 """
     project_exact(dcr::DCR, k::Int)
-Evaluates a full DCR series exactly. Returns a CycloExactResult.
+Evaluates a DCR series exactly for discrete level `k`. Returns a CycloExactResult.
 """
 function project_exact(dcr::DCR, k::Int)
     h = k + 2

@@ -1,16 +1,10 @@
 
-# builders.jl
-
-
 # --------------------------------------------------------------
 #  -- Combinatorial Builders for Quantum Recoupling Symbols --
 # --------------------------------------------------------------
 
 
-
-
-
-# --- Atomic Units: Dimensions & Phases ---
+# --- Atomic units: Dimensions & Phases ---
 
 
 """

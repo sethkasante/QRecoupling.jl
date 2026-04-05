@@ -32,7 +32,7 @@ Uses a multiplicative Möbius inversion to iteratively construct the exact
 algebraic values of Φ_d(z) in the cyclotomic field ζ. 
 
 Crucially, this also precomputes and returns the *algebraic inverses* (`V_inv`), 
-which completely eliminates the need for expensive matrix-inversion divisions 
+which completely eliminates the need for matrix-inversion divisions 
 during the hypergeometric summation loop. 
 """
 function _phi_exact_table(D_max::Int, k::Int, z::T) where {T}
@@ -128,7 +128,7 @@ algebraic cyclotomic field for SU(2)_k.
 
 # Returns:
 An `CycloExactResult{T}` containing:
-1. `radical`: The strictly square-free remainder (kept symbolic for fast O(1) multiplication).
+1. `radical`: The strictly square-free remainder (kept symbolic (monomial) for fast multiplication).
 2. `factor`: The evaluated rational sum (a Nemo field element).
 
 # Architecture:
