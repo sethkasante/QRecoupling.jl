@@ -1,7 +1,7 @@
 
 # Proving Topological Identities
 
-The true power of `QRacahSymbols.jl` lies in its ability to effortlessly verify the foundational axioms of 3D topological quantum field theories (TQFTs). 
+The true power of `QRecoupling.jl` lies in its ability to effortlessly verify the foundational axioms of 3D topological quantum field theories (TQFTs). 
 
 In this tutorial, we will use the package's multi-paradigm engines to prove the two most important topological identities in the Turaev-Viro/Ponzano-Regge state sum models: The **Orthogonality Relation** (Bubble Move) and the **Biedenharn-Elliott Pentagon Identity** (Pachner 2-3 Move).
 
@@ -14,7 +14,7 @@ In a triangulated 3-manifold, integrating out an internal edge corresponds to th
 We can prove this *exactly* (without floating-point errors) using the `:exact` cyclotomic engine.
 
 ```julia
-using QRacahSymbols
+using QRecoupling
 using Nemo
 
 # Define spins and topological level
@@ -59,7 +59,7 @@ Theoretical RHS is: -ζ^6 + ζ^2 - 1
 julia> println("Exact Match?: ", sum_val.factor == expected_rhs)
 Exact Match?: true
 ```
-By leveraging `QRacahSymbols.jl`, the radical prefactors of the $6j$-symbols perfectly annihilate each other during multiplication, keeping the entire computation division-free and strictly inside the cyclotomic field $\mathbb{Q}(\zeta)$.
+By leveraging `QRecoupling.jl`, the radical prefactors of the $6j$-symbols perfectly annihilate each other during multiplication, keeping the entire computation division-free and strictly inside the cyclotomic field $\mathbb{Q}(\zeta)$.
 
 --- 
 
@@ -68,7 +68,7 @@ The Pentagon Identity guarantees that topological invariants are independent of 
 
 Because this involves a large summation and many multiplications, it is the perfect candidate for our high-speed `:numeric` engine.
 ```julia
-using QRacahSymbols
+using QRecoupling
 
 j1, j2, j3 = 1, 1, 1
 l1, l2, l3 = 1, 1, 1

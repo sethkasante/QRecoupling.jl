@@ -1,10 +1,10 @@
 ```@meta
-CurrentModule = QRacahSymbols
+CurrentModule = QRecoupling
 ```
-# QRacahSymbols.jl
-Welcome to the official documentation for **QRacahSymbols.jl**, a high-performance Julia library for evaluating quantum $6j$-symbols, $3j$-symbols, and topological category data for the $\text{SU(2)}_k$ quantum group.
+# QRecoupling.jl
+Welcome to the official documentation for **QRecoupling.jl**, a high-performance Julia library for evaluating quantum $6j$-symbols, $3j$-symbols, and topological category data for the $\text{SU(2)}_k$ quantum group.
 
-`QRacahSymbols.jl` is designed for researchers in Quantum Topology, Quantum Gravity, and fusion category theory. It provides highly optimized, numerically stable, and mathematically exact evaluations of quantum $\text{SU(2)}_k$ recoupling coefficients (such as $3j$- and $6j$-symbols) at arbitrary roots of unity.
+`QRecoupling.jl` is designed for researchers in Quantum Topology, Quantum Gravity, and fusion category theory. It provides highly optimized, numerically stable, and mathematically exact evaluations of quantum $\text{SU(2)}_k$ recoupling coefficients (such as $3j$- and $6j$-symbols) at arbitrary roots of unity.
 
 By representing quantum prime factorizations as deferred sparse cyclotomic arrays, this package bypasses traditional algebraic bottlenecks and floating-point overflows, bridging the gap between very-fast numerical simulations and rigorous Computer Algebra System (CAS) proofs.
 
@@ -13,7 +13,7 @@ By representing quantum prime factorizations as deferred sparse cyclotomic array
 ## Installation
 You can install the package directly from the Julia REPL. Press `]` to enter the Pkg prompt, and run:
 ```julia
-pkg> add QRacahSymbols
+pkg> add QRecoupling
 ```
 
 ---
@@ -21,7 +21,7 @@ pkg> add QRacahSymbols
 ## The Multi-Paradigm Architecture
 Evaluating quantum $6j$-symbols at high spins using standard floating-point evaluation suffers from catastrophic NaN/Inf overflows due to massive factorials, while traditional exact evaluation in cyclotomic fields scales terribly due to the $\mathcal{O}(N^3)$ complexity of algebraic division. 
 
-`QRacahSymbols.jl` solves this by decoupling the **algebraic construction** from the **mathematical evaluation**.
+`QRecoupling.jl` solves this by decoupling the **algebraic construction** from the **mathematical evaluation**.
 
 Using the mode keyword, users can route the computation to specialized engines:
 1. **Numeric Mode** (`mode=:numeric`) The absolute speed limit. Uses pre-cached dense logarithmic arrays and a highly specialized `Log-Sum-Exp` (LSE) hot loop to compute single-shot floating-point values. It is mathematically immune to overflow.
@@ -34,7 +34,7 @@ Using the mode keyword, users can route the computation to specialized engines:
 ## Quick Start
 The master `q6j` function dynamically dispatches to the most efficient computational engine based on whether you request a numerical level `k`, or specify a specific `mode`.
 ```julia
-using QRacahSymbols
+using QRecoupling
 # Fast numerical evaluation (level k=20)
 julia> q6j(1,1,1,1,1,1,20)
 0.1640608932500723

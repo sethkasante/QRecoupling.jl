@@ -4,7 +4,7 @@ Evaluating quantum $6j$-symbols at high spins is a notoriously hostile computati
 
 Standard floating-point implementations inevitably suffer from catastrophic `NaN` or `Inf` overflows. Conversely, executing the sum in a Computer Algebra System (CAS) using dense cyclotomic polynomials triggers severe memory bloat and $\mathcal{O}(N^3)$ polynomial division overhead.
 
-`QRacahSymbols.jl` bypasses both bottlenecks by decoupling the **topological graph construction** from the **mathematical evaluation**.
+`QRecoupling.jl` bypasses both bottlenecks by decoupling the **topological graph construction** from the **mathematical evaluation**.
 
 ---
 
@@ -22,7 +22,7 @@ By keeping the series in this abstract ratio format, we completely eliminate alg
 
 ## 1. The Exact Zero-Division Engine
 
-When evaluated in a rigorous $\text{SU(2)}_k$ cyclotomic field using `Nemo.jl`, `QRacahSymbols.jl` employs a **Zero-Division Architecture**. Use as (`mode=:exact`). 
+When evaluated in a rigorous $\text{SU(2)}_k$ cyclotomic field using `Nemo.jl`, `QRecoupling.jl` employs a **Zero-Division Architecture**. Use as (`mode=:exact`). 
 
 Because the hypergeometric structure is factored into prime cyclotomic bases *before* evaluation, the package executes two critical optimizations:
 1. **Symbolic Square Roots:** Algebraic square roots are the heaviest operation in any CAS. By dividing the integer exponents of the `CycloMonomial` by 2 (via `divrem(e, 2)`), perfect squares are pulled out of the radical *symbolically* in $\mathcal{O}(1)$ time. The exact engine only ever evaluates the strictly square-free radical ($\Delta_{\text{rad}}$).
