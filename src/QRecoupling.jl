@@ -12,8 +12,8 @@ include("symmetries.jl")       # canonical_spins
 include("assembler_dcr.jl")   
 include("builders_dcr.jl") # symbols and invariants
 include("project_cl.jl")
-include("project_dir.jl")
-include("project_ex.jl")
+include("project_direct.jl")
+include("project_exact.jl")
 include("project_an.jl")       # Discrete, Analytic, Classical, Exact
 include("direct_numeric_lse.jl")    # q6j_direct
 include("eager_ex.jl")      # q6j_exact

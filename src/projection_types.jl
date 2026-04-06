@@ -8,17 +8,6 @@
 
 #  ---- Buffers for discrete (level k) and analytical computations ------  
 
-"""
-    DiscreteBuffer{T}
-A workspace for Log-Sum-Exp summation at roots of unity (Real-valued).
-"""
-mutable struct DiscreteBuffer{T}
-    log_mags::Vector{T}
-    signs::Vector{Int8}
-    capacity::Int
-end
-
-DiscreteBuffer{T}(n) where T = DiscreteBuffer{T}(Vector{T}(undef, n), Vector{Int8}(undef, n), n)
 
 """
     AnalyticBuffer{T}
@@ -34,7 +23,7 @@ end
 AnalyticBuffer{T}(n) where T = AnalyticBuffer{T}(Vector{T}(undef, n), Vector{T}(undef, n), Vector{Int8}(undef, n), n)
 
 # global pre-allocated workspaces
-const _WS_F64 = DiscreteBuffer{Float64}(8192)
+# const _WS_F64 = DiscreteBuffer{Float64}(8192)
 const _WS_C64 = AnalyticBuffer{Float64}(8192)
 
 
