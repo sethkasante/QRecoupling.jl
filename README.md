@@ -24,7 +24,7 @@ This design eliminates catastrophic cancellation, avoids redundant computation, 
 
 ### • Deferred Cyclotomic Representation (DCR)
 A sparse, combinatorial encoding of $q$-hypergeometric series with building blocks 
-$$\mathcal{M} = \sigma\, q^P \prod_d \Phi_d(q^2)^{e_d} $$
+$$\mathcal{M} = \sigma\; q^P \prod_d \Phi_d(q^2)^{e_d} $$
 
 - No floating-point arithmetic during construction  
 - Exact factor-level control  
