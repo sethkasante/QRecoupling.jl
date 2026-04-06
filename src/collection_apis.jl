@@ -37,7 +37,7 @@ function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
     
     # --- 3. DCR Projections ---
     if mode == :classical
-        return eager ? project_classical_exact(dcr) : project_classical(dcr, T)
+        return eager ? project_classical(dcr, T) : project_classical_exact(dcr) 
     end
 
     !isnothing(q) && return project_analytic(dcr, q)
@@ -133,7 +133,7 @@ function gsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
     
     if mode == :exact
         return project_exact(dcr, k)
-    else
+    elseif mode == :discrete
         return project_discrete(dcr, k, T)
     end
 end
@@ -163,13 +163,17 @@ end
     qdim(j; k=nothing, q=nothing, T=Float64)
 Quantum dimension [2j+1]_q. 
 """
-function qdim(j::Spin; k=nothing, q=nothing, T::Type=Float64)
+function qdim(j::Spin; k=nothing, q=nothing, T::Type=Float64, mode=:discrete)
     mono = qdim_mono(j)
     
     !isnothing(q) && return project_analytic(mono, q)
     isnothing(k) && return mono
     
-    return project_discrete(mono, k, T)
+    if mode == :exact
+        return project_exact(mono, k)
+    elseif mode == :discrete
+        return project_discrete(mono, k, T)
+    end
 end
 
 
