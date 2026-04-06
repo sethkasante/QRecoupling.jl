@@ -1,6 +1,6 @@
 # Theory & Architecture
 
-The `QRacahSymbols.jl` package provides a high-performance framework for the evaluation of $q$-deformed recoupling coefficients in the $\text{SU(2)}_k$ modular tensor category.
+The `QRecoupling.jl` package provides a high-performance framework for the evaluation of $q$-deformed recoupling coefficients in the $\text{SU(2)}_k$ modular tensor category.
 
 ## Quantum recoupling coefficients
 The fundamental object of the library is the quantum $\{6j\}$-symbol: 
@@ -19,7 +19,7 @@ In standard floating-point arithmetic (`Float64`), the Racah sum encounters a **
 To resolve a value of $10^{-10}$ from summands of magnitude $10^{50}$, a bit-depth is required that scales linearly with the spin. Without a specialized architecture, numerical "noise" completely obliterates the signal for spins $j > 50$.
 
 ## The CycloMonomial Architecture
-To bypass these limits, `QRacahSymbols.jl` implements a `CycloMonomial` engine. Rather than projecting quantum factorials onto the complex plane prematurely, we "lift" the calculation into the cyclotomic ring $\mathbb{Z}[\zeta]$.
+To bypass these limits, `QRecoupling.jl` implements a `CycloMonomial` engine. Rather than projecting quantum factorials onto the complex plane prematurely, we "lift" the calculation into the cyclotomic ring $\mathbb{Z}[\zeta]$.
 
 ### Algebraic Factorization
 We exploit the property that every quantum integer $[n]_q$ is a product of cyclotomic polynomials $\Phi_d(q)$. Specifically, for $z = q^{1/2}$:
