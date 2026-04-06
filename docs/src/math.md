@@ -1,51 +1,56 @@
-# Theory & Architecture
+# Theory and Architecture
 
-The `QRacahSymbols.jl` package provides a high-performance framework for the evaluation of $q$-deformed recoupling coefficients in the $\text{SU(2)}_k$ modular tensor category.
+Evaluating quantum $6j$-symbols at high spins is a notoriously hostile computational problem. The standard Racah-Wigner hypergeometric sum requires computing massive $q$-factorials, multiplying them, dividing them, and extracting algebraic square roots. 
 
-## Quantum recoupling coefficients
-The fundamental object of the library is the quantum $\{6j\}$-symbol: 
-$$\begin{Bmatrix} j_1 & j_2 & j_3 \\ j_4 & j_5 & j_6\end{Bmatrix}_q.$$
+Standard floating-point implementations inevitably suffer from catastrophic `NaN` or `Inf` overflows. Conversely, executing the sum in a Computer Algebra System (CAS) using dense cyclotomic polynomials triggers severe memory bloat and $\mathcal{O}(N^3)$ polynomial division overhead.
 
-In the context of Topological Quantum Field Theory (TQFT), this symbol represents the associativity of fusion (the $F$-move) for three anyons of spins $j_1, j_2, j_3$ into a total spin $j_6$.
+`QRacahSymbols.jl` bypasses both bottlenecks by decoupling the **topological graph construction** from the **mathematical evaluation**.
 
-These symbols are defined by the Quantum Racah Formula, an alternating summation of massive products of quantum factorials. The building blocks are:
+---
 
-* **Quantum integers:** defined as $[n]_q = \frac{q^{n/2} - q^{-n/2}}{q^{1/2} - q^{-1/2}}$. At the level $k$, we typically specialize to the root of unity $q = e^{i \frac{2\pi}{k+2}}$. 
-* **Quantum factorials:** given by $[n]_q! = \prod_{k=1}^n [k]_q$,  with $[0]_q!=1$. 
+## The Core Innovation: Deferred Factorization
 
-### The Numerical Precision Crisis
-In standard floating-point arithmetic (`Float64`), the Racah sum encounters a **catastrophic cancellation** barrier. As the spins $j$ increase, the individual summands grow exponentially, while the final physical invariant oscillates and scales as $O(j^{-1/2})$.
+Instead of eagerly evaluating $q$-integers like $[n]_q$, the package intercepts the mathematics at the prime factorization level. Every component of the Racah sum is factored into irreducible cyclotomic polynomials $\Phi_d(q)$.
 
-To resolve a value of $10^{-10}$ from summands of magnitude $10^{50}$, a bit-depth is required that scales linearly with the spin. Without a specialized architecture, numerical "noise" completely obliterates the signal for spins $j > 50$.
+This data is stored in a highly optimized sparse array called a `CycloMonomial`, which tracks the integer exponents of each polynomial. 
 
-## The CycloMonomial Architecture
-To bypass these limits, `QRacahSymbols.jl` implements a `CycloMonomial` engine. Rather than projecting quantum factorials onto the complex plane prematurely, we "lift" the calculation into the cyclotomic ring $\mathbb{Z}[\zeta]$.
+The overall $6j$-symbol is deferred into a `CycloResult` struct representing the hypergeometric series:
+$$\begin{Bmatrix} j_1 & j_2 & j_3 \\ j_4 & j_5 & j_6 \end{Bmatrix} = \left( \Delta_{\text{root}} \sqrt{\Delta_{\text{rad}}} \right) M_0 \left[ 1 + R_1 + R_1 R_2 + \dots \right]$$
+By keeping the series in this abstract ratio format, we completely eliminate algebraic division during the builder phase. 
 
-### Algebraic Factorization
-We exploit the property that every quantum integer $[n]_q$ is a product of cyclotomic polynomials $\Phi_d(q)$. Specifically, for $z = q^{1/2}$:
+---
 
-$$[n]_q = \prod_{d|n, d>1} \Phi_d(z).$$
+## 1. The Exact Zero-Division Engine
 
-Consequently, any quantum factorial $[n]_q!$ can be uniquely represented as a symbolic monomial:
-$$[n]_q! = s \cdot z^{p} \cdot \prod_d \Phi_d(z)^{e_d}$$
+When evaluated in a rigorous $\text{SU(2)}_k$ cyclotomic field using `Nemo.jl`, `QRacahSymbols.jl` employs a **Zero-Division Architecture**. Use as (`mode=:exact`). 
 
-where $s \in \{-1, 1\}$ is a sign and $e_d$ are integer exponents.
+Because the hypergeometric structure is factored into prime cyclotomic bases *before* evaluation, the package executes two critical optimizations:
+1. **Symbolic Square Roots:** Algebraic square roots are the heaviest operation in any CAS. By dividing the integer exponents of the `CycloMonomial` by 2 (via `divrem(e, 2)`), perfect squares are pulled out of the radical *symbolically* in $\mathcal{O}(1)$ time. The exact engine only ever evaluates the strictly square-free radical ($\Delta_{\text{rad}}$).
+2. **Division-Free Sequences:** By precomputing the exact algebraic inverses of the cyclotomic bases at the requested root of unity, the hypergeometric sum $1 + R_1 + R_1 R_2 \dots$ is evaluated using strictly multiplication and addition. 
 
-### The Generic Engine (`:generic`)
-In the `:generic` mode, the package represents the Racah sum as a collection of **Prime-Power Exponent Arrays**.
-    1. **Symbolic Cancellation:** Massive factorial products in the numerator and denominator are cancelled by simply subtracting their exponent vectors. This is an $O(1)$ operation that precedes any numerical evaluation. 
-    2. **Delayed Specialization:** The "subtraction" of large terms happens exactly in the symbolic space. Numerical evaluation only occurs at the very last step, using high-precision stabilization.
-    3. **Structural Zeros:** This architecture natively recognizes the topological truncation of the fusion category. If a symbol is zero due to the level $k$ constraint, the engine encounters a symbolic factor of $\Phi_{k+2}(q)$, which is exactly zero at the root of unity.
+This enables exact topological proofs (like the Biedenharn-Elliott Pentagon Identity) at spins where traditional CAS approaches would exhaust system RAM.
 
+---
 
-## Topological Category Data
+## 2. The Log-Sum-Exp Numeric Engine
 
-Beyond the $\{6j\}_q$-symbols, the package provides the complete set of structural constants required for Turaev-Viro state-sum models and anyonic braiding.
+For high-speed floating-point simulations (e.g., Turaev-Viro invariant state sums over triangulations), the package relies on a specialized **Log-Sum-Exp (LSE) hot loop**. Use as (`mode=:numeric`).
 
-| Function | Physical Meaning | Output Type |
-| --- | --- | --- |
-| `q6j`, `q3j` | Quantum Wigner $6j$- and $3j$-symbols | `GenericResult` |
-| `qdim` | Quantum Dimensions $[2j+1]_q$ | `CycloMonomial` |
-| `fsymbol` | Unitary $F$-matrix (fusion basis transformation) | `Numeric/Generic` |
-| `rmatrix` | $R$-matrix (braiding phases/statistics) | `Numeric/Generic` |
-| `evaluate_generic` | Analytic continuation to arbitrary $q \in \mathbb{C}$ | `Complex/Real` |
+Rather than using the `CycloResult` pipeline, the `:numeric` mode jumps straight to bare-metal CPU registers. 
+1. The engine pre-caches a dense look-up table of logarithmic $q$-factorials: $\ln([n]_q!)$.
+2. The boundaries of the Racah sum are analyzed to find the maximum logarithmic term ($M_{\text{max}}$).
+3. The alternating sum is shifted by this maximum before exponentiation: $\sum \exp(\ln(M_z) - M_{\text{max}})$.
+
+This guarantees absolute immunity against floating-point underflow/overflow, evaluating massive tetrahedral networks in nanoseconds.
+
+---
+
+## 3. The Classical GMP Engine
+
+In the Ponzano-Regge classical limit ($q \to 1$), the $6j$-symbol reduces to purely rational arithmetic. However, standard Julia `BigInt` arithmetic creates massive Garbage Collection (GC) overhead when millions of fractions are allocated during a sum. Use as (`mode=:classical_exact`)
+
+The `:classical_exact` engine utilizes direct `ccall` bindings to the underlying **GNU Multiple Precision (GMP)** C-library (`Base.GMP.MPZ`). 
+* The hypergeometric ratios are tracked via dynamic integer prime sieves.
+* The summation numerator is accumulated strictly in-place, bypassing Julia's GC entirely.
+
+This makes the classical engine competitive with pure **C/C++** Wigner symbol libraries while maintaining mathematically exact `Rational{BigInt}` outputs.

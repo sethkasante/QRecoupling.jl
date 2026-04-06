@@ -1,162 +1,174 @@
 
 # ------------------------------------------------
-# Exact Nemo Evaluator (in cyclotomic fields Q(ζ)
-# (Zero-Division Architecture)
+# Exact SU(2)k evaluator using Nemo.jl  
+# (in cyclotomic fields Q(ζ)
 # ------------------------------------------------
 
 
 # -------------------------------------------------------------------------------
-# !!! note  PERFORMANCE NOTE FOR HIGH LEVELS (k):
+# !!! note  Performance note for high level k:
 # 
-# This exact engine maps our sparse cyclotomic arrays into rigorous Nemo.jl 
-# cyclotomic number fields. While we have optimized this to use zero-division 
-# hot loops, Computer Algebra Systems (CAS) fundamentally consume exponential 
+# This exact engine maps a deferred cyclotomic representation (DCR) into Nemo.jl 
+# cyclotomic number fields. It is optimized to use zero-division hot loops.
+# However, Computer Algebra Systems (CAS) fundamentally consume exponential 
 # memory as the cyclotomic degree grows. 
 # 
-# As a rule of thumb, this exact engine is incredibly fast and stable for k < 700. 
+# As a rule of thumb, this exact engine is incredibly fast and stable for k < 500. 
 # Pushing past k = 1000 may cause RAM explosion or severe slowdowns due to 
-# dense polynomial arithmetic. If you are working in ultra-high level regimes, 
-# strongly consider using the `:numeric` mode with BigFloats instead.
+# dense polynomial arithmetic. If you are working in ultra-high level regimes. 
+# Consider using the `mode=:discrete` instead for exact evaluation.
 # -------------------------------------------------------------------------------
 
 
-const EXACT_PHI_CACHE = LRU{Int, Any}(maxsize = 1000)
-const EMPTY_MONOMIAL = CycloMonomial(1, 0, Pair{Int,Int}[])
 
+# Stores (V_exact, V_inv) per level k. Rebuilds if max_d increases.
+const EXACT_PHI_CACHE = LRU{Int, Any}(maxsize = 500)
 
 """
-    _phi_exact_table(D_max::Int, k::Int, z::T) where {T}
-
-Internal builder for the exact cyclotomic polynomial table.
-Uses a multiplicative Möbius inversion to iteratively construct the exact 
-algebraic values of Φ_d(z) in the cyclotomic field ζ. 
-
-Crucially, this also precomputes and returns the *algebraic inverses* (`V_inv`), 
-which completely eliminates the need for matrix-inversion divisions 
-during the hypergeometric summation loop. 
+    _phi_exact_table(D_max::Int, k::Int, ζ::T)
+Constructs the cyclotomic basis Φ_d(ζ²) and its inverses in Q(ζ).
 """
-function _phi_exact_table(D_max::Int, k::Int, z::T) where {T}
+function _phi_exact_table(D_max::Int, k::Int, ζ::T) where T
     h = k + 2
     V_exact = Vector{T}(undef, D_max)
     V_inv   = Vector{T}(undef, D_max)
     
+    # Initialize with (q^2n - 1) where q = ζ
     @inbounds for n in 1:D_max
-        V_exact[n] = (n % h == 0) ? zero(z) : z^(2n) - one(z)
+        V_exact[n] = (n % h == 0) ? zero(ζ) : ζ^(2n) - one(ζ)
     end
     
+    # Sieve-based multiplicative Möbius inversion
     @inbounds for d in 1:D_max
         iszero(V_exact[d]) && continue
-        for m in (2 * d):d:D_max
-            if !iszero(V_exact[m])
-                V_exact[m] = divexact(V_exact[m], V_exact[d])
-            end
+        for m in (2d):d:D_max
+            !iszero(V_exact[m]) && (V_exact[m] = divexact(V_exact[m], V_exact[d]))
         end
     end
     
-    # Precompute all inverses here to eliminate division in the hot loop
+    # Precompute inverses for zero-division hot loops
     @inbounds for d in 1:D_max
-        if !iszero(V_exact[d])
-            V_inv[d] = inv(V_exact[d])
-        else
-            V_inv[d] = zero(z)
-        end
+        V_inv[d] = iszero(V_exact[d]) ? zero(ζ) : inv(V_exact[d])
     end
     
     return V_exact, V_inv
 end
 
-"""
-    get_phi_exact_table(D_max::Int, k::Int, z::T) where {T}
-
-Retrieves the precomputed `(V_exact, V_inv)` table from the global LRU cache.
-If the requested `D_max` exceeds the currently cached size, it safely expands 
-and recompiles the cache for the current level `k`.
-"""
-@inline function get_phi_exact_table(D_max::Int, k::Int, z::T) where {T}
-    # Corrected Type Assertion: We are caching a Tuple of two Vectors!
-    if !haskey(EXACT_PHI_CACHE, k) || length((EXACT_PHI_CACHE[k]::Tuple{Vector{T}, Vector{T}})[1]) < D_max
-        EXACT_PHI_CACHE[k] = _phi_exact_table(max(D_max, k + 2), k, z)
+@inline function get_phi_exact_table(D_max::Int, k::Int, ζ::T) where T
+    if !haskey(EXACT_PHI_CACHE, k) || length((EXACT_PHI_CACHE[k])[1]) < D_max
+        EXACT_PHI_CACHE[k] = _phi_exact_table(D_max, k, ζ)
     end
-    return EXACT_PHI_CACHE[k]::Tuple{Vector{T}, Vector{T}} 
+    return EXACT_PHI_CACHE[k]::Tuple{Vector{T}, Vector{T}}
 end
 
 
-"""
-    _project_ratio_nemo(m::CycloMonomial, V_exact::Vector{T}, V_inv::Vector{T}, z::T, h::Int, z_zero::T, z_one::T) where {T}
-
-Maps a sparse `CycloMonomial` into an exact Nemo number field element.
-Small powers are explicitly unrolled to prevent generic allocation overhead.
-"""
-@inline function _project_ratio_nemo(m::CycloMonomial, V_exact::Vector{T}, V_inv::Vector{T}, z::T, h::Int, z_zero::T, z_one::T) where {T}
-    # early exit return type
-    m.sign == 0 && return z_zero
-    
-    val = z_one
-    @inbounds for (d, e) in m.exps
-        if d == h
-            e > 0 && return z_zero
-            e < 0 && throw(DomainError(h-2, "Topological pole: Level k=$(h-2)"))
+# Internal helper for the loops
+@inline function _project_monomial_nemo_internal(m, V_exact, V_inv, ζ, h)
+    m.sign == 0 && return zero(ζ)
+    val = one(ζ)
+    @inbounds for (d, e) in m.phi_exps
+         if d == h
+            e > 0 && return zero(ζ)
+            e < 0 && throw(DomainError(k, "Topological pole at level k"))
             continue
         end
-        
-        # Multiply by V_exact for positive powers, V_inv for negative powers
+
         base = e > 0 ? V_exact[d] : V_inv[d]
         abs_e = abs(e)
-        
-        # explicit perform small powers to avoid generic `^` allocations
-        if abs_e == 1
+        if abs_e == 1 
             val *= base
         elseif abs_e == 2
-            val *= base * base
+            val *= (base * base)
         else
-            val *= base^abs_e
+            val *= base^abs_e 
         end
     end
-    
-    val *= z^(m.z_pow)
-    return m.sign == 1 ? val : -val
+    res = val * ζ^m.q_pow
+    return m.sign == 1 ? res : -res
+end
+
+# --- Project monomial and DCR results ----
+
+"""
+    project_exact(m::CyclotomicMonomial, k::Int)
+Evaluates a single monomial exactly. Returns a Nemo `nf_elem`.
+"""
+function project_exact(m::CyclotomicMonomial, k::Int)
+    h = k + 2
+    K, ζ = cyclotomic_field(2h, "ζ")
+    m.sign == 0 && return zero(ζ)
+    V_exact, V_inv = get_phi_exact_table(m.max_d, k, ζ)
+
+    return _project_monomial_nemo_internal(m, V_exact, V_inv, ζ, h)
 end
 
 
+# -- Project cyclotomic monomials and DCR to exact cyclotomic field ---
 
 """
-    cyclo_to_exact(res::CycloResult, k::Int)
-
-The master exact evaluator for quantum recoupling symbols.
-Takes a compiled, unevaluated `CycloResult` and projects it into the precise 
-algebraic cyclotomic field for SU(2)_k.
-
-# Returns:
-An `CycloExactResult{T}` containing:
-1. `radical`: The strictly square-free remainder (kept symbolic (monomial) for fast multiplication).
-2. `factor`: The evaluated rational sum (a Nemo field element).
-
-# Architecture:
-Extracts the perfect algebraic squares during the construction phase, this 
-evaluator bypasses CAS square-root factorization entirely. The hypergeometric 
-loop itself executes using zero memory allocations and zero algebraic divisions.
+    project_exact(dcr::DCR, k::Int)
+Evaluates a DCR series exactly for discrete level `k`. Returns a CycloExactResult.
 """
-function cyclo_to_exact(res::CycloResult, k::Int)
+function project_exact(dcr::DCR, k::Int)
     h = k + 2
-    _, z = cyclotomic_field(2 * h, "ζ")
-    z_zero, z_one = zero(z), one(z)
+    K, ζ = cyclotomic_field(2h, "ζ")
     
-    if res.radical.sign == 0 || res.base_term.sign == 0
-        return CycloExactResult(k, EMPTY_MONOMIAL, z_zero)
+    if dcr.radical.sign == 0 || dcr.base.sign == 0
+        return CycloExactResult(k, ZERO_MONOMIAL, zero(ζ))
     end
     
-    V_exact, V_inv = get_phi_exact_table(res.max_d, k, z)
+    V_exact, V_inv = get_phi_exact_table(dcr.max_d, k, ζ)
     
-    # Notice: ZERO divisions in this hot loop! 
-    sum_val, curr_term = z_one, z_one
-    for r in res.ratios
-        r_val = _project_ratio_nemo(r, V_exact, V_inv, z, h, z_zero, z_one)
+    # --- Loop: Hypergeometric Sum ---
+    sum_val = one(ζ)
+    curr_term = one(ζ)
+    
+    for r in dcr.ratios
+        # internal monomial projection
+        r_val = _project_monomial_nemo_internal(r, V_exact, V_inv, ζ, h)
         curr_term *= r_val
         sum_val += curr_term
     end
 
-    c_mmin = _project_ratio_nemo(res.base_term, V_exact, V_inv, z, h, z_zero, z_one)
-    exact_root = _project_ratio_nemo(res.root, V_exact, V_inv, z, h, z_zero, z_one)
+    # root prefactor and base term
+    m_base_val = _project_monomial_nemo_internal(dcr.base, V_exact, V_inv, ζ, h)
+    m_root_val = _project_monomial_nemo_internal(dcr.root, V_exact, V_inv, ζ, h)
     
-    return CycloExactResult(k, res.radical, exact_root * c_mmin * sum_val)
+    return CycloExactResult(k, dcr.radical, m_root_val * m_base_val * sum_val)
+end
+
+
+
+
+"""
+    evaluate_exact(res::CycloExactResult, [T=ComplexF64])
+Projects the deferred cyclotomic exact result into a complex/real number.
+Just for consistency checks
+"""
+function evaluate_exact(res::CycloExactResult, ::Type{T}=ComplexF64) where T
+    h = res.k + 2
+    target_z = cispi(one(BigFloat) / h)
+    
+    # 1. Horner evaluation for the Nemo polynomial (safe BigFloat casting)
+    function _horner(poly, z)
+        deg = degree(parent(poly))
+        val = Complex{BigFloat}(0)
+        for i in (deg-1):-1:0
+            c = coeff(poly, i)
+            c_bf = BigFloat(numerator(c)) / BigFloat(denominator(c))
+            val = val * z + c_bf
+        end
+        return val
+    end
+    
+    # Evaluate the exact polynomial sum
+    B = _horner(res.sum_factor, target_z) 
+    
+    # evaluate the radical (CyclotomicMonomial) directly
+    rad_val = project_discrete(res.radical, res.k )
+    
+    A = sqrt(max(zero(BigFloat), real(rad_val)))
+    val = A * B
+    
+    return T <: Real ? T(real(val)) : T(val)
 end

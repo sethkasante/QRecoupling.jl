@@ -1,16 +1,16 @@
 # docs/make.jl
 using Documenter
-using QRacahSymbols
+using QRecoupling
 
-DocMeta.setdocmeta!(QRacahSymbols, :DocTestSetup, :(using QRacahSymbols); recursive=true)
+DocMeta.setdocmeta!(QRecoupling, :DocTestSetup, :(using QRecoupling); recursive=true)
 
 makedocs(;
-    sitename = "QRacahSymbols.jl",
+    sitename = "QRecoupling.jl",
     authors = "Seth K Asante <seth.kurankyi@gmail.com>",
-    modules = [QRacahSymbols],
+    modules = [QRecoupling],
     format = Documenter.HTML(;
         prettyurls = get(ENV, "CI", "false") == "true",
-        canonical = "https://sethkasante.github.io/QRacahSymbols.jl",
+        canonical = "https://sethkasante.github.io/QRecoupling.jl",
         collapselevel = 1,
         sidebar_sitename = false,
         edit_link="main",
@@ -19,13 +19,16 @@ makedocs(;
     pages = [
         "Home" => "index.md",
         "Theory & Architecture" => "math.md",
+        "Tutorials" => [
+            "Proving Identities" => "tutorials/identities.md",
+        ],
         "API Reference" => "api.md"
     ],
     warnonly = [:missing_docs, :cross_references]
 )
 
 deploydocs(;
-    repo = "github.com/sethkasante/QRacahSymbols.jl.git",
+    repo = "github.com/sethkasante/QRecoupling.jl.git",
     devbranch = "main",
     push_preview = true,
 )

@@ -1,23 +1,36 @@
-# QRacahSymbols.jl
+# QRecoupling.jl
 
-[![CI](https://github.com/sethkasante/QRacahSymbols.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/sethkasante/QRacahSymbols.jl/actions/workflows/CI.yml)
-[![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://sethkasante.github.io/QRacahSymbols.jl/)
+[![CI](https://github.com/sethkasante/QRecoupling.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/sethkasante/QRecoupling.jl/actions/workflows/CI.yml)
+[![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://sethkasante.github.io/QRecoupling.jl/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**QRacahSymbols.jl** is a high-performance, mathematically rigorous Julia library for the exact and numerically stable evaluation of quantum $\text{SU(2)}_k$ recoupling coefficients ($\{3j\}$- and $\{6j\}$-symbols and topological category) at arbitrary roots of unity. This package bridges the gap between **ultra-fast floating-point numerics** and **rigorous Computer Algebra System (CAS) exactness**.
+> ⚠️ **Notice of Migration:** > `QRecoupling.jl` is the official, vastly expanded successor to the deprecated package `QRacahSymbols.jl`. The package has been completely rewritten and renamed to reflect its broader scope in topological quantum field theory (TQFT) and quantum recoupling theory.
 
-By representing quantum prime factorizations as deferred sparse cyclotomic arrays, `QRacahSymbols.jl` completely bypasses floating-point overflow and traditional algebraic bottlenecks, allowing for blazing-fast discrete evaluations and exact topological proofs.
+
+### What's New in QRecoupling.jl?
+
+It cleanly separates the deferred cyclotomic representation form projection for generic $q$-hypergeometric series. It is easily extendable
+
+* **The Deferred Cyclotomic Representation (DCR):** A combinatorial spare representation of $q$-hypergeometric series that shields floating-point arithmetic from catastrophic cancellation, successfully pushing the "Stability Wall" of hypergeometric summation to high-spin regimes.
+* **The Universal Projection:** The same DCR object can be evaluated on different target field. We provide projections on discrete level k, exact cyclotomic field $\mathbb{Q}(\zeta)$, classical limit ($q\to $), and analytical continuation $q\in\mathbb{C}$. 
+* **Expanded Topological Kernels:** Easily expandable to other TQFT observables. We have included $F$-symbols, $G$-symbols, R-matrices, and other tetrahedral networks.
+
+
+
+**QRecoupling.jl** is a high-performance, mathematically rigorous Julia library for the exact and numerically stable evaluation of quantum $\text{SU(2)}_k$ recoupling coefficients ($\{3j\}$- and $\{6j\}$-symbols and topological category) at arbitrary roots of unity. This package bridges the gap between **ultra-fast floating-point numerics** and **rigorous Computer Algebra System (CAS) exactness**.
+
+By representing quantum prime factorizations as deferred sparse cyclotomic arrays, `QRecoupling.jl` completely bypasses floating-point overflow and traditional algebraic bottlenecks, allowing for blazing-fast discrete evaluations and exact topological proofs.
 
 ## Installation
 
 ```julia
 # Press ']' in the Julia REPL to enter the package manager
-pkg> add QRacahSymbols
+pkg> add QRecoupling
 ```
 
 ## Core Features
 
-`QRacahSymbols.jl` is built as a unified interface with highly specialized computational engines. 
+`QRecoupling.jl` is built as a unified interface with highly specialized computational engines. 
 
 * **Multi-Paradigm Engine**: Compute symbols dynamically as fast floats, rigorous cyclotomic algebraic numbers, or exact zero-allocation rationals.
 * **Overflow Immunity**: Uses a specialized Log-Sum-Exp architecture and GMP C-calls to handle massive topological spins without NaN or Inf corruption.
@@ -29,7 +42,7 @@ pkg> add QRacahSymbols
 
 Evaluate the core quantum $6j$ and $3j$ (Racah-Wigner) symbols. The **mode** keyword controls the computational engine. Output values may vary slightly based on the floating-point precision.
 ```julia
-using QRacahSymbols
+using QRecoupling
 
 j = 1  # Spins 
 k = 10 # Level k 
@@ -48,7 +61,7 @@ julia> q6j(j, j, j, j, j, j; mode=:classical_exact)
 1//6
 ```
 ### The Polymorphic Architecture
-QRacahSymbols.jl utilizes different mathematically optimized engines invoked via the mode flag:
+QRecoupling.jl utilizes different mathematically optimized engines invoked via the mode flag:
 * `mode=:numeric`: The absolute speed limit. Uses pre-cached dense logarithmic arrays and a Log-Sum-Exp hot loop to rapidly compute single-shot floating point values for $\text{SU(2)}_k$.
 * `mode=:exact`: The mathematician's tool. Maps the symbol into rigorous Nemo.jl cyclotomic fields. By extracting algebraic perfect squares symbolically, it provides $\mathcal{O}(1)$ radical extraction and impenetrable precision.
 * `mode=:classical_exact`: Evaluates the un-deformed Ponzano-Regge limit. Bypasses Julia's Garbage Collector entirely by executing GMP integer math strictly in-place, dramatically outperforming standard libraries.
@@ -58,7 +71,7 @@ QRacahSymbols.jl utilizes different mathematically optimized engines invoked via
 
 When operating in `:cyclo` mode, the engine dynamically collapses perfect squares to provide a human-readable, minimal representation of the symbol.
 ```julia
-using QRacahSymbols
+using QRecoupling
 
 #Symbolic computation (very fast O(1) algebraic additions)
 julia> res = q6j(1, 1, 1, 1, 1, 1; mode=:cyclo);
@@ -71,7 +84,7 @@ CycloResult (Hypergeometric Ratio Form)
 
 ### Topological Tensors
 
-`QRacahSymbols.jl` provides direct APIs for constructing the composite tensors necessary for 3D state sums, automatically handling internal phase shifts and quantum dimensions.
+`QRecoupling.jl` provides direct APIs for constructing the composite tensors necessary for 3D state sums, automatically handling internal phase shifts and quantum dimensions.
 ```julia
 julia> k = 5;
 #quantum dimensions
@@ -94,7 +107,7 @@ julia> gsymbol(1, 1, 1, 1, 1, 1, k; mode=:numeric)
 
 ## Memory Management
 
-`QRacahSymbols.jl` caches prime sieves and cyclotomic phases under the hood when computing massive state sums over complex triangulations. If you change topological levels (k) drastically and need to free up RAM, you can clear the global caches dynamically.
+`QRecoupling.jl` caches prime sieves and cyclotomic phases under the hood when computing massive state sums over complex triangulations. If you change topological levels (k) drastically and need to free up RAM, you can clear the global caches dynamically.
 ```julia
 clear_caches!()         # Clears all internal caches
 clear_numeric_caches!() # Clears the Log-Sum-Exp tables
@@ -103,10 +116,10 @@ clear_exact_caches!()   # Clears dense Nemo.jl polynomials
 
 ## Documentation
 
-For the complete API reference, interactive tutorials, and deep dives into the mathematical architecture, please see the [Official Documentation](https://sethkasante.github.io/QRacahSymbols.jl/).
+For the complete API reference, interactive tutorials, and deep dives into the mathematical architecture, please see the [Official Documentation](https://sethkasante.github.io/QRecoupling.jl/).
 
 ## Citation
 
-If you use `QRacahSymbols.jl` in your research, please cite the following paper:
+If you use `QRecoupling.jl` in your research, please cite the following paper:
 
-> Seth K. Asante, *"QRacahSymbols.jl: Fast Exact Evaluation of Quantum Recoupling Coefficients using Cyclotomic Factorization"* (To appear soon, 2026). arXiv:XXXX.XXXXX.
+> Seth K. Asante, *"QRecoupling.jl: Fast Exact Evaluation of Quantum Recoupling Coefficients using Cyclotomic Factorization"* (To appear soon, 2026). arXiv:XXXX.XXXXX.

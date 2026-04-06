@@ -21,18 +21,23 @@ end
 
 @inline qdim_mono(j::Spin) = qint_mono(round(Int, 2j + 1))
 
+
 """
     rmatrix_mono(j1, j2, j3) -> CyclotomicMonomial
-The algebraic phase for the R-matrix braiding j1, j2 into j3:
-Uses the q^{1/2} power convention.
+The algebraic phase for the R-matrix braiding j1, j2 into j3.
+Uses the q^{1/4} power convention to securely encode quarter-integer 
+phases as exact integers, bypassing float precision loss.
 """
 function rmatrix_mono(j1::Spin, j2::Spin, j3::Spin)
-    # p is power of q^(1/2)
-    p = round(Int, (j3*(j3+1) - j1*(j1+1) - j2*(j2+1)) * 2) ÷ 2
+    # The true physical exponent is: 1/2 * (c3 - c1 - c2)
+    # Since q_pow now tracks powers of q^{1/4}, we multiply the true exponent by 4.
+    p = round(Int, 2 * (j3*(j3+1) - j1*(j1+1) - j2*(j2+1))) 
+    
+    # Standard SU(2) braiding parity sign (-1)^{j1+j2-j3}
     s = iseven(round(Int, j1 + j2 - j3)) ? 1 : -1
-    return CyclotomicMonomial(s, p, Pair{Int,Int}[], 0)
+    
+    return CyclotomicMonomial(Int8(s), p, Pair{Int,Int}[], 0)
 end
-
 
 
 # --- buffers for multiplying integers, factorials ----

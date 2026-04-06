@@ -5,7 +5,7 @@
 
 
 # Cache for the magnitude table log|Φ_d(q²)|
-const MAG_SIEVE_CACHE = LRU{Tuple{DataType, Int}, Vector}(maxsize=100)
+const MAG_SIEVE_CACHE = LRU{Tuple{DataType, Int}, Vector}(maxsize=1000)
 
 """
     get_mag_table(k::Int, max_d::Int, ::Type{T})
@@ -119,7 +119,9 @@ function _evaluate_dcr(res::DCR, k::Int, ::Type{T}, buffer::Vector{T}) where {T}
     pref_sign = res.root.sign * res.base.sign 
 
     # exit if zero
-    ((isinf(pref_lm) && pref_lm < 0) || pref_sign == 0) && return zero(T)
+    if isnan(pref_lm) || pref_lm == -T(Inf) || pref_sign == 0
+        return zero(T)
+    end
 
     ratios = res.ratios
     num_ratios = length(ratios)

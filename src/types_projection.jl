@@ -6,29 +6,6 @@
 
 
 
-#  ---- Buffers for discrete (level k) and analytical computations ------  
-
-
-"""
-    AnalyticBuffer{T}
-Workspace for Log-Sum-Exp summation in the generic complex plane (Complex-valued).
-"""
-mutable struct AnalyticBuffer{T}
-    log_mags::Vector{T}
-    phases::Vector{T}
-    signs::Vector{Int8}
-    capacity::Int
-end
-
-AnalyticBuffer{T}(n) where T = AnalyticBuffer{T}(Vector{T}(undef, n), Vector{T}(undef, n), Vector{Int8}(undef, n), n)
-
-# global pre-allocated workspaces
-# const _WS_F64 = DiscreteBuffer{Float64}(8192)
-const _WS_C64 = AnalyticBuffer{Float64}(8192)
-
-
-
-
 # --- Exact projection types (Nemo/cyclotomic field Q(ζ)) ---- 
 
 """

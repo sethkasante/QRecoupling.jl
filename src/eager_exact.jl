@@ -1,13 +1,61 @@
+
 # ---------------------------------------------------------------------------------
 # Exact Algebraic Model (:exact) uses `Nemo.jl` to handle cyclotomic fields Q(ζ)
+# Exact SU(2)k eager evaluation
+# Performs immediate polynomial arithmetic in the Cyclotomic Field Q(ζ).
 # ---------------------------------------------------------------------------------
 # WARNING: The :exact mode relies on abstract computer algebra in the cyclotomic 
 # field Q(ζ). It is designed strictly for small levels (k ≤ 100) for rigorous 
 # mathematical proofs. For large k, the polynomial arithmetic will trigger 
-# extreme memory and time complexity limits. Use :cyclo or :numeric instead.
+# extreme memory and time complexity limits. 
 # ---------------------------------------------------------------------------------
 
-#----- Construct exact model ------- 
+
+
+
+
+#  ---  Result Container & Printing ----
+
+"""
+    ExactResult
+The exact topological invariant computed via eager dense polynomial arithmetic.
+- `radical_sq`: The exact square of the prefactor (Δ²). 
+- `factor_sum`: The evaluated hypergeometric alternating sum.
+"""
+struct ExactResult
+    k::Int                
+    radical_sq::nf_elem   # Exactly Δ²
+    factor_sum::nf_elem   # The series sum
+end
+
+function _print_truncated_nemo(io::IO, x::nf_elem)
+    s = string(x)
+    if length(s) > 120
+        print(io, s[1:60], " ... ", s[end-40:end])
+    else
+        print(io, s)
+    end
+end
+
+function Base.show(io::IO, res::ExactResult)
+    k_sub = to_subscript(res.k)
+    println(io, "Exact SU(2)", k_sub, " Symbol:")
+    K = parent(res.factor_sum)
+    
+    if res.radical_sq == K(1)
+        print(io, "  Value: ")
+        _print_truncated_nemo(io, res.factor_sum)
+    else
+        println(io, "  Value: √(A) * B")
+        print(io, "  A (Δ²): ")
+        _print_truncated_nemo(io, res.radical_sq)
+        print(io, "\n  B (Sum): ")
+        _print_truncated_nemo(io, res.factor_sum)
+    end
+end
+
+
+# ---- Build exact model (Factorial Cache) ----
 
 struct ExactSU2kModel
     k::Int
@@ -17,249 +65,148 @@ struct ExactSU2kModel
     q_ints::Vector{nf_elem}       
 end
 
-# LRU Caches
-# const Q6J_EXACT_CACHE   = LRU{Tuple{NTuple{6, Float64}, Int}, ExactResult}(maxsize=5000)
-const EXACT_MODEL_CACHE = LRU{Int, ExactSU2kModel}(maxsize=50)
+const EXACT_MODEL_CACHE = LRU{Int, ExactSU2kModel}(maxsize=150)
 
 function ExactSU2kModel(k::Int)
-    # @warn "Building ExactSU2kModel for SU(2)_{$k}. Dense polynomial caching can trigger memory exhaustion for k > 100." maxlog=3
     get!(EXACT_MODEL_CACHE, k) do
-        N = k + 2
-        # The cyclotomic field of order 2N
-        K, z = cyclotomic_field(2N, "ζ") 
+        h = k + 2
+        # Q(ζ) where ζ = exp(iπ/h)
+        K, z = cyclotomic_field(2h, "ζ") 
         
-        q_facts = Vector{nf_elem}(undef, k + 3)
-        q_ints  = Vector{nf_elem}(undef, k + 3)
+        q_facts = Vector{nf_elem}(undef, k + 4)
+        q_ints  = Vector{nf_elem}(undef, k + 4)
         
-        q_facts[1] = K(1) 
-        q_ints[1]  = K(0) # [0]_q = 0
+        q_facts[1] = K(1) # [0]! = 1
+        q_ints[1]  = K(0) # [0] = 0
         
         z_inv = inv(z)
         den_inv = inv(z - z_inv)
         
-        z_n = z
-        z_inv_n = z_inv
-        
-        @inbounds for n in 1:(k+2)
-            q_int = (z_n - z_inv_n) * den_inv
+        @inbounds for n in 1:(k+3)
+            q_int = (z^n - z_inv^n) * den_inv
             q_ints[n+1] = q_int
             q_facts[n+1] = q_facts[n] * q_int
-            
-            z_n *= z
-            z_inv_n *= z_inv
         end
         return ExactSU2kModel(k, K, z, q_facts, q_ints)
     end
 end
 
-# ------- Exact cyclotomic field computations -------
-
-"""
-    qint_exact(n::Int, k::Int)
-
-Returns the exact algebraic representation of [n]_q in Q(ζ). 
-Utilizes cache for small k, but falls back to O(1) memory isolated 
-computation for large k to prevent Out-Of-Memory errors.
-"""
-function qint_exact(n::Int, k::Int)
-    if haskey(EXACT_MODEL_CACHE, k)
-        return EXACT_MODEL_CACHE[k].q_ints[n+1]
-    end
-    
-    # compute single q-integer without building the massive array
-    N = k + 2
-    K, z = cyclotomic_field(2N, "ζ")
-    
-    n == 0 && return K(0)
-    n == 1 && return K(1)
-    
-    z_n = z^n
-    return (z_n - inv(z_n)) * inv(z - inv(z))
-end
-
-# get num and den of triangle coefficients
-@inline function qΔ2_exact_numden(model::ExactSU2kModel, j1::Real, j2::Real, j3::Real)
-    a = Int(j1 + j2 - j3); b = Int(j1 - j2 + j3)
-    c = Int(-j1 + j2 + j3); d = Int(j1 + j2 + j3)
-    
-    num = model.q_facts[a+1] * model.q_facts[b+1] * model.q_facts[c+1]
-    den = model.q_facts[d+2]
-    return num, den
-end
-
-@inline function qtricoeff2_exact(model::ExactSU2kModel, j1::Real, j2::Real, j3::Real, j4::Real, j5::Real, j6::Real)
-    n1, d1 = qΔ2_exact_numden(model, j1, j2, j3)
-    n2, d2 = qΔ2_exact_numden(model, j1, j5, j6)
-    n3, d3 = qΔ2_exact_numden(model, j2, j4, j6)
-    n4, d4 = qΔ2_exact_numden(model, j3, j4, j5)
-    
-    total_num = n1 * n2 * n3 * n4
-    total_den = d1 * d2 * d3 * d4
-    
-    return total_num * inv(total_den) 
-end
-
-function q6jseries_exact(model::ExactSU2kModel, j1::Real, j2::Real, j3::Real, j4::Real, j5::Real, j6::Real)
-    # bounds 
-    α1 = Int(j1 + j2 + j3) 
-    α2 = Int(j1 + j5 + j6) 
-    α3 = Int(j2 + j4 + j6) 
-    α4 = Int(j3 + j4 + j5)
-    β1 = Int(j1 + j2 + j4 + j5) 
-    β2 = Int(j1 + j3 + j4 + j6)
-    β3 = Int(j2 + j3 + j5 + j6)
-    
-    z_min = max(α1, α2, α3, α4)
-    z_max = min(β1, β2, β3, model.k)
-    
-    z_min > z_max && return model.K(0)
-    
-    # Calculate the initial term in the sum explicitly
-    num_term = model.q_facts[z_min+2]
-    den_term = model.q_facts[z_min-α1+1] * model.q_facts[z_min-α2+1] * model.q_facts[z_min-α3+1] * model.q_facts[z_min-α4+1] * model.q_facts[β1-z_min+1] * model.q_facts[β2-z_min+1] * model.q_facts[β3-z_min+1]
-    
-    term = num_term * inv(den_term)
-    if isodd(z_min)
-        term = -term
-    end
-    
-    sum_cf = term
-    
-    # Iteratively update the term using the exact algebraic ratio R_z
-    @inbounds for z in z_min : (z_max - 1)
-        #Direct lookup of quantum integers 
-        num_ratio = -(model.q_ints[z+3]) * (model.q_ints[β1-z+1]) * (model.q_ints[β2-z+1]) * (model.q_ints[β3-z+1])
-        den_ratio = (model.q_ints[z-α1+2]) * (model.q_ints[z-α2+2]) * (model.q_ints[z-α3+2]) * (model.q_ints[z-α4+2])
-                    
-        term = term * (num_ratio * inv(den_ratio))
-        sum_cf += term
-    end
-    
-    return sum_cf
-end
-
-function q6j_exact(model::ExactSU2kModel, j1::Real, j2::Real, j3::Real, j4::Real, j5::Real, j6::Real)
-    Tc2 = qtricoeff2_exact(model, j1, j2, j3, j4, j5, j6)
-    Sum_cf = q6jseries_exact(model, j1, j2, j3, j4, j5, j6)
-    return ExactResult(model.k, Tc2, Sum_cf)
-end
 
 
-function q6j_exact(j1::Real, j2::Real, j3::Real, j4::Real, j5::Real, j6::Real,k::Int)
-    model = get!(() -> ExactSU2kModel(k), EXACT_MODEL_CACHE, k)
-    return q6j_exact(model, j1, j2, j3, j4, j5, j6)
-end
+# ---- Algebraic Symbol Builders ----- 
 
-# ------------------------------
-#  -- Exact Quantum 3j Symbol
-# ------------------------------
-
-@inline function q3j_pref_sq_exact(model::ExactSU2kModel, j1::Real, j2::Real, j3::Real, m1::Real, m2::Real)
-    num, den = qΔ2_exact_numden(model, j1, j2, j3) # FIXED OUTDATED NAME
-    facts = model.q_facts[Int(j1+m1)+1] * model.q_facts[Int(j1-m1)+1] * model.q_facts[Int(j2+m2)+1] * model.q_facts[Int(j2-m2)+1] * model.q_facts[Int(j3-m1-m2)+1] * model.q_facts[Int(j3+m1+m2)+1]
-    
-    return (num * facts) * inv(den)
-end
-
-function q3jseries_exact(model::ExactSU2kModel, j1::Real, j2::Real, j3::Real, m1::Real, m2::Real)
-    α1 = Int(j3 - j2 + m1) 
-    α2 = Int(j3 - j1 - m2)
-    β1 = Int(j1 + j2 - j3)
-    β2 = Int(j1 - m1)
-    β3 = Int(j2 + m2)
-
-    z_min = max(-α1, -α2, 0)
-    z_max = min(β1, β2, β3, model.k)
-    
-    z_min > z_max && return model.K(0)
-    
-    term = inv(
-        model.q_facts[z_min+1] * model.q_facts[α1+z_min+1] * model.q_facts[α2+z_min+1] * model.q_facts[β1-z_min+1] * model.q_facts[β2-z_min+1] * model.q_facts[β3-z_min+1]
-    )
-    
-    phase_offset = α1 - α2
-    if isodd(z_min + phase_offset)
-        term = -term
-    end
-    
-    sum_cf = term
-
-    @inbounds for z in z_min : (z_max - 1)
-        #Direct lookup of quantum integers
-        num_ratio = -(model.q_ints[β1-z+1]) * (model.q_ints[β2-z+1]) * (model.q_ints[β3-z+1])
-        den_ratio = (model.q_ints[z+2]) * (model.q_ints[α1+z+2]) * (model.q_ints[α2+z+2])
-                    
-        term = term * (num_ratio * inv(den_ratio))
-        sum_cf += term
-    end
-    
-    return sum_cf
-end
-
-function q3j_exact(model::ExactSU2kModel, j1::Real, j2::Real, j3::Real, m1::Real, m2::Real)
-    pref_sq = q3j_pref_sq_exact(model, j1, j2, j3, m1, m2)
-    Sum_cf = q3jseries_exact(model, j1, j2, j3, m1, m2)
-    return ExactResult(model.k, pref_sq, Sum_cf)
-end
-
-function q3j_exact(j1::Real, j2::Real, j3::Real, m1::Real, m2::Real, m3::Real,k::Int)
-    model = get!(() -> ExactSU2kModel(k), EXACT_MODEL_CACHE, k)
-    return q3j_exact(model, j1, j2, j3, m1, m2, m3)
-end
-
-
-
-# -------------------------------------------------
-# ---- Exact Field Evaluation Engine ------
-# These functions are used to convert cyclotomic fields to complex or reals for consistency check
-
-"""
-    horner_eval(poly_elem, z::Complex{BigFloat})
-Evaluates a Nemo cyclotomic polynomial element at a complex point `z` using a 
-zero-allocation Horner's method.
-"""
-function horner_eval(poly_elem, z::Complex{BigFloat})
-    # Fast path for pure rational numbers
-    if poly_elem isa Nemo.QQFieldElem || poly_elem isa Rational
-        num = BigFloat(numerator(poly_elem))
-        den = BigFloat(denominator(poly_elem))
-        return Complex{BigFloat}(num / den)
-    end
-    
-    deg = Nemo.degree(parent(poly_elem))
-    res = zero(Complex{BigFloat})
-    
-    # Horner's method safely extracting QQFieldElem coefficients
-    for i in (deg - 1):-1:0
-        c = Nemo.coeff(poly_elem, i)
-        
-        # c_num = BigFloat(BigInt(numerator(c)))
-        # c_den = BigFloat(BigInt(denominator(c)))
-        # res = res * z + (c_num / c_den)
-        res = res * z + BigFloat(c)
-    end
-    
-    return res
+@inline function qΔ2_exact(model::ExactSU2kModel, j1, j2, j3)
+    a, b, c = Int(j1+j2-j3), Int(j1-j2+j3), Int(-j1+j2+j3)
+    d = Int(j1+j2+j3)
+    # [a]![b]![c]! / [d+1]!
+    return (model.q_facts[a+1] * model.q_facts[b+1] * model.q_facts[c+1]) * inv(model.q_facts[d+2])
 end
 
 """
-    evaluate_exact(res::ExactResult, [T=Complex{BigFloat}]; prec=256)
-Projects a full ExactResult into a floating-point number.
+    q6j_exact(j1, j2, j3, j4, j5, j6, k)
+Computes the exact SU(2)k Racah symbol using the eager model.
 """
-function evaluate_exact(res::ExactResult, ::Type{T}=Complex{BigFloat}; prec=256) where {T}
-    val = setprecision(BigFloat, prec) do
-        # cispi(x) computes exp(i * pi * x)
-        target_z = cispi(one(BigFloat) / (res.k + 2))
-        
-        val_sum = horner_eval(res.alt_sum, target_z)
-        val_pref_sq = horner_eval(res.pref_sq, target_z)
-        
-        # val_pref = sqrt(abs(val_pref_sq))
-        # safe square root (theoretical values are positive reals)
-        val_pref = sqrt(max(zero(BigFloat), real(val_pref_sq)))
-        
-        return val_pref * val_sum
+function q6j_exact(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::Int)
+    !qδtet(j1, j2, j3, j4, j5, j6,k) && return ExactResult(k, ExactSU2kModel(k).K(1), ExactSU2kModel(k).K(0))
+    
+    model = ExactSU2kModel(k)
+    # Δ² = Δ123² * Δ156² * Δ246² * Δ345²
+    radical_sq = qΔ2_exact(model, j1, j2, j3) * qΔ2_exact(model, j1, j5, j6) *
+                 qΔ2_exact(model, j2, j4, j6) * qΔ2_exact(model, j3, j4, j5)
+    
+    α = (Int(j1+j2+j3), Int(j1+j5+j6), Int(j2+j4+j6), Int(j3+j4+j5))
+    β = (Int(j1+j2+j4+j5), Int(j1+j3+j4+j6), Int(j2+j3+j5+j6))
+    z_min, z_max = max(α...), min(β...)
+    
+    sum_val = model.K(0)
+    for z in z_min:z_max
+        num = model.q_facts[z+2]
+        den = model.q_facts[z-α[1]+1] * model.q_facts[z-α[2]+1] * model.q_facts[z-α[3]+1] * 
+                    model.q_facts[z-α[4]+1] * model.q_facts[β[1]-z+1] * model.q_facts[β[2]-z+1] * 
+                        model.q_facts[β[3]-z+1]
+        term = num * inv(den)
+        sum_val = iseven(z) ? (sum_val + term) : (sum_val - term)
     end
+    
+    return ExactResult(k, radical_sq, sum_val)
+end
+
+"""
+    q3j_exact(j1, j2, j3, m1, m2, m3, k)
+Computes the exact SU(2)k Wigner 3j symbol.
+"""
+function q3j_exact(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin, k::Int)
+    (!qδ(j1, j2, j3,k) || m1+m2+m3 != 0) && return ExactResult(k, ExactSU2kModel(k).K(1), ExactSU2kModel(k).K(0))
+    
+    model = ExactSU2kModel(k)
+    # radical_sq = Δ123² * Π [j±m]!
+    triangle_sq = qΔ2_exact(model, j1, j2, j3)
+    m_facts = model.q_facts[Int(j1+m1)+1] * model.q_facts[Int(j1-m1)+1] *
+              model.q_facts[Int(j2+m2)+1] * model.q_facts[Int(j2-m2)+1] *
+              model.q_facts[Int(j3+m3)+1] * model.q_facts[Int(j3-m3)+1]
+    
+    α = (Int(j3-j2+m1), Int(j3-j1-m2))
+    β = (Int(j1+j2-j3), Int(j1-m1), Int(j2+m2))
+    z_min, z_max = max(0, -α[1], -α[2]), min(β[1], β[2], β[3])
+    
+    sum_val = model.K(0)
+    for z in z_min:z_max
+        den = model.q_facts[z+1] * model.q_facts[α[1]+z+1] * model.q_facts[α[2]+z+1] *
+              model.q_facts[β[1]-z+1] * model.q_facts[β[2]-z+1] * model.q_facts[β[3]-z+1]
+        term = inv(den)
+        # Sign: (-1)^{z + α1 - α2}
+        sum_val = iseven(z + α[1] - α[2]) ? (sum_val + term) : (sum_val - term)
+    end
+    
+    return ExactResult(k, triangle_sq * m_facts, sum_val)
+end
+
+
+#  --- TQFT Kernels (F & G Symbols) ----- 
+
+function fsymbol_exact(j1, j2, j3, j4, j5, j6, k)
+    res = q6j_exact(j1, j2, j3, j4, j5, j6, k)
+    model = ExactSU2kModel(k)
+    # Unitary F-symbol scales by sqrt([2j3+1][2j6+1]) and phase
+    dim_sq = model.q_ints[Int(2j3+1)+1] * model.q_ints[Int(2j6+1)+1]
+    phase = iseven(Int(j1+j2+j4+j5)) ? 1 : -1
+    return ExactResult(k, res.radical_sq * dim_sq, phase * res.factor_sum)
+end
+
+
+
+
+#  ----  numerical evaluation to Float/Complex  ---- 
+
+
+"""
+    evaluate_exact(res::ExactResult, [T=ComplexF64])
+Projects the cyclotomic exact result into a complex/real number using Horner's method.
+Inherits ambient `BigFloat` precision automatically for intermediate steps.
+"""
+function evaluate_exact(res::ExactResult, ::Type{T}=ComplexF64) where T
+    h = res.k + 2
+    target_z = cispi(one(BigFloat) / h)
+    
+    # Helper: Horner evaluation with SECURE BigFloat casting
+    function _horner(poly, z)
+        deg = degree(parent(poly))
+        val = Complex{BigFloat}(0)
+        for i in (deg-1):-1:0
+            c = coeff(poly, i)
+            # Bypass Float64 truncation by casting Ints natively
+            c_bf = BigFloat(numerator(c)) / BigFloat(denominator(c))
+            val = val * z + c_bf
+        end
+        return val
+    end
+    
+    B = _horner(res.factor_sum, target_z)
+    A_sq = _horner(res.radical_sq, target_z)
+    
+    A = sqrt(max(zero(BigFloat), real(A_sq)))
+    val = A * B
     
     return T <: Real ? T(real(val)) : T(val)
 end
+

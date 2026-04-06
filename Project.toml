@@ -1,20 +1,18 @@
-name = "QRacahSymbols"
-uuid = "13c27e9b-5f68-43dc-97e8-482e821abd98"
-version = "1.1.0"
+name = "QRecoupling"
+uuid = "12fbc973-52c7-4af8-b64a-f7602a7eb369"
+version = "0.1.0"
 authors = ["Seth K. Asante <seth.kurankyi@gmail.com>"]
 
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 LRUCache = "8ac3fa9e-de4c-5943-b1dc-09c6b5f20637"
 Nemo = "2edaba10-b0f1-5616-af89-8c11ac63239a"
-PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
 Documenter = "1.17.0"
 LRUCache = "1.1"
 Nemo = "0.54"
-PrecompileTools = "1"
 julia = "1.10"
 
 [extras]
