@@ -10,12 +10,24 @@ Returns the Quantum 6j-symbol.
 - If `k` and `q` are both nothing, returns a `DCR` object. 
 - If `k` is provided, projects according to `mode` (:discrete, :exact, :classical).
 - If `q` is provided, evaluates analytically for that specific complex/real q.
+- If `eager=true`, bypasses DCR construction for direct numeric/exact evaluation.
 """
 function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin; 
              k=nothing, q=nothing, mode=:discrete, eager=false, T::Type=Float64)
     
     js = canonical_spins(j1, j2, j3, j4, j5, j6)
 
+    # --- 1. FAST PATH: Eager Evaluation Short-Circuit ---
+    # Bypasses DCR graph construction entirely for raw speed
+    if eager && !isnothing(k) && isnothing(q)
+        if mode == :discrete
+            return q6j_direct(js..., k, T)
+        elseif mode == :exact
+            return q6j_exact(js..., k)
+        end
+    end
+
+    # --- 2. DCR Construction ---
     # Check level-k triangle admissibility
     if !isnothing(k) && !qδtet(js..., k)
         dcr = ZERO_DCR
@@ -23,6 +35,7 @@ function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
         dcr = q6j_dcr(js...)
     end
     
+    # --- 3. DCR Projections ---
     if mode == :classical
         return eager ? project_classical_exact(dcr) : project_classical(dcr, T)
     end
@@ -31,9 +44,9 @@ function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
     isnothing(k) && return dcr
     
     if mode == :discrete
-        return eager ? q6j_direct(js..., k; T=T) : project_discrete(dcr, k, T)
+        return project_discrete(dcr, k, T)
     elseif mode == :exact
-        return eager ? q6j_exact(js..., k) : project_exact(dcr, k)
+        return project_exact(dcr, k)
     end
 end
 
@@ -41,8 +54,18 @@ end
     q3j(j1, j2, j3, m1, m2, m3; k=nothing, q=nothing, mode=:discrete, T=Float64)
 """
 function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin=-m1-m2; 
-             k=nothing, q=nothing, mode=:discrete, T::Type=Float64)
+             k=nothing, q=nothing, mode=:discrete, eager=false, T::Type=Float64)
     
+    # --- 1. FAST PATH: Eager Evaluation Short-Circuit ---
+    if eager && !isnothing(k) && isnothing(q)
+        if mode == :discrete
+            return q3j_direct(j1, j2, j3, m1, m2, m3, k, T)
+        elseif mode == :exact
+            return q3j_exact(j1, j2, j3, m1, m2, m3, k)
+        end
+    end
+
+    # --- 2. DCR Construction ---
     # Check level-k triangle admissibility
     if !isnothing(k) && !qδ(j1, j2, j3, k)
         dcr = ZERO_DCR
@@ -50,6 +73,7 @@ function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin=-m1-m2;
         dcr = q3j_dcr(j1, j2, j3, m1, m2, m3)
     end
     
+    # --- 3. DCR Projections ---
     if mode == :classical
         return project_classical(dcr, T)
     end
@@ -127,8 +151,6 @@ function theta_value(j1::Spin, j2::Spin, j3::Spin; k=nothing, q=nothing, T::Type
     else
         mono = theta_mono(j1, j2, j3) 
     end
-
-    mono = theta_mono(j1, j2, j3) 
     
     !isnothing(q) && return project_analytic(mono, q)
     isnothing(k) && return mono
@@ -232,7 +254,11 @@ end
 
 clear_numeric_caches!() = (empty!(LOGQFACT_CACHE); nothing)
 
-clear_exact_caches!() = (empty!(EXACT_PHI_CACHE); nothing)
+clear_exact_caches!() = begin
+    empty!(EXACT_PHI_CACHE)
+    empty!(EXACT_MODEL_CACHE)
+    nothing
+end
 
 clear_sieve_caches!() = (empty!(MAG_SIEVE_CACHE); nothing)
 

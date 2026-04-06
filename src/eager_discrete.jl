@@ -1,9 +1,10 @@
+
+
 # ---------------------------------------------------------------------------
-# :numeric builder - uses Log-Sum-Exp (LSE) for Hypergeometric Summation
-# `Direct or eager` numerical computation of the Racah-Wigner 3j and 6j symbols 
+# :discrete eager builder - uses Log-Sum-Exp (LSE) for Hypergeometric Summation
+# Direct numerical computation of the Racah-Wigner 3j and 6j symbols 
 # ---------------------------------------------------------------------------
 
-using LRUCache
 
 # LRU Cached tables for computations
 const LOGQFACT_CACHE = LRU{Tuple{Int, DataType, Int}, Any}(maxsize = 4096)
@@ -22,9 +23,8 @@ struct NumericSU2kModel{T<:AbstractFloat}
     logqnfact::Vector{T}
 end
 
-# Constructs or retrieves a cached `NumericSU2kModel` for level `k`. 
-function NumericSU2kModel(k::Int; T::Type{<:AbstractFloat}=Float64)
-    # Dynamically grab ambient precision to safely separate cache entries
+function NumericSU2kModel(k::Int, T::Type{<:AbstractFloat}=Float64)
+    # Dynamically grab precision to separate cache entries
     key_prec = T === BigFloat ? precision(BigFloat) : 53 
     
     tab = get!(LOGQFACT_CACHE, (k, T, key_prec)) do
@@ -33,13 +33,6 @@ function NumericSU2kModel(k::Int; T::Type{<:AbstractFloat}=Float64)
     return NumericSU2kModel{T}(k, tab)
 end
 
-"""
-    build_logqnfact_table(k::Int, T::Type) -> Vector{T}
-
-Generates the exact logarithmic quantum factorial table for n ∈ [0, k+1].
-Leverages the reflection symmetry of the sine function to halve the required 
-trigonometric computations. Natively inherits ambient precision if T is BigFloat.
-"""
 function build_logqnfact_table(k::Int, T::Type{<:AbstractFloat})::Vector{T}
     N = k + 2 
     θ = one(T) / T(N)
@@ -70,38 +63,79 @@ end
 
 # Computes log(Δ) for admissible triangular coefficients.
 @inline function log_qΔ(j1::Spin, j2::Spin, j3::Spin, tab::Vector{T})::T where {T}
-    a = Int(j1 + j2 - j3)
-    b = Int(j1 - j2 + j3)
-    c = Int(-j1 + j2 + j3)
-    d = Int(j1 + j2 + j3)
-    
+    a, b, c = Int(j1+j2-j3), Int(j1-j2+j3), Int(-j1+j2+j3)
+    d = Int(j1+j2+j3)
     return (tab[a+1] + tab[b+1] + tab[c+1] - tab[d+2]) / 2 
+end
+
+#---- Compute quantum 6j Symbol ---- 
+
+"""
+    q6j_discrete_eager(j1, j2, j3, j4, j5, j6, k, T)
+
+Evaluates the quantum 6j-symbol using a direct Log-Sum-Exp (LSE) alternating summation.
+"""
+function q6j_direct(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::Int, T::Type{<:AbstractFloat})
+    !qδtet(j1, j2, j3, j4, j5, j6, k) && return zero(T)
+    
+    model = NumericSU2kModel(k, T)
+    table = model.logqnfact
+    
+    # Prefactor
+    logT = log_qΔ(j1, j2, j3, table) + log_qΔ(j1, j5, j6, table) + 
+           log_qΔ(j2, j4, j6, table) + log_qΔ(j3, j4, j5, table)
+
+    # Bounds
+    α1 = Int(j1+j2+j3); α2 = Int(j1+j5+j6); α3 = Int(j2+j4+j6); α4 = Int(j3+j4+j5)
+    β1 = Int(j1+j2+j4+j5); β2 = Int(j1+j3+j4+j6); β3 = Int(j2+j3+j5+j6)
+
+    z_min = max(α1, α2, α3, α4)
+    z_max = min(β1, β2, β3, model.k) 
+    
+    z_min > z_max && return zero(T)
+    
+    # find maximum of log to prevent underflow/overflow
+    logmax = typemin(T)
+    @inbounds for z in z_min:z_max
+        log_sz = table[z+2] - (table[z-α1+1] + table[z-α2+1] + table[z-α3+1] + table[z-α4+1] + table[β1-z+1] + table[β2-z+1] + table[β3-z+1])
+        logmax = max(logmax, log_sz)
+    end
+
+    # perform alternating sum 
+    res_scaled = zero(T)
+    curr_sign = iseven(z_min) ? one(T) : -one(T)
+    
+    @inbounds for z in z_min:z_max
+        log_sz = table[z+2] - (table[z-α1+1] + table[z-α2+1] + table[z-α3+1] + table[z-α4+1] + table[β1-z+1] + table[β2-z+1] + table[β3-z+1])
+        res_scaled += curr_sign * exp(log_sz - logmax)
+        curr_sign = -curr_sign
+    end
+
+    return exp(logT + logmax) * res_scaled
 end
 
 #---- Compute quantum 3j symbol ---- 
 
 """
-    _q3j_stable(model::NumericSU2kModel, j1, j2, j3, m1, m2)
-
-Evaluates the quantum 3j-symbol using a NaN-safe Log-Sum-Exp alternating summation.
+    q3j_discrete_eager(j1, j2, j3, m1, m2, m3, k, T)
 """
-function _q3j_stable(model::NumericSU2kModel{T}, j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin)::T where {T}
+function q3j_direct(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin, k::Int, T::Type{<:AbstractFloat})
+    (!qδ(j1, j2, j3, k) || m1+m2+m3 != 0) && return zero(T)
+    
+    model = NumericSU2kModel(k, T)
     table = model.logqnfact
     
     # Prefactor
     log_delta = log_qΔ(j1, j2, j3, table)
     log_facts = table[Int(j1+m1)+1] + table[Int(j1-m1)+1] + 
                 table[Int(j2+m2)+1] + table[Int(j2-m2)+1] + 
-                table[Int(j3-m1-m2)+1] + table[Int(j3+m1+m2)+1]
+                table[Int(j3+m3)+1] + table[Int(j3-m3)+1]
     
     logT = log_delta + 0.5 * log_facts
 
     # Bounds
-    α1 = Int(j3 - j2 + m1) 
-    α2 = Int(j3 - j1 - m2)
-    β1 = Int(j1 + j2 - j3)
-    β2 = Int(j1 - m1)
-    β3 = Int(j2 + m2)
+    α1 = Int(j3 - j2 + m1); α2 = Int(j3 - j1 - m2)
+    β1 = Int(j1 + j2 - j3); β2 = Int(j1 - m1); β3 = Int(j2 + m2)
 
     z_min = max(-α1, -α2, 0)
     z_max = min(β1, β2, β3, model.k) 
@@ -128,65 +162,3 @@ function _q3j_stable(model::NumericSU2kModel{T}, j1::Spin, j2::Spin, j3::Spin, m
 
     return exp(logT + logmax) * res_scaled
 end
-
-#---- Compute quantum 6j Symbol ---- 
-
-"""
-    _q6j_stable(model::NumericSU2kModel, j1, j2, j3, j4, j5, j6)
-
-Evaluates the quantum 6j-symbol using a direct Log-Sum-Exp (LSE) alternating summation.
-"""
-function _q6j_stable(model::NumericSU2kModel{T}, j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)::T where {T}
-    table = model.logqnfact
-    
-    # Prefactor
-    logT = log_qΔ(j1, j2, j3, table) + log_qΔ(j1, j5, j6, table) + 
-           log_qΔ(j2, j4, j6, table) + log_qΔ(j3, j4, j5, table)
-
-    # Bounds
-    α1 = Int(j1 + j2 + j3) 
-    α2 = Int(j1 + j5 + j6)
-    α3 = Int(j2 + j4 + j6)
-    α4 = Int(j3 + j4 + j5)
-    β1 = Int(j1 + j2 + j4 + j5)
-    β2 = Int(j1 + j3 + j4 + j6)
-    β3 = Int(j2 + j3 + j5 + j6)
-
-    z_min = max(α1, α2, α3, α4)
-    z_max = min(β1, β2, β3, model.k) 
-    
-    z_min > z_max && return zero(T)
-    
-    # find maximum of log
-    logmax = -T(Inf)
-    @inbounds for z in z_min:z_max
-        log_sz = table[z+2] - (table[z-α1+1] + table[z-α2+1] + table[z-α3+1] + table[z-α4+1] + table[β1-z+1] + table[β2-z+1] + table[β3-z+1])
-        logmax = max(logmax, log_sz)
-    end
-
-    # perform alternating sum
-    res_scaled = zero(T)
-    curr_sign = iseven(z_min) ? one(T) : -one(T)
-    
-    @inbounds for z in z_min:z_max
-        log_sz = table[z+2] - (table[z-α1+1] + table[z-α2+1] + table[z-α3+1] + table[z-α4+1] + table[β1-z+1] + table[β2-z+1] + table[β3-z+1])
-        res_scaled += curr_sign * exp(log_sz - logmax)
-        curr_sign = -curr_sign
-    end
-
-    return exp(logT + logmax) * res_scaled
-end
-
-#----- Internal dispatchers ----
-
-q3j_direct(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, k::Int; T::Type{<:AbstractFloat}=Float64) = 
-    _q3j_stable(NumericSU2kModel(k; T=T), j1, j2, j3, m1, m2)
-
-"""
-    q6j_direct(j1, j2, j3, j4, j5, j6, k; T=Float64)
-
-The public-facing fast numeric API for the quantum 6j-symbol. 
-Automatically manages the `NumericSU2kModel` caching behind the scenes.
-"""   
-q6j_direct(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::Int; T::Type{<:AbstractFloat}=Float64) = 
-    _q6j_stable(NumericSU2kModel(k; T=T), j1, j2, j3, j4, j5, j6)
