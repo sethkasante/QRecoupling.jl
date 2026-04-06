@@ -68,9 +68,10 @@ end
 const EXACT_MODEL_CACHE = LRU{Int, ExactSU2kModel}(maxsize=150)
 
 function ExactSU2kModel(k::Int)
+    # @warn "Building ExactSU2kModel for SU(2)_{$k}. Dense polynomial caching can trigger memory exhaustion for k > 100." maxlog=1
     get!(EXACT_MODEL_CACHE, k) do
         h = k + 2
-        # Q(ζ) where ζ = exp(iπ/h)
+        # Q(ζ) where ζ = exp(i2π/2h)
         K, z = cyclotomic_field(2h, "ζ") 
         
         q_facts = Vector{nf_elem}(undef, k + 4)
@@ -95,37 +96,58 @@ end
 
 # ---- Algebraic Symbol Builders ----- 
 
-@inline function qΔ2_exact(model::ExactSU2kModel, j1, j2, j3)
+# get num and den of triangle coefficients
+@inline function _qΔ2_exact_numden(model::ExactSU2kModel, j1::Spin, j2::Spin, j3::Spin)
     a, b, c = Int(j1+j2-j3), Int(j1-j2+j3), Int(-j1+j2+j3)
     d = Int(j1+j2+j3)
-    # [a]![b]![c]! / [d+1]!
-    return (model.q_facts[a+1] * model.q_facts[b+1] * model.q_facts[c+1]) * inv(model.q_facts[d+2])
+    num = model.q_facts[a+1] * model.q_facts[b+1] * model.q_facts[c+1]
+    den = model.q_facts[d+2]
+    return num, den
 end
+
 
 """
     q6j_exact(j1, j2, j3, j4, j5, j6, k)
-Computes the exact SU(2)k Racah symbol using the eager model.
+Computes the exact SU(2)k Racah symbol using the memory-optimized iterative eager model.
 """
 function q6j_exact(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::Int)
-    !qδtet(j1, j2, j3, j4, j5, j6,k) && return ExactResult(k, ExactSU2kModel(k).K(1), ExactSU2kModel(k).K(0))
+    !qδtet(j1, j2, j3, j4, j5, j6, k) && return ExactResult(k, ExactSU2kModel(k).K(1), ExactSU2kModel(k).K(0))
     
     model = ExactSU2kModel(k)
-    # Δ² = Δ123² * Δ156² * Δ246² * Δ345²
-    radical_sq = qΔ2_exact(model, j1, j2, j3) * qΔ2_exact(model, j1, j5, j6) *
-                 qΔ2_exact(model, j2, j4, j6) * qΔ2_exact(model, j3, j4, j5)
     
-    α = (Int(j1+j2+j3), Int(j1+j5+j6), Int(j2+j4+j6), Int(j3+j4+j5))
-    β = (Int(j1+j2+j4+j5), Int(j1+j3+j4+j6), Int(j2+j3+j5+j6))
-    z_min, z_max = max(α...), min(β...)
+    # prefactor (radical squared)
+    n1, d1 = _qΔ2_exact_numden(model, j1, j2, j3)
+    n2, d2 = _qΔ2_exact_numden(model, j1, j5, j6)
+    n3, d3 = _qΔ2_exact_numden(model, j2, j4, j6)
+    n4, d4 = _qΔ2_exact_numden(model, j3, j4, j5)
+    radical_sq = (n1 * n2 * n3 * n4) * inv(d1 * d2 * d3 * d4)
     
-    sum_val = model.K(0)
-    for z in z_min:z_max
-        num = model.q_facts[z+2]
-        den = model.q_facts[z-α[1]+1] * model.q_facts[z-α[2]+1] * model.q_facts[z-α[3]+1] * 
-                    model.q_facts[z-α[4]+1] * model.q_facts[β[1]-z+1] * model.q_facts[β[2]-z+1] * 
-                        model.q_facts[β[3]-z+1]
-        term = num * inv(den)
-        sum_val = iseven(z) ? (sum_val + term) : (sum_val - term)
+
+    α1 = Int(j1+j2+j3); α2 = Int(j1+j5+j6); α3 = Int(j2+j4+j6); α4 = Int(j3+j4+j5)
+    β1 = Int(j1+j2+j4+j5); β2 = Int(j1+j3+j4+j6); β3 = Int(j2+j3+j5+j6)
+    
+    z_min = max(α1, α2, α3, α4)
+    z_max = min(β1, β2, β3, model.k)
+    
+    z_min > z_max && return ExactResult(k, radical_sq, model.K(0))
+    
+    #intial term
+    num_term = model.q_facts[z_min+2]
+    den_term = model.q_facts[z_min-α1+1] * model.q_facts[z_min-α2+1] * model.q_facts[z_min-α3+1] * model.q_facts[z_min-α4+1] * model.q_facts[β1-z_min+1] * model.q_facts[β2-z_min+1] * model.q_facts[β3-z_min+1]
+    
+    term = num_term * inv(den_term)
+    if isodd(z_min)
+        term = -term
+    end
+    sum_val = term
+    
+    # iterative loop
+    @inbounds for z in z_min : (z_max - 1)
+        num_ratio = -(model.q_ints[z+3]) * (model.q_ints[β1-z+1]) * (model.q_ints[β2-z+1]) * (model.q_ints[β3-z+1])
+        den_ratio = (model.q_ints[z-α1+2]) * (model.q_ints[z-α2+2]) * (model.q_ints[z-α3+2]) * (model.q_ints[z-α4+2])
+                    
+        term = term * (num_ratio * inv(den_ratio))
+        sum_val += term
     end
     
     return ExactResult(k, radical_sq, sum_val)
@@ -133,46 +155,58 @@ end
 
 """
     q3j_exact(j1, j2, j3, m1, m2, m3, k)
-Computes the exact SU(2)k Wigner 3j symbol.
+Computes the exact SU(2)k Wigner 3j symbol using the memory-optimized iterative eager model.
 """
 function q3j_exact(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin, k::Int)
-    (!qδ(j1, j2, j3,k) || m1+m2+m3 != 0) && return ExactResult(k, ExactSU2kModel(k).K(1), ExactSU2kModel(k).K(0))
+    (!qδ(j1, j2, j3, k) || m1+m2+m3 != 0) && return ExactResult(k, ExactSU2kModel(k).K(1), ExactSU2kModel(k).K(0))
     
     model = ExactSU2kModel(k)
-    # radical_sq = Δ123² * Π [j±m]!
-    triangle_sq = qΔ2_exact(model, j1, j2, j3)
-    m_facts = model.q_facts[Int(j1+m1)+1] * model.q_facts[Int(j1-m1)+1] *
-              model.q_facts[Int(j2+m2)+1] * model.q_facts[Int(j2-m2)+1] *
-              model.q_facts[Int(j3+m3)+1] * model.q_facts[Int(j3-m3)+1]
     
-    α = (Int(j3-j2+m1), Int(j3-j1-m2))
-    β = (Int(j1+j2-j3), Int(j1-m1), Int(j2+m2))
-    z_min, z_max = max(0, -α[1], -α[2]), min(β[1], β[2], β[3])
+    # prefactor (radical squared)
+    num, den = _qΔ2_exact_numden(model, j1, j2, j3)
+    facts = model.q_facts[Int(j1+m1)+1] * model.q_facts[Int(j1-m1)+1] * model.q_facts[Int(j2+m2)+1] * model.q_facts[Int(j2-m2)+1] * model.q_facts[Int(j3+m3)+1] * model.q_facts[Int(j3-m3)+1]
+    triangle_sq = (num * facts) * inv(den)
     
-    sum_val = model.K(0)
-    for z in z_min:z_max
-        den = model.q_facts[z+1] * model.q_facts[α[1]+z+1] * model.q_facts[α[2]+z+1] *
-              model.q_facts[β[1]-z+1] * model.q_facts[β[2]-z+1] * model.q_facts[β[3]-z+1]
-        term = inv(den)
-        # Sign: (-1)^{z + α1 - α2}
-        sum_val = iseven(z + α[1] - α[2]) ? (sum_val + term) : (sum_val - term)
+    α1 = Int(j3 - j2 + m1); α2 = Int(j3 - j1 - m2)
+    β1 = Int(j1 + j2 - j3); β2 = Int(j1 - m1); β3 = Int(j2 + m2)
+    
+    z_min = max(0, -α1, -α2)
+    z_max = min(β1, β2, β3, model.k)
+    
+    z_min > z_max && return ExactResult(k, triangle_sq, model.K(0))
+    
+    # base term
+    term = inv(model.q_facts[z_min+1] * model.q_facts[α1+z_min+1] * model.q_facts[α2+z_min+1] * model.q_facts[β1-z_min+1] * model.q_facts[β2-z_min+1] * model.q_facts[β3-z_min+1])
+    
+    phase_offset = α1 - α2
+    if isodd(z_min + phase_offset)
+        term = -term
+    end
+    sum_val = term
+
+    # loop sum
+    @inbounds for z in z_min : (z_max - 1)
+        num_ratio = -(model.q_ints[β1-z+1]) * (model.q_ints[β2-z+1]) * (model.q_ints[β3-z+1])
+        den_ratio = (model.q_ints[z+2]) * (model.q_ints[α1+z+2]) * (model.q_ints[α2+z+2])
+                    
+        term = term * (num_ratio * inv(den_ratio))
+        sum_val += term
     end
     
-    return ExactResult(k, triangle_sq * m_facts, sum_val)
+    return ExactResult(k, triangle_sq, sum_val)
 end
 
 
-#  --- TQFT Kernels (F & G Symbols) ----- 
+#  --- Fsymbol ----- 
 
 function fsymbol_exact(j1, j2, j3, j4, j5, j6, k)
     res = q6j_exact(j1, j2, j3, j4, j5, j6, k)
     model = ExactSU2kModel(k)
-    # Unitary F-symbol scales by sqrt([2j3+1][2j6+1]) and phase
+    # scale by sqrt([2j3+1][2j6+1]) and phase
     dim_sq = model.q_ints[Int(2j3+1)+1] * model.q_ints[Int(2j6+1)+1]
     phase = iseven(Int(j1+j2+j4+j5)) ? 1 : -1
     return ExactResult(k, res.radical_sq * dim_sq, phase * res.factor_sum)
 end
-
 
 
 
