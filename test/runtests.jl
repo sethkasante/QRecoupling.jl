@@ -64,11 +64,11 @@ using Nemo
         js = (2, 2, 2, 2, 2, 2)
         
         # Exact Rational Path (Zero-GCD)
-        res_rat = q6j(js..., mode=:classical, eager=false) # Returns ClassicalResult
+        res_rat = q6j(js..., q=1, exact=true) # Returns ClassicalResult
         val_rat = Float64(res_rat)
         
         # Numerical Log-Sum-Exp Path
-        val_num = q6j(js..., mode=:classical, eager=true, T=Float64)
+        val_num = q6j(js..., q=1, exact=false)
         
         @test val_rat ≈ val_num atol=1e-14
     end

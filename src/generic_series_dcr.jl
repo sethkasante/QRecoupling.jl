@@ -160,12 +160,10 @@ function build_generic_dcr(pref_func::Function,
                            extract_radical::Bool=false,
                            alternating_sign::Bool=false)
     
-    # Estimate a safe initial capacity based on the summation bounds
-    # The buffer dynamically resizes itself if this estimate is too low anyway.
+    # Estimate initial capacity based on the summation bounds
     initial_capacity = max(20, z_max + 10)
     buf = CycloBuffer(initial_capacity)
-    
-    # Pass it straight to the high-performance mutating engine
+
     return _build_generic_dcr!(buf, pref_func, base_func, ratio_func, z_min, z_max;
                               extract_radical=extract_radical, 
                               alternating_sign=alternating_sign)
@@ -173,43 +171,35 @@ end
 
 
 
-
-
 """
-    project_dcr(dcr::DCR; k=nothing, q=nothing, mode=nothing, exact_classical=false, T::Type=Float64)
+    project_dcr(dcr::DCR; k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
 
-Universal evaluation API for any Deferred Cyclotomic Representation (DCR). 
-Routes the abstract algebraic graph to the appropriate numerical or exact projection engine.
-
-- If `q = 1` is passed, it automatically resolves the limits via the classical exact solver.
-- If `q` is complex/real, it uses the fast analytic solver.
-- If `k` is passed, it uses the root-of-unity discrete or exact solvers based on `mode`.
+Universal evaluation API for a DCR. 
+- Classical Limit: Pass `q = 1`.
+- Root of Unity (TQFT): Pass `k` (integer level).
+- Complex Analytic: Pass `q` (complex or real parameter).
+- Precision is controlled by `exact` (Float64 vs Rational/Cyclotomic).
 """
 function project_dcr(dcr::DCR; 
                      k=nothing, 
                      q=nothing, 
-                     mode=nothing, 
-                     exact=false, 
+                     exact::Bool=false, 
                      T::Type=Float64)
     
     # ---  classical limit (q -> 1) ---
-    if q == 1 || q == 1.0 || mode == :classical
+    if (!isnothing(q) && (q == 1 || q == 1.0)) || (!isnothing(k) && k == Inf)
         return exact ? project_classical_exact(dcr) : project_classical(dcr, T)
     end
 
-    # ---  complex/analytic projection ---
+    # --- complex/analytic projection ---
     if !isnothing(q)
         return project_analytic(dcr, q)
     end
 
     # --- root of unity projection ---
     if !isnothing(k)
-        if !isnothing(mode) && mode != :discrete
-            throw(ArgumentError("When providing `k`, the regime is implicitly discrete. Unrecognized mode: $mode"))
-        end
-        
         return exact ? project_exact(dcr, k) : project_discrete(dcr, k, T)
     end
 
-    throw(ArgumentError("Projection target missing. Specify `k` (integer level) or `q` (complex/real parameter)."))
+    throw(ArgumentError("Projection target missing. Specify `k` (integer level) or `q` (parameter)."))
 end

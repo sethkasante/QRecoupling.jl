@@ -20,7 +20,7 @@ include("projection_analytic.jl")
 include("eager_discrete.jl")  
 include("eager_exact.jl")    
 
-include("recoupling_apis.jl")  
+include("recoupling_api.jl")  
 
 
 # Export physics tqft and recoupling symbols api
