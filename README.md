@@ -7,17 +7,16 @@
 > **Notice of Migration:** > `QRecoupling.jl` is the official, vastly expanded successor to the deprecated package `QRacahSymbols.jl`. The package has been completely rewritten and renamed to reflect its broader scope in topological quantum field theory (TQFT) and quantum recoupling theory.
 
 --- 
-
 # QRecoupling.jl
 
-**QRecoupling.jl** is a high-performance Julia library for the **exact, stable, and scalable evaluation of quantum recoupling coefficients** and related $q$-hypergeometric series. 
+**QRecoupling.jl** is a high-performance Julia library for the **stable and scalable evaluation of quantum recoupling coefficients and q-hypergeometric series**, designed to overcome computational limitations of direct numerical and symbolic methods.
 
-The package is built on a single unifying idea:
+It is designed to overcome fundamental limitations of direct numerical and symbolic evaluation, including catastrophic cancellation, expression swell, and redundant computation.
 
-> **Separate algebra from evaluation.**
+
+> **Main idea:** separate algebraic structure from numerical evaluation.
 
 All quantities are first represented symbolically in a **Deferred Cyclotomic Representation (DCR)**, and only later projected into a target field (numeric, exact, or asymptotic).
-This design eliminates catastrophic cancellation, avoids redundant computation, and enables efficient evaluation across multiple regimes.
 
 ---
 
@@ -27,12 +26,10 @@ This design eliminates catastrophic cancellation, avoids redundant computation, 
 A sparse, combinatorial encoding of $q$-hypergeometric series with building blocks 
 $$\mathcal{M} = \sigma\; q^P \prod_d \Phi_d(q^2)^{e_d} $$
 
-- No floating-point arithmetic during construction  
-- Exact factor-level control  
-- Eliminates intermediate blow-up  
+- the representation is performed using the exponents of the cyclotomic basis $\{q,\Phi_d(q^2)\}$ 
+- multiplication and division translates to addition of exponents 
 
 ---
-
 
 ### • Universal Projection Framework
 
@@ -44,15 +41,6 @@ A single DCR object can be evaluated in multiple regimes:
 | **Exact algebraic** | Evaluation in cyclotomic fields via `Nemo.jl` |
 | **Complex analytic** | Efficient evaluation for $q \in \mathbb{C}$ |
 | **Classical limit** | Exact $q \to 1$ reduction |
-
----
-
-### • High-Performance Evaluation
-
-- Log-Sum-Exp summation for numerical stability  
-- Möbius-based cyclotomic sieve ($\mathcal{O}(D \log D)$)  
-- Sparse exponent arithmetic (no polynomial expansion)  
-- Early termination at roots of unity  
 
 ---
 
@@ -117,8 +105,8 @@ Exact SU(2)₁₀ Symbol:
 julia> q6j(j, j, j, j, j, j, q=exp(0.5im))
 0.035851185150113485 + 1.969762350587362e-17im
 
-# 4. Classical Ponzano-Regge Limit (q -> 1 or k -> ∞, WignerSymbols) 
-julia> q6j(j, j, j, j, j, j,mode=:classical, exact=true)
+# 4. Classical Ponzano-Regge Limit (q -> 1, WignerSymbols) 
+julia> q6j(j, j, j, j, j, j, q=1, exact=true)
 1//6
 ```
 ### Topological Tensors
@@ -127,7 +115,7 @@ julia> q6j(j, j, j, j, j, j,mode=:classical, exact=true)
 ```julia
 julia> k = 5;
 #quantum dimensions
-julia> qdim(1/2,k=k,mode=:exact)
+julia> qdim(1/2,k=k,exact=true)
 -ζ^5 + ζ^4 - ζ^3 + ζ^2 + 1
 
 # R-Matrix braiding
