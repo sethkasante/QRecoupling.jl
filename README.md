@@ -97,21 +97,19 @@ DCR (Deferred Cyclotomic Representation)
  ├─ Base Term: -q⁻⁶ Φ₂² Φ₃ Φ₄
  └─ Sequence : 1 update ratios {R_z}
 ```
-This representation is:	
-- exact
-- minimal
-- independent of evaluation field
+This representation is exact, minimal, and independent of evaluation field
 
 
 ### Projections 
 For projection to target fields:
 ```julia
+julia> j = 1;
 # 1. projection into discrete level `k` (Float64 by default)
-julia> q6j(j, j, j, j, j, j, k=10, mode=:discrete)
+julia> q6j(j, j, j, j, j, j, k=10)
 0.1547005383792515
 
-# 2. exact algebraic projectioin in cyclotomic fields (ζ)
-julia> q6j(j, j, j, j, j, j, k=10, mode=:exact)
+# 2. exact algebraic projection in cyclotomic fields (ζ)
+julia> q6j(j, j, j, j, j, j, k=10, exact=true)
 Exact SU(2)₁₀ Symbol: 
 -2//3*ζ^6 + 4//3*ζ^2 - 1
 
@@ -120,7 +118,7 @@ julia> q6j(j, j, j, j, j, j, q=exp(0.5im))
 0.035851185150113485 + 1.969762350587362e-17im
 
 # 4. Classical Ponzano-Regge Limit (q -> 1 or k -> ∞, WignerSymbols) 
-julia> q6j(j, j, j, j, j, j,mode=:classical)
+julia> q6j(j, j, j, j, j, j,mode=:classical, exact=true)
 1//6
 ```
 ### Topological Tensors
@@ -145,16 +143,25 @@ julia> gsymbol(1, 1, 1, 1, 1, 1, k=5)
 1.0000000000000007
 ```
 
+## Generic $q$-Series
+`QRecoupling.jl` can also be use to study generic basic $q$-hypergeometric series. Here's how to construct a DCR for a custom sequence, such as $\sum_{z=1}^{10} [z]_q!$:
+```julia
 
-### Performance Notes
+# build the q-series 
+julia> custom_series = build_generic_dcr(
+           b -> nothing,                       
+           (b, z) -> add_qfact!(b, z),      # base term at z_min   
+           (b, z) -> add_qint!(b, z + 1),   # ratio: T_{z+1}/T_z = [z+1]_q   
+           1, 10
+          )
+julia> project_dcr(custom_series,k=10)
+29948.709646825515
 
-- Numerical evaluation is overflow-free even at large spins
-- Exact evaluation avoids polynomial GCDs entirely
-- Root-of-unity evaluation exploits vanishing Φₕ(q²) for early exit
-- All hot loops are allocation-free
+julia> project_dcr(custom_series,q=0.5im)
+1.0996624874742891e10 - 4.482327660636685e12im
+```
 
 ## Cache Management
-
 ```julia
 empty_caches!() # Clears all internal caches
 ```
