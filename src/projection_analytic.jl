@@ -110,6 +110,7 @@ function _eval_analytic_dcr(res::DCR, q::T, q_sq::T) where T
     @inbounds for i in 1:length(ratios)
         r_val = _eval_mono_analytic(ratios[i], q, table)
         curr_term *= r_val
+        iszero(curr_term) && break 
         sum_val += curr_term
     end
 
