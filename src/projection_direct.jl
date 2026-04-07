@@ -107,7 +107,7 @@ end
 
 
 
-function _evaluate_dcr(res::DCR, k::Int, ::Type{T}, buffer::Vector{T}) where {T}
+function _evaluate_discrete_dcr(res::DCR, k::Int, ::Type{T}, buffer::Vector{T}) where {T}
     table = get_mag_table(k, res.max_d, T)
 
     # project prefactors
@@ -162,7 +162,7 @@ function project_discrete(res::DCR, k::Int, ::Type{T}=Float64) where {T}
     nt = length(res.ratios)
     buffer = Vector{T}(undef, nt)
 
-    return _evaluate_dcr(res, k, T, buffer)
+    return _evaluate_discrete_dcr(res, k, T, buffer)
 end
 
 
