@@ -95,17 +95,7 @@ end
 
 # --- Universal DCR assembler  ---
 
-"""
-    build_generic_dcr!(buf::CycloBuffer, pref_func, base_func, ratio_func, z_min, z_max; kwargs...)
-
-The master DCR compiler. Generates the full combinatorial skeleton of an arbitrary 
-sequence by orchestrating closures over a highly optimized `CycloBuffer`.
-
-**Keyword Arguments:**
-- `extract_radical::Bool` (default `false`): If true, searches the prefactor for perfect squares and separates them into the `root` and `radical` fields.
-- `alternating_sign::Bool` (default `false`): If true, automatically injects a (-1)^z term into the sequence (standard for recoupling invariants).
-"""
-function build_generic_dcr!(buf::CycloBuffer, 
+function _build_generic_dcr!(buf::CycloBuffer, 
                             pref_func::Function, 
                             base_func::Function, 
                             ratio_func::Function, 
@@ -151,3 +141,75 @@ function build_generic_dcr!(buf::CycloBuffer,
     return DCR(m_root, m_rad, m_base, ratios, z_min:z_max, g_max_d)
 end
 
+
+"""
+    build_generic_dcr!(buf::CycloBuffer, pref_func, base_func, ratio_func, z_min, z_max; kwargs...)
+
+The master DCR compiler. Generates the full combinatorial skeleton of an arbitrary 
+sequence by orchestrating closures over a highly optimized `CycloBuffer`.
+
+**Keyword Arguments:**
+- `extract_radical::Bool` (default `false`): If true, searches the prefactor for perfect squares and separates them into the `root` and `radical` fields.
+- `alternating_sign::Bool` (default `false`): If true, automatically injects a (-1)^z term into the sequence (standard for recoupling invariants).
+"""
+function build_generic_dcr(pref_func::Function, 
+                           base_func::Function, 
+                           ratio_func::Function, 
+                           z_min::Int, 
+                           z_max::Int;
+                           extract_radical::Bool=false,
+                           alternating_sign::Bool=false)
+    
+    # Estimate a safe initial capacity based on the summation bounds
+    # The buffer dynamically resizes itself if this estimate is too low anyway.
+    initial_capacity = max(20, z_max + 10)
+    buf = CycloBuffer(initial_capacity)
+    
+    # Pass it straight to the high-performance mutating engine
+    return _build_generic_dcr!(buf, pref_func, base_func, ratio_func, z_min, z_max;
+                              extract_radical=extract_radical, 
+                              alternating_sign=alternating_sign)
+end
+
+
+
+
+
+"""
+    project_dcr(dcr::DCR; k=nothing, q=nothing, mode=nothing, exact_classical=false, T::Type=Float64)
+
+Universal evaluation API for any Deferred Cyclotomic Representation (DCR). 
+Routes the abstract algebraic graph to the appropriate numerical or exact projection engine.
+
+- If `q = 1` is passed, it automatically resolves the limits via the classical exact solver.
+- If `q` is complex/real, it uses the fast analytic solver.
+- If `k` is passed, it uses the root-of-unity discrete or exact solvers based on `mode`.
+"""
+function project_dcr(dcr::DCR; 
+                     k=nothing, 
+                     q=nothing, 
+                     mode=nothing, 
+                     exact=false, 
+                     T::Type=Float64)
+    
+    # ---  classical limit (q -> 1) ---
+    if q == 1 || q == 1.0 || mode == :classical
+        return exact ? project_classical_exact(dcr) : project_classical(dcr, T)
+    end
+
+    # ---  complex/analytic projection ---
+    if !isnothing(q)
+        return project_analytic(dcr, q)
+    end
+
+    # --- root of unity projection ---
+    if !isnothing(k)
+        if !isnothing(mode) && mode != :discrete
+            throw(ArgumentError("When providing `k`, the regime is implicitly discrete. Unrecognized mode: $mode"))
+        end
+        
+        return exact ? project_exact(dcr, k) : project_discrete(dcr, k, T)
+    end
+
+    throw(ArgumentError("Projection target missing. Specify `k` (integer level) or `q` (complex/real parameter)."))
+end

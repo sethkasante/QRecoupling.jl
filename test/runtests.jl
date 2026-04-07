@@ -38,7 +38,7 @@ using Nemo
         @test dcr_zero.base.sign == 0
         
         # Exact engine zero check
-        res_exact = q6j(1, 1, 1, 1, 1, 1, k=2, mode=:exact)
+        res_exact = q6j(1, 1, 1, 1, 1, 1, k=2, exact=true)
         @test iszero(res_exact)
     end
 
@@ -53,8 +53,8 @@ using Nemo
         
         # Exact (Eager Nemo) vs Exact (DCR Nemo)
         # Note: Eager returns ExactResult, DCR returns CycloExactResult
-        ex_eager = q6j(j, j, j, j, j, j, k=k, mode=:exact, eager=true)
-        ex_dcr   = q6j(j, j, j, j, j, j, k=k, mode=:exact, eager=false)
+        ex_eager = q6j(j, j, j, j, j, j, k=k, exact=true, eager=true)
+        ex_dcr   = q6j(j, j, j, j, j, j, k=k, exact=true, eager=false)
         
         # Numerical comparison via projection
         @test QRecoupling.evaluate_exact(ex_eager) ≈ Complex(val_dcr) atol=1e-15

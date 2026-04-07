@@ -2,7 +2,7 @@ module QRecoupling
 
 using Nemo, LRUCache
 
-const Spin = Real
+const Spin = Union{Int, Rational, Float64}
 
 # --- Internal Includes ---
 include("types_cyclotomic.jl")
@@ -20,7 +20,7 @@ include("projection_analytic.jl")
 include("eager_discrete.jl")  
 include("eager_exact.jl")    
 
-include("collection_apis.jl")  
+include("recoupling_apis.jl")  
 
 
 # Export physics tqft and recoupling symbols api
@@ -33,6 +33,6 @@ export project_classical, project_classical_exact
 
 # Export api for generic series
 export CyclotomicMonomial, DCR
-export add_qint!, add_qfact!, build_generic_dcr!
+export add_qint!, add_qfact!, build_generic_dcr, project_dcr
 
 end
