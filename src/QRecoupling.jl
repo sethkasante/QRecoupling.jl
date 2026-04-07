@@ -9,26 +9,30 @@ include("types_cyclotomic.jl")
 include("types_projection.jl")  
 include("admissibility.jl")    
 include("symmetries.jl")    
-include("assembler_dcr.jl")   
-include("builders_dcr.jl") # symbols and tqft invariants
+
+include("generic_series_dcr.jl")   
+include("recoupling_dcr.jl") # recoupling symbols and tqft invariants
+
 include("projection_classical.jl")
 include("projection_direct.jl")
 include("projection_exact.jl")
 include("projection_analytic.jl")       
 include("eager_discrete.jl")  
 include("eager_exact.jl")    
+
 include("collection_apis.jl")  
 
 
-# Export the high-level API
-export q6j, q3j, fsymbol, gsymbol, tetrahedron, theta_value
-export ExactResult, ClassicalResult, DCR, CyclotomicMonomial
-export q6j_dcr, q3j_dcr, fsymbol_dcr, gsymbol_dcr
-export qdim, rmatrix, rmatrix_mono
-export evaluate_exact, project_analytic, project_discrete
+# Export physics tqft and recoupling symbols api
+export q6j, q3j, fsymbol, gsymbol, rmatrix, qdim
+
+#projection 
+export project_discrete, project_exact, project_analytic
 export project_classical, project_classical_exact
 
 
-
+# Export api for generic series
+export CyclotomicMonomial, DCR
+export add_qint!, add_qfact!, build_generic_dcr!
 
 end

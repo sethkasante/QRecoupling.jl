@@ -71,6 +71,9 @@ struct DCR
     max_d::Int                    # global maximum cyclotomic index
 end
 
+#zero DCR 
+const ZERO_DCR = DCR(ZERO_MONOMIAL, ONE_MONOMIAL, ZERO_MONOMIAL, CyclotomicMonomial[], 0:-1, 0)
+
 
 # ----- Buffer management & snapshots ------ 
 

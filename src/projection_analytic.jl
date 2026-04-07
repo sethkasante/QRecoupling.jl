@@ -9,7 +9,6 @@
 
 
 
-
 # ---- On-The-Fly: cyclotomic table builder --- --
 
 """
@@ -42,8 +41,6 @@ function build_analytic_table(max_d::Int, q_sq::T) where T
     end
     return table
 end
-
-
 
 
 # -- Internal computations ---

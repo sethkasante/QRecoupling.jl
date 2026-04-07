@@ -1,6 +1,6 @@
 
 # --------------------------------------------------------------
-#  -- Combinatorial Builders for Quantum Recoupling Symbols --
+#  -- DCR Builders for Quantum Recoupling Symbols --
 # --------------------------------------------------------------
 
 
@@ -21,6 +21,7 @@ end
 
 @inline qdim_mono(j::Spin) = qint_mono(round(Int, 2j + 1))
 
+#qfact_mono
 
 """
     rmatrix_mono(j1, j2, j3) -> CyclotomicMonomial
@@ -30,36 +31,13 @@ phases as exact integers, bypassing float precision loss.
 """
 function rmatrix_mono(j1::Spin, j2::Spin, j3::Spin)
     # The true physical exponent is: 1/2 * (c3 - c1 - c2)
-    # Since q_pow now tracks powers of q^{1/4}, we multiply the true exponent by 4.
+    # q_pow now tracks powers of q^{1/4}
     p = round(Int, 2 * (j3*(j3+1) - j1*(j1+1) - j2*(j2+1))) 
     
-    # Standard SU(2) braiding parity sign (-1)^{j1+j2-j3}
+    # parity sign
     s = iseven(round(Int, j1 + j2 - j3)) ? 1 : -1
     
     return CyclotomicMonomial(Int8(s), p, Pair{Int,Int}[], 0)
-end
-
-
-# --- buffers for multiplying integers, factorials ----
-
-function add_qint!(buf::CycloBuffer, n::Int, p::Int=1)
-    n <= 1 && return
-    buf.q_pow += p * (1 - n) 
-    ensure_capacity!(buf, n)
-    @inbounds for d in 2:n
-        (n % d == 0) && (buf.exps[d] += p)
-    end
-    n > buf.max_d && (buf.max_d = n)
-end
-
-function add_qfact!(buf::CycloBuffer, n::Int, p::Int=1)
-    n <= 1 && return
-    buf.q_pow += p * (n * (1 - n) ÷ 2)
-    ensure_capacity!(buf, n)
-    @inbounds for d in 2:n
-        buf.exps[d] += p * (n ÷ d)
-    end
-    n > buf.max_d && (buf.max_d = n)
 end
 
 
@@ -73,8 +51,10 @@ end
 end
 
 @inline function qtetrahedron!(buf, j1, j2, j3, j4, j5, j6)
-    qtriangle!(buf, j1, j2, j3); qtriangle!(buf, j1, j5, j6)
-    qtriangle!(buf, j2, j4, j6); qtriangle!(buf, j3, j4, j5)
+    qtriangle!(buf, j1, j2, j3)
+    qtriangle!(buf, j1, j5, j6)
+    qtriangle!(buf, j2, j4, j6)
+    qtriangle!(buf, j3, j4, j5)
 end
 
 # --- Recoupling Symbols (3j & 6j) ---
@@ -91,8 +71,8 @@ function q3j_dcr(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = -m
     # Initialize buffer 
     buf = CycloBuffer(max(z_max + 2, round(Int, j1 + j2 + j3 + 1)))
 
-    return build_dcr!(buf,
-        # Prefactor: triangle factorials * (j ± m) factorials
+    return build_generic_dcr!(buf,
+        # Prefactor
         b -> begin
             qtriangle!(b, j1, j2, j3)
             # Add (j ± m)! terms explicitly 
@@ -100,17 +80,21 @@ function q3j_dcr(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = -m
             add_qfact!(b, round(Int, j2 + m2)); add_qfact!(b, round(Int, j2 - m2))
             add_qfact!(b, round(Int, j3 + m3)); add_qfact!(b, round(Int, j3 - m3))
         end,
+
         # Base Term (at z_min)
         (b, z) -> (add_qfact!(b, z, -1); 
                     map(a -> add_qfact!(b, a+z, -1), α); 
                     map(bv -> add_qfact!(b, bv-z, -1), β)
                    ),
+        
         # Ratio R_z = Term(z+1)/Term(z)
         (b, z) -> (map(bv -> add_qint!(b, bv-z), β); 
                     add_qint!(b, z+1, -1); 
                     map(a -> add_qint!(b, a+z+1, -1), α)
                    ),
-        z_min, z_max
+        z_min, z_max;
+        extract_radical = true,
+        alternating_sign = true
     )
 end
 
@@ -123,19 +107,24 @@ function q6j_dcr(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
     z_min, z_max = max(α...), min(β...)
     buf = CycloBuffer(max(z_max + 2, β...))
 
-    return build_dcr!(buf,
+    return build_generic_dcr!(buf,
         b -> qtetrahedron!(b, j1, j2, j3, j4, j5, j6),
         # base term 
-        (b, z) -> (add_qfact!(b, z+1); 
+        (b, z) -> begin 
+                    add_qfact!(b, z+1); 
                     map(a -> add_qfact!(b, z-a, -1), α); 
                     map(bv -> add_qfact!(b, bv-z, -1), β)
-                   ),
+                end,
+
         # ratios 
-        (b, z) -> (add_qint!(b, z+2); 
+        (b, z) -> begin 
+                    add_qint!(b, z+2); 
                     map(bv -> add_qint!(b, bv-z), β); 
                     map(a -> add_qint!(b, z+1-a, -1), α)
-                   ),
-        z_min, z_max
+                end,
+        z_min, z_max;
+        extract_radical = true,
+        alternating_sign = true
     )
 end
 
