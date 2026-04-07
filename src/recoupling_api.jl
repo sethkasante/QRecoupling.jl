@@ -145,7 +145,7 @@ function theta_value(j1::Spin, j2::Spin, j3::Spin;
     end
     
     # Classical limit catch
-    if (!isnothing(q) && (q == 1 || q == 1.0)) || (!isnothing(k) && k == Inf)
+    if !isnothing(q) && (q == 1 || q == 1.0)
         return exact ? project_classical_exact(mono) : project_classical(mono, T)
     end
     
@@ -163,7 +163,7 @@ Quantum dimension [2j+1]_q.
 function qdim(j::Spin; k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
     mono = qdim_mono(j)
     
-    if (!isnothing(q) && (q == 1 || q == 1.0)) || (!isnothing(k) && k == Inf)
+    if !isnothing(q) && (q == 1 || q == 1.0)
         return exact ? project_classical_exact(mono) : project_classical(mono, T)
     end
     
@@ -188,7 +188,7 @@ function rmatrix(j1::Spin, j2::Spin, j3::Spin;
     end
     
     # Classical limit catch
-    if (!isnothing(q) && (q == 1 || q == 1.0)) || (!isnothing(k) && k == Inf)
+    if !isnothing(q) && (q == 1 || q == 1.0)
         return T(mono.sign)
     end
     

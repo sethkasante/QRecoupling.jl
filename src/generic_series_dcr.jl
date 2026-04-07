@@ -187,7 +187,7 @@ function project_dcr(dcr::DCR;
                      T::Type=Float64)
     
     # ---  classical limit (q -> 1) ---
-    if (!isnothing(q) && (q == 1 || q == 1.0)) || (!isnothing(k) && k == Inf)
+    if !isnothing(q) && (q == 1 || q == 1.0)
         return exact ? project_classical_exact(dcr) : project_classical(dcr, T)
     end
 
