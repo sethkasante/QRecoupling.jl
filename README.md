@@ -136,7 +136,7 @@ julia> gsymbol(1, 1, 1, 1, 1, 1, k=5)
 ```julia
 
 # build the q-series 
-julia> custom_series = build_generic_dcr(
+julia> custom_series = build_dcr(
            b -> nothing,                       
            (b, z) -> add_qfact!(b, z),      # base term at z_min   
            (b, z) -> add_qint!(b, z + 1),   # ratio: T_{z+1}/T_z = [z+1]_q   
