@@ -2,7 +2,7 @@ name = "QRecoupling"
 uuid = "12fbc973-52c7-4af8-b64a-f7602a7eb369"
 version = "0.2.0"
 authors = ["Seth K. Asante <seth.kurankyi@gmail.com>"]
-description = "Stable and Efficient evaluation of quantum recoupling coefficients and q-hypergeometric series via cyclotomic factorization."
+description = "Efficient evaluation of quantum recoupling coefficients and q-hypergeometric series via cyclotomic factorization."
 keywords = ["quantum-gravity", "tqft", "tensor-networks", "spin-foam", "hypergeometric-series", "math","physics","Racah","quantum-wigner"]
 
 [deps]

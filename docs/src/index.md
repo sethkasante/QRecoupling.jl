@@ -3,13 +3,16 @@ CurrentModule = QRecoupling
 ```
 # QRecoupling.jl
 
-*Stable and Exact Evaluation of q-Hypergeometric Series via Cyclotomic Factorization.*
+*Stable and Exact Evaluation of quantum recoupling coefficients and q-Hypergeometric Series via Cyclotomic Factorization.*
 
 **QRecoupling.jl** is a high-performance Julia library for the exact, stable, and scalable evaluation of quantum recoupling coefficients and generic $q$-hypergeometric series. 
 
 > **Notice of Migration:** `QRecoupling.jl` is the official, expanded successor to the deprecated package `QRacahSymbols.jl`. It has been completely rewritten and renamed to reflect its broader scope in topological quantum field theory (TQFT) and mathematics.
 
-## The Core Philosophy: Separate Algebra from Evaluation
+## The Core Philosophy 
+
+The main idea is to 
+> Separate Algebra from Evaluation
 
 The numerical evaluation of highly oscillatory $q$-hypergeometric series (like the quantum $6j$-symbols) is susceptible to catastrophic cancellation and intermediate expression swell. 
 
@@ -37,7 +40,7 @@ pkg> add QRecoupling
 
 ---
 ## Outline 
-Please navigate through the documentation to learn how to leverage the package
+Please navigate through the documentation to learn more about the package
 ```@contents
 Pages = [
     "series.md",
