@@ -33,6 +33,6 @@ export project_classical, project_classical_exact
 
 # Export api for generic series
 export CyclotomicMonomial, DCR
-export add_qint!, add_qfact!, build_generic_dcr, project_dcr
+export add_qint!, add_qfact!, build_dcr, build_dcr!, project_dcr
 
 end

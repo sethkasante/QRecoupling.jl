@@ -169,7 +169,7 @@ function build_dcr(pref_func::Function,
     initial_capacity = max(20, z_max + 10)
     buf = CycloBuffer(initial_capacity)
 
-    return _build_dcr!(buf, pref_func, base_func, ratio_func, z_min, z_max;
+    return build_dcr!(buf, pref_func, base_func, ratio_func, z_min, z_max;
                               extract_radical=extract_radical, 
                               alternating_sign=alternating_sign)
 end
