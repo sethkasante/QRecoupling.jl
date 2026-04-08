@@ -1,9 +1,9 @@
 
 # Proving Topological Identities
 
-The true power of `QRecoupling.jl` lies in its ability to effortlessly verify the foundational axioms of 3D topological quantum field theories (TQFTs). 
+Another advantage of `QRecoupling.jl` is its ability to verify axioms of 3D topological quantum field theories (TQFTs). 
 
-In this tutorial, we will use the package's multi-paradigm engines to prove the two most important topological identities in the Turaev-Viro/Ponzano-Regge state sum models: The **Orthogonality Relation** (Bubble Move) and the **Biedenharn-Elliott Pentagon Identity** (Pachner 2-3 Move).
+In this tutorial, we will prove the two most important topological identities in the Turaev-Viro/Ponzano-Regge state sum models: The **Orthogonality Relation** (Bubble Move) and the **Biedenharn-Elliott Pentagon Identity** (Pachner 2-3 Move).
 
 ---
 
@@ -33,12 +33,12 @@ x_max = min(j1 + j5, j2 + j4, k - max(j1+j5, j2+j4))
 
 for x in x_min:1:x_max
     # Compute the exact symbols
-    res_A = q6j(j1, j2, j3, j4, j5, x, k; mode=:exact)
-    res_B = q6j(j1, j2, j3, j4, j5, x, k; mode=:exact)
+    res_A = q6j(j1, j2, j3, j4, j5, x, k=k, exact=true)
+    res_B = q6j(j1, j2, j3, j4, j5, x, k=k, exact=true)
     
     # Square the symbol and multiply by the quantum dimension
     squared_symbol = res_A * res_B 
-    dim_x = qdim(x, k; mode=:exact)
+    dim_x = qdim(x, k=k, exact=true)
     
     # Add to the running total (extracting factor from the ExactResult)
     sum_val += (squared_symbol * dim_x).factor
@@ -80,12 +80,12 @@ lhs_sum = 0.0
 
 for x in 0:k
     # The numeric engine automatically returns 0.0 for inadmissible bounds
-    w1 = q6j(j1, j2, j12, l1, l2, x, k; mode=:numeric)
-    w2 = q6j(j1, x, l2, l3, j3, j23, k; mode=:numeric)
-    w3 = q6j(l1, j2, x, j3, l3, l2, k; mode=:numeric)
+    w1 = q6j(j1, j2, j12, l1, l2, x, k=k)
+    w2 = q6j(j1, x, l2, l3, j3, j23, k=k)
+    w3 = q6j(l1, j2, x, j3, l3, l2, k=k)
     
-    if w1 != 0.0 && w2 != 0.0 && w3 != 0.0
-        dim_x = qdim(x, k; mode=:numeric)
+    if !iszero(w1) && !iszero(w2) && !iszero(w3)
+        dim_x = qdim(x, k=k)
         
         # Topological phase shift
         phase = iseven(round(Int, j12 + j23 + x + l2)) ? 1.0 : -1.0
@@ -95,8 +95,8 @@ for x in 0:k
 end
 
 # Right Hand Side: { } * { }
-rhs_w1 = q6j(j12, j3, j23, l3, l1, l2, k; mode=:numeric)
-rhs_w2 = q6j(j1, j2, j12, j3, j23, l1, k; mode=:numeric)
+rhs_w1 = q6j(j12, j3, j23, l3, l1, l2, k=k)
+rhs_w2 = q6j(j1, j2, j12, j3, j23, l1, k=k)
 rhs_val = rhs_w1 * rhs_w2
 
 println("Pentagon LHS : ", lhs_sum)
