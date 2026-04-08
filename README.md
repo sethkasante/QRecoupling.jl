@@ -163,4 +163,4 @@ For the complete API reference, interactive tutorials, and deep dives into the m
 
 If you use `QRecoupling.jl` in your research, please cite the following paper:
 
-> Seth K. Asante, *"Deferred Cyclotomic Representations for Efficient Evaluation of q-Hypergeometric Series"* (To appear soon, 2026). arXiv:XXXX.XXXXX.
+> Seth K. Asante, *"Efficient Evaluation of q-Hypergeometric Series via Cyclotomic Factorization"* (To appear soon, 2026). arXiv:XXXX.XXXXX.
