@@ -19,6 +19,7 @@ makedocs(;
     pages = [
         "Home" => "index.md",
         "Theory & Architecture" => "series.md",
+        "Recoupling Symbols" => "tqft.md",
         "Tutorials" => [
             "Proving Identities" => "tutorials/identities.md",
         ],

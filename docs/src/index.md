@@ -40,8 +40,8 @@ pkg> add QRecoupling
 Please navigate through the documentation to learn how to leverage the package
 ```@contents
 Pages = [
-    "tqft.md",
     "series.md",
+    "tqft.md",
     "tutorials/identities.md",
     "api.md"
 ]
