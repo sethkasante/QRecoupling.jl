@@ -71,7 +71,7 @@ function q3j_dcr(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = -m
     # Initialize buffer 
     buf = CycloBuffer(max(z_max + 2, round(Int, j1 + j2 + j3 + 1)))
 
-    return _build_generic_dcr!(buf,
+    return build_dcr!(buf,
         # Prefactor
         b -> begin
             qtriangle!(b, j1, j2, j3)
@@ -107,7 +107,7 @@ function q6j_dcr(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
     z_min, z_max = max(α...), min(β...)
     buf = CycloBuffer(max(z_max + 2, β...))
 
-    return _build_generic_dcr!(buf,
+    return build_dcr!(buf,
         b -> qtetrahedron!(b, j1, j2, j3, j4, j5, j6),
         # base term 
         (b, z) -> begin 

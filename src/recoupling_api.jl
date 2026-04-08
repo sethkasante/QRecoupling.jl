@@ -41,7 +41,7 @@ end
 
 """
     q3j(j1, j2, j3, m1, m2, m3; k=nothing, q=nothing, exact::Bool=false, eager::Bool=false, T=Float64)
-Returns the Wigner 3j-symbol.
+Returns the quantum Wigner 3j-symbol.
 """
 function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin=-m1-m2; 
              k=nothing, q=nothing, exact::Bool=false, eager::Bool=false, T::Type=Float64)

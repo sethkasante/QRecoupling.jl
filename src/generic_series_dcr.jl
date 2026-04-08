@@ -94,8 +94,17 @@ end
 
 
 # --- Universal DCR assembler  ---
+"""
+    build_dcr!(pref_func, base_func, ratio_func, z_min, z_max; kwargs...)
 
-function _build_generic_dcr!(buf::CycloBuffer, 
+The master DCR compiler. Generates the full combinatorial skeleton of an arbitrary 
+sequence by orchestrating closures over a highly optimized `CycloBuffer`.
+
+**Keyword Arguments:**
+- `extract_radical::Bool` (default `false`): If true, searches the prefactor for perfect squares and separates them into the `root` and `radical` fields.
+- `alternating_sign::Bool` (default `false`): If true, automatically injects a (-1)^z term into the sequence (standard for recoupling invariants).
+"""
+function build_dcr!(buf::CycloBuffer, 
                             pref_func::Function, 
                             base_func::Function, 
                             ratio_func::Function, 
@@ -143,16 +152,12 @@ end
 
 
 """
-    build_generic_dcr!(buf::CycloBuffer, pref_func, base_func, ratio_func, z_min, z_max; kwargs...)
+    build_dcr(pref_func, base_func, ratio_func, z_min, z_max; kwargs...)
 
 The master DCR compiler. Generates the full combinatorial skeleton of an arbitrary 
-sequence by orchestrating closures over a highly optimized `CycloBuffer`.
-
-**Keyword Arguments:**
-- `extract_radical::Bool` (default `false`): If true, searches the prefactor for perfect squares and separates them into the `root` and `radical` fields.
-- `alternating_sign::Bool` (default `false`): If true, automatically injects a (-1)^z term into the sequence (standard for recoupling invariants).
+sequence. 
 """
-function build_generic_dcr(pref_func::Function, 
+function build_dcr(pref_func::Function, 
                            base_func::Function, 
                            ratio_func::Function, 
                            z_min::Int, 
@@ -164,7 +169,7 @@ function build_generic_dcr(pref_func::Function,
     initial_capacity = max(20, z_max + 10)
     buf = CycloBuffer(initial_capacity)
 
-    return _build_generic_dcr!(buf, pref_func, base_func, ratio_func, z_min, z_max;
+    return _build_dcr!(buf, pref_func, base_func, ratio_func, z_min, z_max;
                               extract_radical=extract_radical, 
                               alternating_sign=alternating_sign)
 end
