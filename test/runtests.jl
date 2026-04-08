@@ -118,7 +118,7 @@ using Nemo
             f2 = q6j(j1, x, l3, l2, j3, j23, k=k)
             f3 = q6j(l1, j2, x, j3, l2, l3, k=k)
             
-            if f1 != 0 && f2 != 0 && f3 != 0
+            if !iszero(f1) && !iszero(f2) && !iszero(f3)
                 dim_x = qdim(x, k=k)
                 phase = iseven(round(Int, j12 + j23 + x + l1 + l2 + l3)) ? 1 : -1
                 lhs += phase * dim_x * f1 * f2 * f3
