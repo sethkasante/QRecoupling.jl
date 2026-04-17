@@ -45,18 +45,18 @@ function compute_amplification(j, k::Int)
         sum_abs_T += T_z
         sum_S += (iseven(z) ? T_z : -T_z)
         
-        # eager γ (Log-Sum swell)
+        # γ_eager (Log-Sum swell)
         log_Nz_eager = sum(view(log_qint, 1:z+1))
         log_Dz_eager = 4 * sum(view(log_qint, 1:z-3j)) + 3 * sum(view(log_qint, 1:4j-z))
         
         gamma_eager = log_Nz_eager + log_Dz_eager
         (gamma_eager > max_gamma_eager) && (max_gamma_eager = gamma_eager)
         
-        # --- C. DCR Gamma (Symbolic minimal swell) ---
+        # γ_DCR
         log_Nz_dcr, log_Dz_dcr = 0.0, 0.0
         
         for d in 2:z+1
-            # Exact integer exponent sieve
+            # integer exponent sieve
             e_d = floor(Int, (z+1)/d) - 4 * floor(Int, (z-3j)/d) - 3 * floor(Int, (4j-z)/d)
             
             if e_d > 0
@@ -80,9 +80,14 @@ function compute_amplification(j, k::Int)
     return (log10_kappa, max_gamma_eager, max_gamma_dcr)
 end
 
+#samples
 # j= 10
 # compute_amplification(j,4j)
 # (1.2748894577139092, 61.091413429608444, 18.996838137590856)
+
+# j= 100
+# compute_amplification(j,4j)
+# (14.390682814574646, 1352.6535207963473, 212.48694509649596)
 
 # j= 500
 # compute_amplification(j,4j)
