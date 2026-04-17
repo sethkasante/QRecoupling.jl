@@ -68,7 +68,7 @@ pkg> add QRecoupling
 
 Evaluate the core quantum $6j$ and $3j$ (Racah-Wigner) symbols. The **mode** keyword controls the computational engine. Output values may vary slightly based on the floating-point precision.
 
-### DRC algebraic object construction
+### DCR algebraic object construction
 ```julia
 using QRecoupling
 
