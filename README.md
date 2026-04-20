@@ -38,7 +38,7 @@ A single DCR object can be evaluated in multiple regimes:
 | Regime | Description |
 |------|-------------|
 | **Root of unity ($k$)** | Fast numerical evaluation using Log-Sum-Exp |
-| **Exact algebraic** | Evaluation in cyclotomic fields via `Nemo.jl` |
+| **Exact algebraic** | Evaluation in cyclotomic fields ($\zeta$) via `Nemo.jl` |
 | **Complex analytic** | Efficient evaluation for $q \in \mathbb{C}$ |
 | **Classical limit** | Exact $q \to 1$ reduction |
 
