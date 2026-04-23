@@ -77,7 +77,7 @@ Bypasses iterator allocations and safety branches to ensure nanosecond-scale exe
     lm = zero(T)
     pe = m.phi_exps
     
-    @inbounds for i in 1:length(pe)
+    @inbounds @simd for i in 1:length(pe)
         p = pe[i]
         lm += p.second * table[p.first]
     end
@@ -105,6 +105,9 @@ function project_discrete(m::CyclotomicMonomial, k::Int, ::Type{T}=Float64) wher
     return m.sign * exp(lm)
 end
 
+function project_discrete(m::CyclotomicMonomial; k=k::Int, T=Float64)
+    project_discrete(m,k,T)
+end
 
 
 function _evaluate_discrete_dcr(res::DCR, k::Int, ::Type{T}, buffer::Vector{T}) where {T}
