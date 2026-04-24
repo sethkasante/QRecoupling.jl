@@ -5,7 +5,6 @@
 # -------------------------------------------------------------
 
 
-
 # --- Exact projection types (Nemo/cyclotomic field Q(ζ)) ---- 
 
 """
@@ -29,26 +28,45 @@ function Base.:(==)(a::CycloExactResult, b::CycloExactResult)
 end
 
 # Add two exact results if they share the same radical.
-function Base.:+(a::CycloExactResult, b::CycloExactResult)
-    a.k != b.k && error("Level mismatch")
-    if a.radical == b.radical
-        return CycloExactResult(a.k, a.radical, a.sum_factor + b.sum_factor)
-    elseif iszero(a.sum_factor)
-        return b
-    elseif iszero(b.sum_factor)
-        return a
-    else
-        # If radicals differ, verification is done by checking if Sum(res_i) is zero.
-        # This usually requires moving radicals into the field (if they are perfect squares).
-        error("Cannot sum exact results with different radicals algebraically.")
-    end
-end
+# function Base.:+(a::CycloExactResult, b::CycloExactResult)
+#     a.k != b.k && error("Level mismatch")
+#     if a.radical == b.radical
+#         return CycloExactResult(a.k, a.radical, a.sum_factor + b.sum_factor)
+#     elseif iszero(a.sum_factor)
+#         return b
+#     elseif iszero(b.sum_factor)
+#         return a
+#     else
+#         # If radicals differ, verification is done by checking if Sum(res_i) is zero.
+#         # This usually requires moving radicals into the field (if they are perfect squares).
+#         error("Cannot sum exact results with different radicals algebraically.")
+#     end
+# end
 
-Base.:-(a::CycloExactResult, b::CycloExactResult) = a + CycloExactResult(b.k, b.radical, -b.sum_factor)
+# Base.:-(a::CycloExactResult, b::CycloExactResult) = a + CycloExactResult(b.k, b.radical, -b.sum_factor)
 Base.iszero(res::CycloExactResult) = iszero(res.sum_factor)
 
 # Scalar multiplication
 Base.:*(c::Number, res::CycloExactResult) = CycloExactResult(res.k, res.radical, c * res.sum_factor)
+
+Base.zero(res::CycloExactResult) = CycloExactResult(res.k, ZERO_MONOMIAL, zero(res.sum_factor))
+Base.one(res::CycloExactResult)  = CycloExactResult(res.k, ONE_MONOMIAL, one(res.sum_factor))
+
+function Base.:*(a::CycloExactResult{T}, b::CycloExactResult{T}) where T
+    a.k != b.k && error("Level k mismatch in multiplication.")
+    
+    buf = CycloBuffer(max(a.radical.max_d, b.radical.max_d))
+    mul!(buf, a.radical, b.radical)
+    
+    # Extract perfect squares
+    root_mono, new_rad = snapshot_square_root(buf)
+    
+    root_val = project_exact(root_mono, a.k)
+    new_factor = a.sum_factor * b.sum_factor * root_val
+    
+    return CycloExactResult{T}(a.k, new_rad, new_factor)
+end
+
 
 #  --- Conversion to Float64 for sanity checks ---
 # function Base.Complex{T}(res::CycloExactResult) where T <: AbstractFloat
@@ -56,6 +74,94 @@ Base.:*(c::Number, res::CycloExactResult) = CycloExactResult(res.k, res.radical,
 #     rad_val = project_analytic(res.radical, exp(im*π/(res.k+2)))
 #     return Complex{T}(rad_val * res.sum_factor)
 # end
+
+
+"""
+    CompositeExactResult{T}
+Represents a formal sum of `CycloExactResult`s with potentially different radicals.
+Automatically groups terms that share the same square-free radical.
+"""
+struct CompositeExactResult{T}
+    k::Int
+    terms::Dict{CyclotomicMonomial, T}
+end
+
+# Constructor to build an empty composite result for a given level k
+function CompositeExactResult(k::Int, ::Type{T}) where T
+    return CompositeExactResult{T}(k, Dict{CyclotomicMonomial, T}())
+end
+
+# Constructor to upgrade a single CycloExactResult into a Composite
+function CompositeExactResult(res::CycloExactResult{T}) where T
+    dict = Dict{CyclotomicMonomial, T}()
+    if !iszero(res)
+        dict[res.radical] = res.sum_factor
+    end
+    return CompositeExactResult{T}(res.k, dict)
+end
+
+# --- Addition: Cyclo + Cyclo ---
+function Base.:+(a::CycloExactResult, b::CycloExactResult)
+    a.k != b.k && error("Cannot sum exact results from different levels (k=$(a.k) vs k=$(b.k))")
+    
+    # If radicals match, keep it as a simple CycloExactResult
+    if a.radical == b.radical
+        return CycloExactResult(a.k, a.radical, a.sum_factor + b.sum_factor)
+    end
+    
+    # If radicals differ, promote to CompositeExactResult
+    comp = CompositeExactResult(a)
+    return comp + b
+end
+
+# --- Addition: Composite + Cyclo ---
+function Base.:+(comp::CompositeExactResult{T}, b::CycloExactResult{T}) where T
+    comp.k != b.k && error("Level mismatch")
+    iszero(b) && return comp
+    
+    new_terms = copy(comp.terms)
+    if haskey(new_terms, b.radical)
+        new_terms[b.radical] += b.sum_factor
+        # Clean up exact zeros to keep the dictionary sparse
+        iszero(new_terms[b.radical]) && delete!(new_terms, b.radical)
+    else
+        new_terms[b.radical] = b.sum_factor
+    end
+    
+    return CompositeExactResult{T}(comp.k, new_terms)
+end
+
+# Allow commutative addition
+Base.:+(a::CycloExactResult, b::CompositeExactResult) = b + a
+
+# --- Addition: Composite + Composite ---
+function Base.:+(a::CompositeExactResult{T}, b::CompositeExactResult{T}) where T
+    a.k != b.k && error("Level mismatch")
+    
+    new_terms = copy(a.terms)
+    for (rad, factor) in b.terms
+        if haskey(new_terms, rad)
+            new_terms[rad] += factor
+            iszero(new_terms[rad]) && delete!(new_terms, rad)
+        else
+            new_terms[rad] = factor
+        end
+    end
+    
+    return CompositeExactResult{T}(a.k, new_terms)
+end
+
+# --- Subtraction ---
+Base.:-(a::CycloExactResult) = CycloExactResult(a.k, a.radical, -a.sum_factor)
+Base.:-(a::CompositeExactResult{T}) where T = CompositeExactResult{T}(a.k, Dict(rad => -fac for (rad, factor) in a.terms))
+
+Base.:-(a::CycloExactResult, b::CycloExactResult) = a + (-b)
+Base.:-(a::CompositeExactResult, b::CycloExactResult) = a + (-b)
+Base.:-(a::CycloExactResult, b::CompositeExactResult) = a + (-b)
+Base.:-(a::CompositeExactResult, b::CompositeExactResult) = a + (-b)
+
+
+
 
 
 

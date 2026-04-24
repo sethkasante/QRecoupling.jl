@@ -14,7 +14,7 @@ include("generic_series_dcr.jl")
 include("recoupling_dcr.jl") # recoupling symbols and tqft invariants
 
 include("projection_classical.jl")
-include("projection_direct.jl")
+include("projection_discrete.jl")
 include("projection_exact.jl")
 include("projection_analytic.jl")       
 include("eager_discrete.jl")  
