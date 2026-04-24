@@ -86,7 +86,7 @@ Returns `(log_magnitude::T, sign::Int)` for monomial `m` in the q→1 limit.
 `ensure_classical_sieve` has been called — this avoids repeated global
 lookups in hot loops.
 """
-@inline function _log_mag_classical(m::CyclotomicMonomial,lmag::Vector{Float64},:Type{T}) where T
+@inline function _log_mag_classical(m::CyclotomicMonomial,lmag::Vector{Float64},::Type{T}) where T
     m.sign == 0 && return (-T(Inf), 0)
 
     lm = zero(T)
