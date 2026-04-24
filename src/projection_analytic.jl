@@ -16,31 +16,26 @@
 Computes exact complex values of Φ_d(q²) up to max_d.
 """
 function build_analytic_table(max_d::Int, q_sq::T) where T
+    max_d == 0 && return Vector{T}(undef, 0)
     table = Vector{T}(undef, max_d)
-    max_d == 0 && return table
-    
-    # Φ_1(q^2) = q^2 - 1
-    table[1] = q_sq - one(T)
-    
-    q_curr = q_sq * q_sq
-    @inbounds for n in 2:max_d
-        val = q_curr - one(T) # (q^2)^n - 1
-        
-        # Factor out the lower divisors
+
+    q_pow = q_sq  # tracks (q²)^n
+    @inbounds for n in 1:max_d
+        val = q_pow - one(T)  # (q²)^n - 1 = ∏_{d|n} Φ_d(q²)
         for d in 1:(n-1)
             if n % d == 0
-                if iszero(table[d])
-                     val = zero(T)
-                     break
-                end
-                val /= table[d]
+                td = table[d]
+                iszero(td) && throw(DomainError(q_sq,
+                    "q² is a primitive $(d)-th root of unity; Φ_$n is singular here."))
+                val /= td
             end
         end
         table[n] = val
-        q_curr *= q_sq
+        q_pow *= q_sq
     end
     return table
 end
+
 
 
 # -- Internal computations ---
@@ -57,26 +52,29 @@ M =  q^{q_pow} * ∏ Φ_d(q²)^e
     val = one(T)
     pe = m.phi_exps
     
+    
     @inbounds for i in 1:length(pe)
         p = pe[i]
         d, e = p.first, p.second
         
         # unroll exponent to bypass complex `^` operator
+        td   = table[d]
+        
         if e == 1
-            val *= table[d]
+            val *= td
         elseif e == -1
-            iszero(table[d]) && throw(DomainError(d, "Division by zero: Φ_$d(q²) = 0."))
-            val /= table[d]
+            iszero(td) && throw(DomainError(d, "Division by zero: Φ_$d(q²) = 0."))
+            val /= td
         elseif e == 2
-            val *= (table[d] * table[d])
+            val *= (td * td)
         elseif e == -2
-            iszero(table[d]) && throw(DomainError(d, "Division by zero: Φ_$d(q²) = 0."))
-            val /= (table[d] * table[d])
+            iszero(td) && throw(DomainError(d, "Division by zero: Φ_$d(q²) = 0."))
+            val /= (td * td)
         elseif e > 0
-            val *= table[d]^e
+            val *= td^e
         else
-            iszero(table[d]) && throw(DomainError(d, "Division by zero: Φ_$d(q²) = 0."))
-            val /= table[d]^(-e)
+            iszero(td) && throw(DomainError(d, "Division by zero: Φ_$d(q²) = 0."))
+            val /= td^(-e)
         end
     end
     
@@ -122,10 +120,10 @@ end
 Evaluates a single quantum monomial
 """
 function project_analytic(m::CyclotomicMonomial, q::Number)
-    T = typeof(q * 1.0) 
+    T = typeof(float(q)) 
     
     m.sign == 0 && return zero(T)
-    abs(q - 1.0) < 1e-12 && throw(ArgumentError("For q=1, use mode=:classical instead."))
+    q ≈ one(T) && throw(ArgumentError("q ≈ 1: use classical mode instead (set q=1)."))
     
     q_T = T(q)
     q_sq = q_T * q_T

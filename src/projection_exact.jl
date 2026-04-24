@@ -23,6 +23,7 @@
 
 # Stores (V_exact, V_inv) per level k. Rebuilds if max_d increases.
 const EXACT_PHI_CACHE = LRU{Int, Any}(maxsize = 500)
+const EXACT_PHI_LOCK = ReentrantLock()
 
 """
     _phi_exact_table(D_max::Int, k::Int, ζ::T)
@@ -55,10 +56,12 @@ function _phi_exact_table(D_max::Int, k::Int, ζ::T) where T
 end
 
 @inline function get_phi_exact_table(D_max::Int, k::Int, ζ::T) where T
-    if !haskey(EXACT_PHI_CACHE, k) || length((EXACT_PHI_CACHE[k])[1]) < D_max
-        EXACT_PHI_CACHE[k] = _phi_exact_table(D_max, k, ζ)
+    lock(EXACT_PHI_LOCK) do
+        if !haskey(EXACT_PHI_CACHE, k) || length((EXACT_PHI_CACHE[k])[1]) < D_max
+            EXACT_PHI_CACHE[k] = _phi_exact_table(D_max, k, ζ)
+        end
+        return EXACT_PHI_CACHE[k]::Tuple{Vector{T}, Vector{T}}
     end
-    return EXACT_PHI_CACHE[k]::Tuple{Vector{T}, Vector{T}}
 end
 
 
