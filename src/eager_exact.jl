@@ -65,30 +65,36 @@ struct ExactSU2kModel
     q_ints::Vector{nf_elem}       
 end
 
-const EXACT_MODEL_CACHE = LRU{Int, ExactSU2kModel}(maxsize=150)
+const EXACT_MODEL_CACHE   = Dict{Int, ExactSU2kModel}()
+const EXACT_MODEL_LOCK = ReentrantLock()
 
 function ExactSU2kModel(k::Int)
-    # @warn "Building ExactSU2kModel for SU(2)_{$k}. Dense polynomial caching can trigger memory exhaustion for k > 100." maxlog=1
-    get!(EXACT_MODEL_CACHE, k) do
-        h = k + 2
-        # Q(ζ) where ζ = exp(i2π/2h)
-        K, z = cyclotomic_field(2h, "ζ") 
-        
-        q_facts = Vector{nf_elem}(undef, k + 4)
-        q_ints  = Vector{nf_elem}(undef, k + 4)
-        
-        q_facts[1] = K(1) # [0]! = 1
-        q_ints[1]  = K(0) # [0] = 0
-        
-        z_inv = inv(z)
-        den_inv = inv(z - z_inv)
-        
-        @inbounds for n in 1:(k+3)
-            q_int = (z^n - z_inv^n) * den_inv
-            q_ints[n+1] = q_int
-            q_facts[n+1] = q_facts[n] * q_int
+    # @warn "Building ExactSU2kModel for SU(2)_{$k}. Dense polynomial caching can trigger memory exhaustion for k > 200." maxlog=1
+    
+    
+    
+    lock(EXACT_MODEL_LOCK) do
+        get!(EXACT_MODEL_CACHE, k) do
+            h = k + 2
+            # Q(ζ) where ζ = exp(i2π/2h)
+            K, z = cyclotomic_field(2h, "ζ") 
+            
+            q_facts = Vector{nf_elem}(undef, k + 4)
+            q_ints  = Vector{nf_elem}(undef, k + 4)
+            
+            q_facts[1] = K(1) # [0]! = 1
+            q_ints[1]  = K(0) # [0] = 0
+            
+            z_inv = inv(z)
+            den_inv = inv(z - z_inv)
+            
+            @inbounds for n in 1:(k+3)
+                q_int = (z^n - z_inv^n) * den_inv
+                q_ints[n+1] = q_int
+                q_facts[n+1] = q_facts[n] * q_int
+            end
+            return ExactSU2kModel(k, K, z, q_facts, q_ints)
         end
-        return ExactSU2kModel(k, K, z, q_facts, q_ints)
     end
 end
 
@@ -97,9 +103,9 @@ end
 # ---- Algebraic Symbol Builders ----- 
 
 # get num and den of triangle coefficients
-@inline function _qΔ2_exact_numden(model::ExactSU2kModel, j1::Spin, j2::Spin, j3::Spin)
-    a, b, c = Int(j1+j2-j3), Int(j1-j2+j3), Int(-j1+j2+j3)
-    d = Int(j1+j2+j3)
+@inline function _qΔ2_exact_numden(model::ExactSU2kModel, J1::Int, J2::Int, J3::Int)
+    a, b, c = (J1+J2-J3) ÷ 2, (J1-J2+J3) ÷ 2, (-J1+J2+J3) ÷ 2
+    d = (J1+J2+J3) ÷ 2
     num = model.q_facts[a+1] * model.q_facts[b+1] * model.q_facts[c+1]
     den = model.q_facts[d+2]
     return num, den
@@ -107,25 +113,26 @@ end
 
 
 """
-    q6j_exact(j1, j2, j3, j4, j5, j6, k)
+    q6j_exact(J1, J2, J3, J4, J5, J6, k)
 Computes the exact SU(2)k Racah symbol using the memory-optimized iterative eager model.
+Inputs uses twice spins (J = 2j).
 """
-function q6j_exact(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k::Int)
-    !qδtet(j1, j2, j3, j4, j5, j6, k) && return ExactResult(k, ExactSU2kModel(k).K(1), ExactSU2kModel(k).K(0))
-    
+function q6j_exact(J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int, k::Int)
+    !qδtet(J1, J2, J3, J4, J5, J6, k) && return ExactResult(k, ExactSU2kModel(k).K(1), ExactSU2kModel(k).K(0))
+
     model = ExactSU2kModel(k)
     
     # prefactor (radical squared)
-    n1, d1 = _qΔ2_exact_numden(model, j1, j2, j3)
-    n2, d2 = _qΔ2_exact_numden(model, j1, j5, j6)
-    n3, d3 = _qΔ2_exact_numden(model, j2, j4, j6)
-    n4, d4 = _qΔ2_exact_numden(model, j3, j4, j5)
+    n1, d1 = _qΔ2_exact_numden(model, J1, J2, J3)
+    n2, d2 = _qΔ2_exact_numden(model, J1, J5, J6)
+    n3, d3 = _qΔ2_exact_numden(model, J2, J4, J6)
+    n4, d4 = _qΔ2_exact_numden(model, J3, J4, J5)
     radical_sq = (n1 * n2 * n3 * n4) * inv(d1 * d2 * d3 * d4)
     
 
-    α1 = Int(j1+j2+j3); α2 = Int(j1+j5+j6); α3 = Int(j2+j4+j6); α4 = Int(j3+j4+j5)
-    β1 = Int(j1+j2+j4+j5); β2 = Int(j1+j3+j4+j6); β3 = Int(j2+j3+j5+j6)
-    
+    α1 = (J1+J2+J3) ÷ 2; α2 = (J1+J5+J6) ÷ 2; α3 = (J2+J4+J6) ÷ 2; α4 = (J3+J4+J5) ÷ 2
+    β1 = (J1+J2+J4+J5) ÷ 2; β2 = (J1+J3+J4+J6) ÷ 2; β3 = (J2+J3+J5+J6) ÷ 2
+
     z_min = max(α1, α2, α3, α4)
     z_max = min(β1, β2, β3, model.k)
     
@@ -154,21 +161,22 @@ function q6j_exact(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin, k
 end
 
 """
-    q3j_exact(j1, j2, j3, m1, m2, m3, k)
+    q3j_exact(J1, J2, J3, M1, M2, M3, k)
 Computes the exact SU(2)k Wigner 3j symbol using the memory-optimized iterative eager model.
+Inputs: twice spins (J = 2j, M = 2m).
 """
-function q3j_exact(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin, k::Int)
-    (!qδ(j1, j2, j3, k) || m1+m2+m3 != 0) && return ExactResult(k, ExactSU2kModel(k).K(1), ExactSU2kModel(k).K(0))
+function q3j_exact(J1::Int, J2::Int, J3::Int, M1::Int, M2::Int, M3::Int, k::Int)
+    (!qδ(J1, J2, J3, k) || M1+M2+M3 != 0) && return ExactResult(k, ExactSU2kModel(k).K(1), ExactSU2kModel(k).K(0))
     
     model = ExactSU2kModel(k)
     
     # prefactor (radical squared)
-    num, den = _qΔ2_exact_numden(model, j1, j2, j3)
-    facts = model.q_facts[Int(j1+m1)+1] * model.q_facts[Int(j1-m1)+1] * model.q_facts[Int(j2+m2)+1] * model.q_facts[Int(j2-m2)+1] * model.q_facts[Int(j3+m3)+1] * model.q_facts[Int(j3-m3)+1]
+    num, den = _qΔ2_exact_numden(model, J1, J2, J3)
+    facts = model.q_facts[(J1+M1) ÷ 2 + 1] * model.q_facts[(J1-M1) ÷ 2 + 1] * model.q_facts[(J2+M2) ÷ 2 + 1] * model.q_facts[(J2-M2) ÷ 2 + 1] * model.q_facts[(J3+M3) ÷ 2 + 1] * model.q_facts[(J3-M3) ÷ 2 + 1]
     triangle_sq = (num * facts) * inv(den)
     
-    α1 = Int(j3 - j2 + m1); α2 = Int(j3 - j1 - m2)
-    β1 = Int(j1 + j2 - j3); β2 = Int(j1 - m1); β3 = Int(j2 + m2)
+    α1 = (J3 - J2 + M1) ÷ 2; α2 = (J3 - J1 - M2) ÷ 2
+    β1 = (J1 + J2 - J3) ÷ 2; β2 = (J1 - M1) ÷ 2; β3 = (J2 + M2) ÷ 2
     
     z_min = max(0, -α1, -α2)
     z_max = min(β1, β2, β3, model.k)
@@ -199,12 +207,12 @@ end
 
 #  --- Fsymbol ----- 
 
-function fsymbol_exact(j1, j2, j3, j4, j5, j6, k)
-    res = q6j_exact(j1, j2, j3, j4, j5, j6, k)
+function fsymbol_exact(J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int, k::Int)
+    res = q6j_exact(J1, J2, J3, J4, J5, J6, k)
     model = ExactSU2kModel(k)
     # scale by sqrt([2j3+1][2j6+1]) and phase
-    dim_sq = model.q_ints[Int(2j3+1)+1] * model.q_ints[Int(2j6+1)+1]
-    phase = iseven(Int(j1+j2+j4+j5)) ? 1 : -1
+    dim_sq = model.q_ints[J3+1] * model.q_ints[J6+1]
+    phase = iseven((J1+J2+J4+J5) ÷ 2) ? 1 : -1
     return ExactResult(k, res.radical_sq * dim_sq, phase * res.factor_sum)
 end
 

@@ -124,12 +124,19 @@ function snapshot(buf::CycloBuffer)
 end
 
 #split exps as e = 2q + r, r∈{-1,0,1}
+# @inline function split_exp(e::Int)
+#     r = (e & 1) == 0 ? 0 : (e > 0 ? 1 : -1)
+#     q = (e - r) >> 1
+#     return q, r
+# end
+
+#Check: any branch choice related issue?
+#split exps as e = 2q + r, r∈{0,1}
 @inline function split_exp(e::Int)
-    r = (e & 1) == 0 ? 0 : (e > 0 ? 1 : -1)
-    q = (e - r) >> 1
+    r = e & 1           
+    q = (e - r) >> 1   
     return q, r
 end
-
 #snapshot for square root of cyclotomic monomials
 #split into perfect square and radical
 function snapshot_square_root(buf::CycloBuffer)

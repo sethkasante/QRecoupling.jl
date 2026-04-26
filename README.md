@@ -24,7 +24,7 @@ All quantities are first represented symbolically in a **Deferred Cyclotomic Rep
 
 ### • Deferred Cyclotomic Representation (DCR)
 A sparse, combinatorial encoding of $q$-hypergeometric series with building blocks 
-$$\mathcal{M} = \sigma\; q^P \prod_d \Phi_d(q^2)^{e_d} $$
+$$\mathcal{M} = \sigma q^P \prod_d \Phi_d(q^2)^{e_d} $$
 
 - the representation is performed using the exponents of the cyclotomic basis {$q,\Phi_d(q^2)$} 
 - multiplication and division translates to addition of exponents 

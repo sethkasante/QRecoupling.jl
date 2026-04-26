@@ -2,6 +2,11 @@
 # Unified Public API for SU(2) TQFT Kernels
 # ---------------------------------------------
 
+# twice spins (J = 2j)
+@inline doubled(j::Spin) = round(Int, 2j)
+@inline doubled(js...)   = map(j -> round(Int, 2j), js)
+
+
 """
     q6j(j1, j2, j3, j4, j5, j6; k=nothing, q=nothing, exact::Bool=false, eager::Bool=false, T=Float64)
     
@@ -45,17 +50,19 @@ Returns the quantum Wigner 3j-symbol.
 """
 function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin=-m1-m2; 
              k=nothing, q=nothing, exact::Bool=false, eager::Bool=false, T::Type=Float64)
-             
+    
+    Js = doubled(j1, j2, j3, m1, m2, m3)
+
     # --- eager evaluation circuit ---
     if eager && !isnothing(k) && isnothing(q)
-        return exact ? q3j_exact(j1, j2, j3, m1, m2, m3, k) : q3j_direct(j1, j2, j3, m1, m2, m3, k, T)
+        return exact ? q3j_exact(Js..., k) : q3j_direct(Js..., k, T)
     end
 
     # --- DCR Construction ---
-    if !isnothing(k) && !qδ(j1, j2, j3, k)
+    if !isnothing(k) && !qδ(Js[1], Js[2], Js[3], k)
         dcr = ZERO_DCR
     else
-        dcr = q3j_dcr(j1, j2, j3, m1, m2, m3)
+        dcr = q3j_dcr(Js...)
     end
     
     # --- Return raw graph if no target is specified ---
@@ -75,10 +82,13 @@ Unitary crossing matrix element: √([d3][d6]) * {6j}.
 function fsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin; 
                  k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
     
-    if !isnothing(k) && !qδtet(j1, j2, j3, j4, j5, j6, k)
+    # F-symbol not fully symmetric! Just double
+    Js = doubled(j1, j2, j3, j4, j5, j6)
+    
+    if !isnothing(k) && !qδtet(Js..., k)
         dcr = ZERO_DCR
     else
-        dcr = fsymbol_dcr(j1, j2, j3, j4, j5, j6)
+        dcr = fsymbol_dcr(Js...)
     end
     
     if isnothing(k) && isnothing(q)
@@ -96,10 +106,13 @@ Tetrahedrally symmetric invariant: √(Π[di]) * {6j}.
 function gsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin; 
                  k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
     
-    if !isnothing(k) && !qδtet(j1, j2, j3, j4, j5, j6, k)
+    # G-symbol is fully symmetric.
+    Js = canonical_spins(j1, j2, j3, j4, j5, j6)
+    
+    if !isnothing(k) && !qδtet(Js..., k)
         dcr = ZERO_DCR
     else
-        dcr = gsymbol_dcr(j1, j2, j3, j4, j5, j6)
+        dcr = gsymbol_dcr(Js...)
     end
     
     if isnothing(k) && isnothing(q)
@@ -117,10 +130,13 @@ Evaluates the standard closed tetrahedron network.
 function tetrahedron(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin; 
                      k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
     
-    if !isnothing(k) && !qδtet(j1, j2, j3, j4, j5, j6, k)
+    # Tetrahedron is symmetric.
+    Js = canonical_spins(j1, j2, j3, j4, j5, j6)
+    
+    if !isnothing(k) && !qδtet(Js..., k)
         dcr = ZERO_DCR
     else
-        dcr = tetrahedron_dcr(j1, j2, j3, j4, j5, j6)
+        dcr = tetrahedron_dcr(Js...)
     end
     
     if isnothing(k) && isnothing(q)
@@ -138,13 +154,15 @@ Value of the Theta-graph.
 function theta_value(j1::Spin, j2::Spin, j3::Spin; 
                      k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
     
-    if !isnothing(k) && !qδ(j1, j2, j3, k)
+    Js = doubled(j1, j2, j3)
+    
+    if !isnothing(k) && !qδ(Js..., k)
         mono = ZERO_MONOMIAL
     else
-        mono = theta_mono(j1, j2, j3) 
+        mono = theta_mono(Js...) 
     end
     
-    # Classical limit catch
+    # classical limit 
     if !isnothing(q) && (q == 1 || q == 1.0)
         return exact ? project_classical_exact(mono) : project_classical(mono, T)
     end
@@ -161,7 +179,8 @@ end
 Quantum dimension [2j+1]_q. 
 """
 function qdim(j::Spin; k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
-    mono = qdim_mono(j)
+    J = doubled(j)
+    mono = qdim_mono(J)
     
     if !isnothing(q) && (q == 1 || q == 1.0)
         return exact ? project_classical_exact(mono) : project_classical(mono, T)
@@ -181,10 +200,12 @@ Returns the R-matrix phase (braiding eigenvalue) for j1, j2 crossing into j3.
 function rmatrix(j1::Spin, j2::Spin, j3::Spin; 
                  k=nothing, q=nothing, exact::Bool=false, T::Type=ComplexF64)
     
-    if !isnothing(k) && !qδ(j1, j2, j3, k)
+    Js = doubled(j1, j2, j3)
+    
+    if !isnothing(k) && !qδ(Js..., k)
         mono = ZERO_MONOMIAL
     else
-        mono = rmatrix_mono(j1, j2, j3) 
+        mono = rmatrix_mono(Js...) 
     end
     
     # Classical limit catch

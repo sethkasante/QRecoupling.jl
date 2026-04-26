@@ -23,6 +23,7 @@
 
 # Stores (V_exact, V_inv) per level k. Rebuilds if max_d increases.
 const EXACT_PHI_CACHE = LRU{Int, Any}(maxsize = 500)
+const EXACT_PHI_LOCK = ReentrantLock()
 
 """
     _phi_exact_table(D_max::Int, k::Int, ζ::T)
@@ -55,10 +56,12 @@ function _phi_exact_table(D_max::Int, k::Int, ζ::T) where T
 end
 
 @inline function get_phi_exact_table(D_max::Int, k::Int, ζ::T) where T
-    if !haskey(EXACT_PHI_CACHE, k) || length((EXACT_PHI_CACHE[k])[1]) < D_max
-        EXACT_PHI_CACHE[k] = _phi_exact_table(D_max, k, ζ)
+    lock(EXACT_PHI_LOCK) do
+        if !haskey(EXACT_PHI_CACHE, k) || length((EXACT_PHI_CACHE[k])[1]) < D_max
+            EXACT_PHI_CACHE[k] = _phi_exact_table(D_max, k, ζ)
+        end
+        return EXACT_PHI_CACHE[k]::Tuple{Vector{T}, Vector{T}}
     end
-    return EXACT_PHI_CACHE[k]::Tuple{Vector{T}, Vector{T}}
 end
 
 
@@ -107,14 +110,14 @@ end
 
 """
     project_exact(dcr::DCR, k::Int)
-Evaluates a DCR series exactly for discrete level `k`. Returns a CycloExactResult.
+Evaluates a DCR series exactly for discrete level `k`. Returns a CompositeExactResult.
 """
 function project_exact(dcr::DCR, k::Int)
     h = k + 2
     K, ζ = cyclotomic_field(2h, "ζ")
     
     if dcr.radical.sign == 0 || dcr.base.sign == 0
-        return CycloExactResult(k, ZERO_MONOMIAL, zero(ζ))
+        return CompositeExactResult(k, ZERO_MONOMIAL, zero(ζ))
     end
     
     V_exact, V_inv = get_phi_exact_table(dcr.max_d, k, ζ)
@@ -134,18 +137,18 @@ function project_exact(dcr::DCR, k::Int)
     m_base_val = _project_monomial_nemo_internal(dcr.base, V_exact, V_inv, ζ, h)
     m_root_val = _project_monomial_nemo_internal(dcr.root, V_exact, V_inv, ζ, h)
     
-    return CycloExactResult(k, dcr.radical, m_root_val * m_base_val * sum_val)
+    return CompositeExactResult(k, dcr.radical, m_root_val * m_base_val * sum_val)
 end
 
 
 
 
 """
-    evaluate_exact(res::CycloExactResult, [T=ComplexF64])
+    evaluate_exact(res::CompositeExactResult, [T=ComplexF64])
 Projects the deferred cyclotomic exact result into a complex/real number.
 Just for consistency checks
 """
-function evaluate_exact(res::CycloExactResult, ::Type{T}=ComplexF64) where T
+function evaluate_exact(res::CompositeExactResult, ::Type{T}=ComplexF64) where T
     h = res.k + 2
     target_z = cispi(one(BigFloat) / h)
     

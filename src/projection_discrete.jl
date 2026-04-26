@@ -5,29 +5,42 @@
 
 
 # Cache for the magnitude table log|Φ_d(q²)|
-const MAG_SIEVE_CACHE = LRU{Tuple{DataType, Int}, Vector}(maxsize=1000)
+const MAG_SIEVE_CACHE = Dict{Tuple{DataType, Int, Int}, Any}()
+const MAG_SIEVE_LOCK  = ReentrantLock()
+const MAG_SIEVE_MAXSIZE = 7_000
 
 """
     get_mag_table(k::Int, max_d::Int, ::Type{T})
 Unified cache for the magnitude table log|Φ_d(q²)|.
 """
 function get_mag_table(k::Int, max_d::Int, ::Type{T}) where T
-    key = (T, k)
-    h = k + 2
-    
-    # Ensure the table is large enough for the requested max_d
-    table = get!(MAG_SIEVE_CACHE, key) do
-        build_mag_table(max(max_d, h), k, T)
-    end::Vector{T}
-    
-    if length(table) < max_d
-        table = build_mag_table(max_d, k, T)
-        MAG_SIEVE_CACHE[key] = table
-    end
-    
-    return table
-end
 
+    key_prec = T === BigFloat ? precision(BigFloat) : 53
+    key = (T, k, key_prec)
+
+    h   = k + 2
+
+    if haskey(MAG_SIEVE_CACHE, key)
+        table = MAG_SIEVE_CACHE[key]::Vector{T}
+        # return if it's large enough!
+        if length(table) >= max_d
+            return table
+        end
+    end
+
+    return @lock MAG_SIEVE_LOCK begin
+        existing = get(MAG_SIEVE_CACHE, key, nothing)
+
+        if existing !== nothing && length(existing) >= max_d
+            existing::Vector{T}               
+        else
+            length(MAG_SIEVE_CACHE) >= MAG_SIEVE_MAXSIZE && empty!(MAG_SIEVE_CACHE)
+            new_table = build_mag_table(max(max_d, h), k, T)
+            MAG_SIEVE_CACHE[key] = new_table
+            new_table
+        end
+    end::Vector{T}
+end
 
 
 """
@@ -107,7 +120,7 @@ end
 
 
 
-function _evaluate_discrete_dcr(res::DCR, k::Int, ::Type{T}, buffer::Vector{T}) where {T}
+function _evaluate_discrete_dcr(res::DCR, k::Int, ::Type{T}) where {T}
     table = get_mag_table(k, res.max_d, T)
 
     # project prefactors
@@ -119,50 +132,41 @@ function _evaluate_discrete_dcr(res::DCR, k::Int, ::Type{T}, buffer::Vector{T}) 
     pref_sign = res.root.sign * res.base.sign 
 
     # exit if zero
-    if isnan(pref_lm) || pref_lm == -T(Inf) || pref_sign == 0
+    if isnan(pref_lm) || (isinf(pref_lm) && pref_lm < 0) || pref_sign == 0
         return zero(T)
     end
 
     ratios = res.ratios
     num_ratios = length(ratios)
     
-    # store cumulative sums in the buffer 
     max_lm = pref_lm
     curr_lm = pref_lm
+    curr_sign = pref_sign
+    res_scaled = T(curr_sign)
     
+    # Single-Pass LSE summation
     @inbounds for i in 1:num_ratios
         r_lm = _log_mag_internal(ratios[i], table)
         curr_lm += r_lm
-        buffer[i] = curr_lm 
-        (curr_lm > max_lm) && (max_lm = curr_lm)
-    end
-
-    # LSE summation
-    sum_val = pref_sign * exp(pref_lm - max_lm)
-    
-    # terms 1 to N
-    curr_sign = pref_sign
-    @inbounds for i in 1:num_ratios
         curr_sign *= ratios[i].sign
-        sum_val += curr_sign * exp(buffer[i] - max_lm)
+        
+        if curr_lm > max_lm
+            res_scaled = res_scaled * exp(max_lm - curr_lm) + curr_sign
+            max_lm = curr_lm
+        else
+            res_scaled += curr_sign * exp(curr_lm - max_lm)
+        end
     end
 
-    return exp(max_lm) * sum_val
+    return exp(max_lm) * res_scaled
 end
 
 
 """
     project_discrete(res::DCR, k::Int, ::Type{T}=Float64)
-Thread-safe for full DCR symbols (e.g., 6j, 3j). 
-Allocates a local buffer for intermediate summation results.
+Thread-safe, Zero-Allocation evaluator for full DCR symbols (e.g., 6j, 3j).
 """
 function project_discrete(res::DCR, k::Int, ::Type{T}=Float64) where {T}
     res.base.sign == 0 && return zero(T)
-
-    nt = length(res.ratios)
-    buffer = Vector{T}(undef, nt)
-
-    return _evaluate_discrete_dcr(res, k, T, buffer)
+    return _evaluate_discrete_dcr(res, k, T)
 end
-
-
