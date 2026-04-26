@@ -42,20 +42,6 @@ end
 Base.iszero(comp::CompositeExactResult) = isempty(comp.terms)
 Base.zero(comp::CompositeExactResult{T}) where T = CompositeExactResult(comp.k, T)
 
-# Scalar multiplication
-function Base.:*(c::Number, comp::CompositeExactResult{T}) where T
-    iszero(c) && return zero(comp)
-    new_terms = Dict{CyclotomicMonomial, T}()
-    for (rad, factor) in comp.terms
-        new_factor = c * factor
-        if !iszero(new_factor)
-            new_terms[rad] = new_factor
-        end
-    end
-    return CompositeExactResult{T}(comp.k, new_terms)
-end
-Base.:*(comp::CompositeExactResult, c::Number) = c * comp
-
 # --- Addition: Composite + Composite ---
 function Base.:+(a::CompositeExactResult{T}, b::CompositeExactResult{T}) where T
     a.k != b.k && error("Level mismatch: Cannot sum exact results from k=$(a.k) and k=$(b.k)")
@@ -78,24 +64,26 @@ end
 Base.:-(a::CompositeExactResult{T}) where T = CompositeExactResult{T}(a.k, Dict(rad => -fac for (rad, fac) in a.terms))
 Base.:-(a::CompositeExactResult, b::CompositeExactResult) = a + (-b)
 
+
 # --- Multiplication: Composite * Composite ---
+
 function Base.:*(a::CompositeExactResult{T}, b::CompositeExactResult{T}) where T
     a.k != b.k && error("Level k mismatch in multiplication.")
     
     result = zero(a)
     
-    # allocate one buffer to reuse for all radical multiplications
+    # allocate one buffer for all multiplications
     buf = CycloBuffer(1024) 
     
     for (rad_a, fac_a) in a.terms
         for (rad_b, fac_b) in b.terms
-            empty!(buf)
+            reset!(buf)
             mul!(buf, rad_a, rad_b)
             
-            # extract perfect squares from the combined radicals
+            # extract perfect squares 
             root_mono, new_rad = snapshot_square_root(buf)
             
-            # project the perfect square root back into Nemo 
+            # project the perfect square root  
             root_val = project_exact(root_mono, a.k)
             new_factor = fac_a * fac_b * root_val
             
@@ -108,16 +96,67 @@ function Base.:*(a::CompositeExactResult{T}, b::CompositeExactResult{T}) where T
     return result
 end
 
-# --- collection API for CompositeExactResult ---
+# scalar multiplication
+function Base.:*(c, comp::CompositeExactResult{T}) where T
+    iszero(c) && return zero(comp)
+    new_terms = Dict{CyclotomicMonomial, T}()
+    for (rad, factor) in comp.terms
+        new_factor = c * factor
+        if !iszero(new_factor)
+            new_terms[rad] = new_factor
+        end
+    end
+    return CompositeExactResult{T}(comp.k, new_terms)
+end
+
+Base.:*(comp::CompositeExactResult{T}, c) where T = c * comp
+
+# --- more API for CompositeExactResult ---
 
 Base.length(comp::CompositeExactResult) = length(comp.terms)
 Base.isempty(comp::CompositeExactResult) = isempty(comp.terms)
 
-# Iterate exactly like a dictionary, yielding (CyclotomicMonomial, factor) pairs
+# iterate like a dictionary
 Base.iterate(comp::CompositeExactResult, state...) = iterate(comp.terms, state...)
 
 Base.keys(comp::CompositeExactResult) = keys(comp.terms)
 Base.values(comp::CompositeExactResult) = values(comp.terms)
+
+
+# --- Adding/subtracting scalars (like Nemo nf_elem) and composites ---
+
+function Base.:+(c, comp::CompositeExactResult{T}) where T
+    iszero(c) && return comp
+    
+    c_nemo = if c isa T
+        c
+    elseif !isempty(comp.terms)
+        # extract the parent field from any existing term
+        parent(first(values(comp.terms)))(c)
+    else
+        # derive the field K from the level k
+        K, _ = cyclotomic_field(2 * (comp.k + 2), "ζ")
+        K(c)
+    end
+    
+    # add scalar, set rad =1
+    return CompositeExactResult(comp.k, ONE_MONOMIAL, c_nemo) + comp
+end
+
+Base.:+(comp::CompositeExactResult, c) = c + comp
+
+Base.:-(c, comp::CompositeExactResult) = c + (-comp)
+Base.:-(comp::CompositeExactResult, c) = comp + (-c)
+
+# Scalar division
+function Base.:/(comp::CompositeExactResult{T}, c) where T
+    iszero(c) && throw(DivideError())
+    new_terms = Dict{CyclotomicMonomial, T}()
+    for (rad, factor) in comp.terms
+        new_terms[rad] = factor / c # Nemo handles division beautifully
+    end
+    return CompositeExactResult{T}(comp.k, new_terms)
+end
 
 
 
@@ -172,11 +211,11 @@ Base.:*(x::Number, res::ClassicalResult) = Float64(res) * x
 
 
 # Helper to safely truncate large Nemo strings
-function _truncate_nemo_str(x, max_chunks=15)
+function _truncate_nemo_str(x, max_chunks=20)
     s = string(x)
     tokens = split(s, " ")
     
-    # If the polynomial has too many terms, truncate the middle
+    # truncate polynomial (at middle) if it has many terms 
     if length(tokens) > 2 * max_chunks + 1
         first_part = join(tokens[1:max_chunks], " ")
         last_part  = join(tokens[end-max_chunks+1:end], " ")
@@ -199,7 +238,7 @@ function Base.show(io::IO, comp::CompositeExactResult)
     for (rad, factor) in comp.terms
         fac_str = _truncate_nemo_str(factor)
         
-        # If the radical is just 1, we don't need to print √(1)
+        #radical = 1, don't print √(1)
         if is_identity(rad)
             push!(terms_strs, "($fac_str)")
         else

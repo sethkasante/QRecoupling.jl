@@ -132,7 +132,7 @@ function _evaluate_discrete_dcr(res::DCR, k::Int, ::Type{T}) where {T}
     pref_sign = res.root.sign * res.base.sign 
 
     # exit if zero
-    if isnan(pref_lm) || pref_lm == -T(Inf) || pref_sign == 0
+    if isnan(pref_lm) || (isinf(pref_lm) && pref_lm < 0) || pref_sign == 0
         return zero(T)
     end
 
