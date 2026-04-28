@@ -226,8 +226,10 @@ function _truncate_nemo_str(x, max_chunks=20)
 end
 
 function Base.show(io::IO, comp::CompositeExactResult)
+    h = comp.k + 2
     k_sub = to_subscript(comp.k)
-    print(io, "Exact SU(2)$k_sub Composite:\n  Value: ")
+    h_sub = to_subscript(2h)
+    print(io, "Exact SU(2)$k_sub Symbol in Q(ζ$h_sub):\n  Value: ")
     
     if iszero(comp)
         print(io, "0")
