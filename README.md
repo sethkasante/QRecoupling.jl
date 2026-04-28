@@ -4,9 +4,9 @@
 [![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://sethkasante.github.io/QRecoupling.jl/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **Notice of Migration:** > `QRecoupling.jl` is the official, vastly expanded successor to the deprecated package `QRacahSymbols.jl`. The package has been completely rewritten and renamed to reflect its broader scope in quantum recoupling coefficients, $q$-hypergeometric series and their applications.
+<!-- > **Notice of Migration:** > `QRecoupling.jl` is the official, vastly expanded successor to the deprecated package `QRacahSymbols.jl`. The package has been completely rewritten and renamed to reflect its broader scope in quantum recoupling coefficients, $q$-hypergeometric series and their applications.
 
---- 
+---  -->
 # QRecoupling.jl
 
 **QRecoupling.jl** is a high-performance Julia library for the **stable and scalable evaluation of quantum recoupling coefficients and q-hypergeometric series**, designed to overcome computational limitations of direct numerical and symbolic methods.
@@ -167,7 +167,7 @@ If you use `QRecoupling.jl` in your research, please cite the mathematical frame
 Seth K. Asante (2026). *arXiv preprint arXiv:2604.13196*.
 
 ```bibtex
-@misc{asante2026dcr,
+@misc{Asante2026dcr,
       title={Deferred Cyclotomic Representation for Stable and Exact Evaluation of q-Hypergeometric Series}, 
       author={Seth K. Asante},
       year={2026},
