@@ -11,42 +11,45 @@
 
 **QRecoupling.jl** is a high-performance Julia library for the **stable and scalable evaluation of quantum recoupling coefficients and q-hypergeometric series**, designed to overcome computational limitations of direct numerical and symbolic methods.
 
-It is designed to overcome fundamental limitations of direct numerical and symbolic evaluation, including catastrophic cancellation, expression swell, and redundant computation.
+It is designed to overcome fundamental limitations of direct numerical and symbolic evaluation of $q$-deformed symbols, including catastrophic cancellation, expression swell, and redundant computation.
 
 
 > **Main idea:** separate algebraic structure from numerical evaluation.
 
-All quantities are first represented symbolically in a **Deferred Cyclotomic Representation (DCR)**, and only later projected into a target field (numeric, exact, or asymptotic).
+All quantities are first represented symbolically in a **Deferred Cyclotomic Representation (DCR)**, where exact cancellations happen automatically. Only after the expression is maximally reduced is it projected into a target field (numeric, exact algebraic, or classical asymptotic limit).
 
 ---
 
 ## Key Features
 
 ### • Deferred Cyclotomic Representation (DCR)
-A sparse, combinatorial encoding of $q$-hypergeometric series with building blocks 
+Instead of expanding quantum factorials into massive rational polynomials, the DCR encodes $q$-hypergeometric series using the sparse integer exponents of their cyclotomic factorization:
 $$\mathcal{M} = \sigma q^P \prod_d \Phi_d(q^2)^{e_d} $$
-
-- the representation is performed using the exponents of the cyclotomic basis {$q,\Phi_d(q^2)$} 
-- multiplication and division translates to addition of exponents 
+- Multiplication and division are reduced to highly efficient integer vector addition/subtraction.
+- Perfect square roots (like those in $\Delta$-triangle coefficients) are extracted exactly at the exponent level, bypassing the need for algebraic field extensions.
 
 ---
 
 ### • Universal Projection Framework
 
-A single DCR object can be evaluated in multiple regimes:
+A single compiled DCR object can be evaluated across multiple regimes without recomputation:
 
 | Regime | Description |
 |------|-------------|
 | **Root of unity ($k$)** | Fast numerical evaluation using Log-Sum-Exp |
-| **Exact algebraic** | Evaluation in cyclotomic fields ($\zeta$) via `Nemo.jl` |
+| **Exact algebraic** | Evaluation in cyclotomic fields ($\mathbb{Q}(\zeta_{2h})$) via `Nemo.jl` |
 | **Complex analytic** | Efficient evaluation for $q \in \mathbb{C}$ |
-| **Classical limit** | Exact $q \to 1$ reduction |
+| **Classical limit** | Exact $q \to 1$ evaluation (recover Ponzano-Regge amplitudes) |
+
+### • HPC-Ready & Zero-Allocation
+
+The package is designed to be thread-safe and implements **zero-allocation** loops during large numerical evaluations.
 
 ---
 
 ### • Extensible TQFT Toolkit
 
-The framework naturally supports:
+The framework natively supports:
 
 - $6j$ symbols (Racah–Wigner)
 - $3j$ symbols  
@@ -54,7 +57,7 @@ The framework naturally supports:
 - $R$-matrices (braiding)
 - $G$-symbols (tetrahedral weights)
 
-and is designed to extend to general tensor network observables.
+and is designed to extend to more $q$-deformed tensors.
 
 
 ## Installation
@@ -66,9 +69,10 @@ pkg> add QRecoupling
 --- 
 ## Quick Start
 
-Evaluate the core quantum $6j$ and $3j$ (Racah-Wigner) symbols. The **mode** keyword controls the computational engine. Output values may vary slightly based on the floating-point precision.
+Evaluate the core quantum $6j$ and $3j$-symbols. The evaluation mode is controlled via keyword arguments, dynamically routing the computation to the most optimal engine.
 
 ### DCR algebraic object construction
+If no evaluation parameters are passed, the package builds the parameter-independent DCR object:
 ```julia
 using QRecoupling
 
@@ -88,16 +92,25 @@ This representation is exact, minimal, and independent of evaluation field
 
 
 ### Projections 
-For projection to target fields:
+Project the same abstract symbol into your required target field:
 ```julia
-julia> j = 1;
 # 1. projection into discrete level `k` (Float64 by default)
+julia> project_dcr(dcr6j,k=10)
+0.1547005383792515
+
+julia> j=1; 
+
+# full evaluation (constructs dcr object internally and then project)
 julia> q6j(j, j, j, j, j, j, k=10)
 0.1547005383792515
 
 # 2. exact algebraic projection in cyclotomic fields (ζ)
+julia> project_dcr(dcr6j, k=10, exact=true)
+Exact SU(2)₁₀ Symbol in Q(ζ₂₄):
+  Value: (-2//3*ζ^6 + 4//3*ζ^2 - 1)
+
 julia> q6j(j, j, j, j, j, j, k=10, exact=true)
-Exact SU(2)₁₀ Symbol: 
+Exact SU(2)₁₀ Symbol in Q(ζ₂₄):
 -2//3*ζ^6 + 4//3*ζ^2 - 1
 
 # 3. generic complex q projection
@@ -148,11 +161,9 @@ julia> project_dcr(custom_series,q=0.5im)
 1.0996624874742891e10 - 4.482327660636685e12im
 ```
 
-## Cache Management
-```julia
-empty_caches!() # Clears all internal caches
-```
-Clears all internal caches (cyclotomic tables, numeric workspaces, etc.).
+## More features
+- **Memory Management:** `QRecoupling.jl` caches cyclotomic tables and numeric workspaces to speed up parameter sweeps. You can manually flush these by calling `empty_caches!()`.
+- **Exact Algebra Computations:** The `exact=true` flag for quantum symbols returns a `CompositeExactResult`. You can multiply these by raw integers, floats, or other exact symbols.
 
 ## Documentation
 
