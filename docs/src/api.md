@@ -30,6 +30,8 @@ gsymbol
 build_dcr!
 build_dcr
 project_dcr
+add_qint!
+add_qfact!
 ```
 
 ---

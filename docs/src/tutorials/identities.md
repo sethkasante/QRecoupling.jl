@@ -51,23 +51,23 @@ function test_orthogonality(j1, j2, j3, j4, j5, j6;k=k)
 end
 
 
-julia> test_orthogonality(1, 1, 1, 1, 1, 1, k=5)
+julia> test_orthogonality(1,1,1,1,1,1, k=5)
 Orthogonality Check for SU(2)_5
 --------------------------------
-LHS (Sum): Exact SU(2)₅ Composite:
+LHS (Sum): Exact Algebraic Result in ℚ(ζ₁₄):
   Value: (-ζ^4 + ζ^3)
 RHS (Exact): -ζ^4 + ζ^3
-LHS - RHS = Exact SU(2)₅ Composite:
+LHS - RHS = Exact Algebraic Result in ℚ(ζ₁₄):
   Value: 0
 Identity Holds!
 
 julia> test_orthogonality(0.5, 0.5, 0.5, 0.5, 1.0, 1.0, k=10)
 Orthogonality Check for SU(2)_10
 --------------------------------
-LHS (Sum): Exact SU(2)₁₀ Composite:
+LHS (Sum): Exact Algebraic Result in ℚ(ζ₂₄):
   Value: (-1//2*ζ^6 + ζ^2 - 1//2)
 RHS (Exact): -1//2*ζ^6 + ζ^2 - 1//2
-LHS - RHS = Exact SU(2)₁₀ Composite:
+LHS - RHS = Exact Algebraic Result in ℚ(ζ₂₄):
   Value: 0
 Identity Holds!
 
@@ -75,10 +75,10 @@ Identity Holds!
 julia> test_orthogonality(12,15,17,18,13,14, k=60)
 Orthogonality Check for SU(2)_60
 --------------------------------
-LHS (Sum): Exact SU(2)₆₀ Composite:
+LHS (Sum): Exact Algebraic Result in ℚ(ζ₁₂₄):
   Value: 0
 RHS (Exact): 0
-LHS - RHS = Exact SU(2)₆₀ Composite:
+LHS - RHS = Exact Algebraic Result in ℚ(ζ₁₂₄):
   Value: 0
 Identity Holds!
 ```

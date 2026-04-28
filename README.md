@@ -106,11 +106,11 @@ julia> q6j(j, j, j, j, j, j, k=10)
 
 # 2. exact algebraic projection in cyclotomic fields (ζ)
 julia> project_dcr(dcr6j, k=10, exact=true)
-Exact SU(2)₁₀ Symbol in Q(ζ₂₄):
+Exact Algebraic Result in ℚ(ζ₂₄):
   Value: (-2//3*ζ^6 + 4//3*ζ^2 - 1)
 
 julia> q6j(j, j, j, j, j, j, k=10, exact=true)
-Exact SU(2)₁₀ Symbol in Q(ζ₂₄):
+Exact Algebraic Result in ℚ(ζ₂₄):
 -2//3*ζ^6 + 4//3*ζ^2 - 1
 
 # 3. generic complex q projection
