@@ -73,7 +73,6 @@ Evaluate the core quantum $6j$ and $3j$ (Racah-Wigner) symbols. The **mode** key
 using QRecoupling
 
 j = 1
-k = 10 
 
 # 1. Deferred Graph Construction (Returns a DCR Object)
 julia> dcr6j = q6j(j, j, j, j, j, j)
