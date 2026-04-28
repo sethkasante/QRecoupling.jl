@@ -227,9 +227,8 @@ end
 
 function Base.show(io::IO, comp::CompositeExactResult)
     h = comp.k + 2
-    k_sub = to_subscript(comp.k)
     h_sub = to_subscript(2h)
-    print(io, "Exact SU(2)$k_sub Symbol in Q(ζ$h_sub):\n  Value: ")
+    print(io, "Exact Algebraic Result in ℚ(ζ$h_sub):\n  Value: ")
     
     if iszero(comp)
         print(io, "0")
