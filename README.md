@@ -34,7 +34,7 @@ A single compiled DCR object can be evaluated across multiple regimes without re
 | Regime | Description |
 |------|-------------|
 | **Root of unity ($k$)** | Fast numerical evaluation using Log-Sum-Exp |
-| **Exact algebraic** | Evaluation in cyclotomic fields ($\mathbb{Q}(\zeta_{2h})$) via `Nemo.jl` |
+| **Exact algebraic** | Evaluation in cyclotomic field $(\mathbb{Q}(\zeta_{2h}))$ via `Nemo.jl` |
 | **Complex analytic** | Efficient evaluation for $q \in \mathbb{C}$ |
 | **Classical limit** | Exact $q \to 1$ evaluation (recover Ponzano-Regge amplitudes) |
 
