@@ -4,9 +4,6 @@
 [![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://sethkasante.github.io/QRecoupling.jl/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-<!-- > **Notice of Migration:** > `QRecoupling.jl` is the official, vastly expanded successor to the deprecated package `QRacahSymbols.jl`. The package has been completely rewritten and renamed to reflect its broader scope in quantum recoupling coefficients, $q$-hypergeometric series and their applications.
-
----  -->
 # QRecoupling.jl
 
 **QRecoupling.jl** is a high-performance Julia library for the **stable and scalable evaluation of quantum recoupling coefficients and q-hypergeometric series**, designed to overcome computational limitations of direct numerical and symbolic methods.

@@ -56,4 +56,13 @@ Depth = 2
 
 If you use `QRecoupling.jl` in your research, please cite the following paper:
 
-> Seth K. Asante, *"Efficient Evaluation of q-Hypergeometric Series via Cyclotomic Factorization"* (To appear soon, 2026). arXiv:XXXX.XXXXX.
+```bibtex
+@misc{Asante2026dcr,
+      title={Deferred Cyclotomic Representation for Stable and Exact Evaluation of q-Hypergeometric Series}, 
+      author={Seth K. Asante},
+      year={2026},
+      eprint={2604.13196},
+      archivePrefix={arXiv},
+      primaryClass={math-ph}
+}
+```
