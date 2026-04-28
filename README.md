@@ -92,7 +92,7 @@ This representation is exact, minimal, and independent of evaluation field
 
 
 ### Projections 
-Project the same abstract symbol into your required target field:
+Project the same abstract symbol into your required target field using the `project_dcr` function:
 ```julia
 # 1. projection into discrete level `k` (Float64 by default)
 julia> project_dcr(dcr6j,k=10)
