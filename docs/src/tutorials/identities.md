@@ -7,7 +7,7 @@ In this tutorial, we will prove the two most important topological identities in
 
 ---
 
-## 1. Exact Orthogonality (The Bubble Move)
+### Proof of Orthogonality 
 
 In a triangulated 3-manifold, integrating out an internal edge corresponds to the "Bubble Move". Mathematically, this enforces the orthogonality of the $6j$-symbols.
 
