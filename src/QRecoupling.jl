@@ -11,7 +11,7 @@ include("admissibility.jl")
 include("symmetries.jl")    
 
 include("generic_series_dcr.jl")   
-include("recoupling_dcr.jl") # recoupling symbols and tqft invariants
+include("recoupling_symbols_dcr.jl") # recoupling symbols and tqft invariants
 
 include("projection_classical.jl")
 include("projection_discrete.jl")
@@ -34,6 +34,6 @@ export project_classical, project_classical_exact
 
 # Export api for generic series
 export CyclotomicMonomial, DCR
-export add_qint!, add_qfact!, build_dcr, build_series
+export add_qint!, add_qfact!, build_dcr!, build_series
 
 end
