@@ -32,7 +32,7 @@ function rmatrix_mono(J1::Int, J2::Int, J3::Int)
     # parity sign
     s = iseven((J1 + J2 - J3) ÷ 2) ? 1 : -1
     
-    return CyclotomicMonomial(Int8(s), p, Pair{Int,Int}[], 0)
+    return iseven(p) ? CyclotomicMonomial(Int8(s), p ÷ 2, Pair{Int,Int}[], 0) : "R-matrix phase for these spins requires a half-integer power: $(s) * q^($(p)/2). Not stored as CyclotomicMonomial"
 end
 
 

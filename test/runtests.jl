@@ -19,10 +19,9 @@ using Nemo
         @test m.phi_exps == [2 => 1]
         
         # 1.3 R-Matrix Phase 
-        # R^{1/2, 1/2}_0 = (-1)^{1/2+1/2-0} q^{0-3/4-3/4} = -q^{-3/2}
-        rm = QRecoupling.rmatrix(0.5, 0.5, 0.0)
-        @test rm.sign == -1
-        @test rm.q_pow == -3
+        # R_{1/2, 1/2}^0 = (-1)^{1/2+1/2-0} q^{0-3/4-3/4} = -q^{-3/2} = -e^(-3/2 * π/(k+2))
+        rm = rmatrix(0.5, 0.5, 0.0, k=1)
+        @test rm ≈ -cispi(-1/2)
     end
 
     @testset "2. Admissibility & Topological Guards" begin

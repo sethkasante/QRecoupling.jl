@@ -128,8 +128,8 @@ julia> qdim(1/2,k=k,exact=true)
 -ζ^5 + ζ^4 - ζ^3 + ζ^2 + 1
 
 # R-Matrix braiding
-julia> rmatrix(1, 1, 1, k=5)
--0.9009688679024191 + 0.4338837391175581im
+julia> rmatrix(1,1,1,k=5)
+-0.6234898018587336 + 0.7818314824680298im
 
 # F-Symbol (fusion)
 julia> fsymbol(1, 1, 1, 1, 1, 1, k=5)
