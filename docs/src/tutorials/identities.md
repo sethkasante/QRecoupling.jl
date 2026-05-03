@@ -86,7 +86,7 @@ By leveraging `QRecoupling.jl`, the radical prefactors of the $6j$-symbols perfe
 
 --- 
 
-## 2. The Biedenharn-Elliott Pentagon Identity
+### The Biedenharn-Elliott (Pentagon) Identity
 The Pentagon Identity guarantees that topological invariants are independent of the chosen triangulation. It relates the product of two $6j$-symbols to a sum over the product of three $6j$-symbols.
 
 Because this involves a large summation and many multiplications, it is the perfect candidate for our high-speed `:numeric` engine.
