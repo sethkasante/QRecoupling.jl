@@ -24,14 +24,39 @@ gsymbol
 ```
 ---
 
+### $q$-Hypergeometric Primitives
+Public primitives to easily build algebraic representations of $q$-deformed integers, factorials, and binomial coefficients. These functions return `CyclotomicMonomial` objects and are designed to be used inside the `qseries` sequence builder.
+```@docs
+qint
+qfact
+qbinomial
+```
+
+---
+
 ## Generic Series & Universal Evaluation
 `QRecoupling.jl` separates algebraic construction from field evaluation. These functions allow you to construct custom $q$-hypergeometric series and project abstract Deferred Cyclotomic Representation (DCR) objects into concrete target fields.
 ```@docs
+qseries
+build_series
 build_dcr!
-build_dcr
-project_dcr
+qeval
+CyclotomicMonomial
+DCR
+```
+
+--- 
+
+### Low-Level Buffer Operations & Projections
+For developers building advanced, memory-optimized loops or requesting specific projection regimes directly without routing through `qeval`.
+```@docs
 add_qint!
 add_qfact!
+project_discrete
+project_exact
+project_classical
+project_classical_exact
+project_analytic
 ```
 
 ---
