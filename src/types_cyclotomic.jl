@@ -242,6 +242,46 @@ Base.:*(a::CyclotomicMonomial, b::CyclotomicMonomial) = snapshot(mul!(CycloBuffe
 Base.:/(a::CyclotomicMonomial, b::CyclotomicMonomial) = snapshot(div!(CycloBuffer(max(a.max_d, b.max_d)), a, b))
 Base.inv(m::CyclotomicMonomial) = CyclotomicMonomial(m.sign, -m.q_pow, [d => -e for (d, e) in m.phi_exps], m.max_d)
 
+Base.:-(m::CyclotomicMonomial) = CyclotomicMonomial(-m.sign, m.q_pow, m.phi_exps, m.max_d)
+
+# Integer Powers
+function Base.:^(m::CyclotomicMonomial, p::Int)
+    m.sign == 0 && return p == 0 ? ONE_MONOMIAL : ZERO_MONOMIAL
+    p == 0 && return ONE_MONOMIAL
+    p == 1 && return m
+    p == -1 && return inv(m)
+    
+    #sign: only flips if base is negative and power is odd
+    new_sign = (m.sign == -1 && isodd(p)) ? -1 : 1
+    new_q_pow = m.q_pow * p
+    new_exps = Pair{Int,Int}[d => (e * p) for (d, e) in m.phi_exps]
+    
+    return CyclotomicMonomial(new_sign, new_q_pow, new_exps, m.max_d)
+end
+
+
+#  --- scalar Multiplication for Cyclotomic Monomials ----- 
+
+function Base.:*(c::Int, m::CyclotomicMonomial)
+    c == 0 && return ZERO_MONOMIAL
+    c == 1 && return m
+    c == -1 && return -m
+    throw(ArgumentError("CyclotomicMonomials only support scalar coefficients of -1, 0, or 1. Got: $c"))
+end
+
+Base.:*(m::CyclotomicMonomial, c::Integer) = c * m
+
+function Base.:/(m::CyclotomicMonomial, c::Integer)
+    c == 0 && throw(DivideError())
+    c == 1 && return m
+    c == -1 && return -m
+    throw(ArgumentError("CyclotomicMonomials only support scalar division by -1 or 1. Got: $c"))
+end
+
+
+Base.:/(c::Int, m::CyclotomicMonomial) = c * inv(m)
+
+
 
 # ----- Comparisons ----- 
 # utilities for comparing cyclotomic monomials 

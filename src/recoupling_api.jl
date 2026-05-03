@@ -2,10 +2,6 @@
 # Unified Public API for SU(2) TQFT Kernels
 # ---------------------------------------------
 
-# twice spins (J = 2j)
-@inline doubled(j::Spin) = round(Int, 2j)
-@inline doubled(js...)   = map(j -> round(Int, 2j), js)
-
 
 """
     q6j(j1, j2, j3, j4, j5, j6; k=nothing, q=nothing, exact::Bool=false, eager::Bool=false, T=Float64)
@@ -28,7 +24,7 @@ function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
 
     # ---  DCR construction ---
     # Check level-k triangle admissibility
-    if !isnothing(k) && !qδtet(js..., k)
+    if !isnothing(k) && !_qδtet(js..., k)
         dcr = ZERO_DCR
     else
         dcr = q6j_dcr(js...)
@@ -40,7 +36,7 @@ function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
     end
 
     # --- DCR Projections ---
-    return project_dcr(dcr; k=k, q=q, exact=exact, T=T)
+    return qeval(dcr; k=k, q=q, exact=exact, T=T)
 end
 
 
@@ -59,7 +55,7 @@ function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin=-m1-m2;
     end
 
     # --- DCR Construction ---
-    if !isnothing(k) && !qδ(Js[1], Js[2], Js[3], k)
+    if !isnothing(k) && !_qδ(Js[1], Js[2], Js[3], k)
         dcr = ZERO_DCR
     else
         dcr = q3j_dcr(Js...)
@@ -71,7 +67,7 @@ function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin=-m1-m2;
     end
 
     # --- DCR Projections ---
-    return project_dcr(dcr; k=k, q=q, exact=exact, T=T)
+    return qeval(dcr; k=k, q=q, exact=exact, T=T)
 end
 
 
@@ -85,7 +81,7 @@ function fsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
     # F-symbol not fully symmetric! Just double
     Js = doubled(j1, j2, j3, j4, j5, j6)
     
-    if !isnothing(k) && !qδtet(Js..., k)
+    if !isnothing(k) && !_qδtet(Js..., k)
         dcr = ZERO_DCR
     else
         dcr = fsymbol_dcr(Js...)
@@ -95,7 +91,7 @@ function fsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
         return dcr
     end
 
-    return project_dcr(dcr; k=k, q=q, exact=exact, T=T)
+    return qeval(dcr; k=k, q=q, exact=exact, T=T)
 end
 
 
@@ -109,7 +105,7 @@ function gsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
     # G-symbol is fully symmetric.
     Js = canonical_spins(j1, j2, j3, j4, j5, j6)
     
-    if !isnothing(k) && !qδtet(Js..., k)
+    if !isnothing(k) && !_qδtet(Js..., k)
         dcr = ZERO_DCR
     else
         dcr = gsymbol_dcr(Js...)
@@ -119,7 +115,7 @@ function gsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
         return dcr
     end
 
-    return project_dcr(dcr; k=k, q=q, exact=exact, T=T)
+    return qeval(dcr; k=k, q=q, exact=exact, T=T)
 end
 
 
@@ -133,7 +129,7 @@ function tetrahedron(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
     # Tetrahedron is symmetric.
     Js = canonical_spins(j1, j2, j3, j4, j5, j6)
     
-    if !isnothing(k) && !qδtet(Js..., k)
+    if !isnothing(k) && !_qδtet(Js..., k)
         dcr = ZERO_DCR
     else
         dcr = tetrahedron_dcr(Js...)
@@ -143,7 +139,7 @@ function tetrahedron(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
         return dcr
     end
 
-    return project_dcr(dcr; k=k, q=q, exact=exact, T=T)
+    return qeval(dcr; k=k, q=q, exact=exact, T=T)
 end
 
 
@@ -156,7 +152,7 @@ function theta_value(j1::Spin, j2::Spin, j3::Spin;
     
     Js = doubled(j1, j2, j3)
     
-    if !isnothing(k) && !qδ(Js..., k)
+    if !isnothing(k) && !_qδ(Js..., k)
         mono = ZERO_MONOMIAL
     else
         mono = theta_mono(Js...) 
@@ -202,7 +198,7 @@ function rmatrix(j1::Spin, j2::Spin, j3::Spin;
     
     Js = doubled(j1, j2, j3)
     
-    if !isnothing(k) && !qδ(Js..., k)
+    if !isnothing(k) && !_qδ(Js..., k)
         mono = ZERO_MONOMIAL
     else
         mono = rmatrix_mono(Js...) 

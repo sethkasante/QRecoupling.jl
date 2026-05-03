@@ -7,21 +7,13 @@
 # --- Atomic units: Dimensions & Phases ---
 
 
-"""
-    qint_mono(n::Int) -> CyclotomicMonomial
-Returns the algebraic representation of the quantum integer [n]q.
-"""
-function qint_mono(n::Int)
-    n <= 0 && return ZERO_MONOMIAL
-    n == 1 && return ONE_MONOMIAL
-    buf = CycloBuffer(n)
-    add_qint!(buf, n, 1)
-    return snapshot(buf)
-end
-
-# @inline qdim_mono(j::Spin) = qint_mono(round(Int, 2j + 1))
 # quantum dimension [2j+1] -> [J+1]
-@inline qdim_mono(J::Int) = qint_mono(J + 1)
+"""
+    qdim_mono(J::Int) -> CyclotomicMonomial
+Returns the algebraic quantum dimension [J+1]_q.
+Inputs use twice spins (J = 2j).
+"""
+@inline qdim_mono(J::Int) = qint(J + 1)
 
 
 #qfact_mono
@@ -64,7 +56,7 @@ end
 
 function q3j_dcr(J1::Int, J2::Int, J3::Int, M1::Int, M2::Int, M3::Int = -M1-M2)
     # admissibile conditions
-    (!δ(J1, J2, J3) || M1 + M2 + M3 != 0) && return ZERO_DCR
+    (!_δ(J1, J2, J3) || M1 + M2 + M3 != 0) && return ZERO_DCR
 
     # Standard summation bounds for Wigner 3j
     α1 = (J3 - J2 + M1) ÷ 2; α2 = (J3 - J1 - M2) ÷ 2
@@ -106,7 +98,7 @@ function q3j_dcr(J1::Int, J2::Int, J3::Int, M1::Int, M2::Int, M3::Int = -M1-M2)
 end
 
 function q6j_dcr(J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int)
-    !δtet(J1, J2, J3, J4, J5, J6) && return ZERO_DCR
+    !_δtet(J1, J2, J3, J4, J5, J6) && return ZERO_DCR
 
     α1 = (J1+J2+J3) ÷ 2; α2 = (J1+J5+J6) ÷ 2; α3 = (J2+J4+J6) ÷ 2; α4 = (J3+J4+J5) ÷ 2
     β1 = (J1+J2+J4+J5) ÷ 2; β2 = (J1+J3+J4+J6) ÷ 2; β3 = (J2+J3+J5+J6) ÷ 2
@@ -159,8 +151,8 @@ function fsymbol_dcr(J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int)
     
     # phase factor 
     phase = iseven((J1 + J2 + J4 + J5) ÷ 2) ? 1 : -1
-    new_base = CyclotomicMonomial(res.base.sign * phase, res.base.q_pow, res.base.phi_exps, res.base.max_d)
-
+    new_base = phase * res.base
+    
     return DCR(res.root, res.radical, new_base, res.ratios, res.z_range, res.max_d)
 end
 
@@ -185,12 +177,12 @@ end
 # ---- Graph evaluators (Theta & Tetrahedron Values)  ----
 
 """
-    theta_dcr(A, B, C)
+    theta_mono(A, B, C)
 Evaluates the value of the 'Theta' graph (two vertices connected by 3 edges).
 Equivalent to a quantum dimension calculation for the triad.
 """
-function theta_dcr(A::Int, B::Int, C::Int)
-    !δ(A, B, C) && return ZERO_MONOMIAL
+function theta_mono(A::Int, B::Int, C::Int)
+    !_δ(A, B, C) && return ZERO_MONOMIAL
     buf = CycloBuffer((A + B + C) ÷ 2 + 1)
     qtriangle!(buf, A, B, C)
     # Norm factor for Theta graph in SU(2)k
@@ -213,7 +205,8 @@ function tetrahedron_dcr(J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int)
     # Value = {6j} * (θ(j1,j2,j3)θ(j1,j5,j6)θ(j2,j4,j6)θ(j3,j4,j5))^(1/2)
     # We build the product of the four theta values
     m_max = (J1 + J2 + J3 + J4 + J5 + J6) ÷ 2
-    # Inlining theta prefactors for speed
+    
+    # inline theta prefactors 
     buf = CycloBuffer(m_max)
     qtetrahedron!(buf, J1, J2, J3, J4, J5, J6)
 

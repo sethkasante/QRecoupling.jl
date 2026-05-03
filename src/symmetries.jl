@@ -23,16 +23,10 @@
 
 @inline function canonical_spins(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin)
     # convert to doubled spins (J = 2j) 
-    J1 = round(Int, 2*j1)
-    J2 = round(Int, 2*j2)
-    J3 = round(Int, 2*j3)
-    J4 = round(Int, 2*j4)
-    J5 = round(Int, 2*j5)
-    J6 = round(Int, 2*j6)
-    
-    t = (J1, J2, J3, J4, J5, J6)
+    t = doubled(j1, j2, j3, j4, j5, j6)
+    # t = (J1, J2, J3, J4, J5, J6)
 
-    if all(x -> x == J1, t)
+    if allequal(t)
         return t
     end
     

@@ -37,6 +37,71 @@ end
 
 
 """
+    add_monomial!(buf::CycloBuffer, m::CyclotomicMonomial, p::Int=1)
+Algebraically multiplies the buffer by the given monomial raised to power `p`.
+This acts as the bridge between explicit monomial objects and the DCR compiler.
+"""
+function add_monomial!(buf::CycloBuffer, m::CyclotomicMonomial, p::Int=1)
+    p == 0 && return buf
+    m.sign == 0 && (buf.sign = 0; return)
+    
+    # Flip the sign if the monomial is negative and the applied power is odd
+    if m.sign == -1 && isodd(p)
+        buf.sign = -buf.sign
+    end
+    
+    buf.q_pow += m.q_pow * p
+    ensure_capacity!(buf, m.max_d)
+    
+    @inbounds for (d, e) in m.phi_exps
+        update_exps!(buf, d, e * p)
+    end
+end
+
+
+
+"""
+    qint(n::Int, p::Int=1)
+
+Returns the algebraic representation of `([n]_q)^p` as a `CyclotomicMonomial`.
+"""
+function qint(n::Int, p::Int=1)
+    n < 0 && return ZERO_MONOMIAL
+    n <= 1 && return ONE_MONOMIAL
+    buf = CycloBuffer(n)
+    add_qint!(buf, n, p)
+    return snapshot(buf)
+end
+
+"""
+    qfact(n::Int, p::Int=1)
+
+Returns the algebraic representation of `([n]_q!)^p` as a `CyclotomicMonomial`.
+"""
+function qfact(n::Int, p::Int=1)
+    n < 0 && return ZERO_MONOMIAL
+    n <= 1 && return ONE_MONOMIAL
+    buf = CycloBuffer(n)
+    add_qfact!(buf, n, p)
+    return snapshot(buf)
+end
+
+"""
+    qbinomial(n::Int, k::Int)
+Returns the cyclotomic monomial for the quantum binomial coefficient `[n]_q! / ([k]_q! [n-k]_q!)`.
+"""
+function qbinomial(n::Int, k::Int)
+    (k < 0 || k > n) && return ZERO_MONOMIAL
+    (k == 0 || k == n) && return ONE_MONOMIAL
+    buf = CycloBuffer(n)
+    add_qfact!(buf, n, 1)
+    add_qfact!(buf, k, -1)
+    add_qfact!(buf, n - k, -1)
+    return snapshot(buf)
+end
+
+
+"""
     CyclotomicMonomial(sign::Int, q_pow::Int, dense_exps::Vector{Int})
 
 Build sparse cyclotomic monomials directly from dense exponent arrays.
@@ -91,9 +156,71 @@ function fuse_root(res::DCR, m::CyclotomicMonomial)
 end
 
 
+# --- Universal DCR & series assembler  ---
+
+"""
+    build_series(summand::Function, z_range::UnitRange; prefactor::CyclotomicMonomial=ONE_MONOMIAL, extract_radical::Bool=false)
+
+Constructs a `DCR` from a user-provided summand function.
+`summand(z)` must return a `CyclotomicMonomial` representing the z-th term in the series.
+"""
+function build_series(summand::Function, z_range::UnitRange{Int};
+                      prefactor::CyclotomicMonomial = ONE_MONOMIAL,
+                      extract_radical::Bool = false)
+    z_min = first(z_range)
+    z_max = last(z_range)
+
+    (z_min > z_max || prefactor.sign == 0) && return ZERO_DCR
+
+    # We allocate a single buffer to handle both the prefactor and ratio divisions
+    buf = CycloBuffer(prefactor.max_d)
+
+    # evaluate Prefactor
+    if extract_radical
+        reset!(buf)
+        add_monomial!(buf, prefactor, 1)
+        m_root, m_rad = snapshot_square_root(buf)
+    else
+        m_root = prefactor
+        m_rad = ONE_MONOMIAL
+    end
+
+    g_max_d = max(m_root.max_d, m_rad.max_d)
+
+    # Base Term
+    m_base = summand(z_min)
+    m_base.sign == 0 && return ZERO_DCR  # Trivial zero series
+    g_max_d = max(g_max_d, m_base.max_d)
+
+    # ratios
+    ratios = Vector{CyclotomicMonomial}(undef, z_max - z_min)
+    curr_term = m_base
+
+    for (i, z) in enumerate(z_min:(z_max - 1))
+        next_term = summand(z + 1)
+        # stop and truncate sum if we hit a structural zero
+        if next_term.sign == 0 
+            resize!(ratios, i - 1)
+            z_range = z_min:(z_min + i - 1)
+            break 
+        end
+        
+        # calculate next_term / curr_term 
+        reset!(buf)
+        add_monomial!(buf, next_term, 1)
+        add_monomial!(buf, curr_term, -1)
+        
+        ratio = snapshot(buf)
+        ratios[i] = ratio
+        g_max_d = max(g_max_d, ratio.max_d)
+
+        curr_term = next_term
+    end
+
+    return DCR(m_root, m_rad, m_base, ratios, z_range, g_max_d)
+end
 
 
-# --- Universal DCR assembler  ---
 """
     build_dcr!(pref_func, base_func, ratio_func, z_min, z_max; kwargs...)
 
@@ -115,7 +242,7 @@ function build_dcr!(buf::CycloBuffer,
     
     (z_min > z_max || buf.sign == 0) && return ZERO_DCR
     
-    # 1. Prefactor Evaluation
+    # prefactor evaluation
     reset!(buf)
     pref_func(buf)
     
@@ -127,8 +254,8 @@ function build_dcr!(buf::CycloBuffer,
     end
     g_max_d = max(m_root.max_d, m_rad.max_d)
     
-    # 2. Base Term at z_min
-    # Inject initial alternating sign if requested
+    # base term at z_min
+    # inject initial alternating sign if requested
     base_sign = alternating_sign ? (iseven(z_min) ? 1 : -1) : 1
     reset!(buf, base_sign)
     
@@ -136,7 +263,7 @@ function build_dcr!(buf::CycloBuffer,
     m_base = snapshot(buf)
     g_max_d = max(g_max_d, m_base.max_d)
     
-    # 3. Sequence of Dynamic Update Ratios
+    # sequence of update ratios
     ratios = Vector{CyclotomicMonomial}(undef, z_max - z_min)
     ratio_sign = alternating_sign ? -1 : 1
     
@@ -152,32 +279,61 @@ end
 
 
 """
-    build_dcr(pref_func, base_func, ratio_func, z_min, z_max; kwargs...)
+    qseries(summand::Function, z_range::UnitRange{Int}; 
+            prefactor::CyclotomicMonomial = ONE_MONOMIAL, 
+            extract_radical::Bool = false)
 
-The master DCR compiler. Generates the full combinatorial skeleton of an arbitrary 
-sequence. 
+A lightweight, user-friendly API for compiling a finite q-hypergeometric series 
+into a Deferred Cyclotomic Representation (DCR). 
+
+# Example
+```julia
+my_series = qseries(3:10) do z
+    return (-1)^z * (qfact(z) / qfact(z - 3))
+end
+```
 """
-function build_dcr(pref_func::Function, 
-                           base_func::Function, 
-                           ratio_func::Function, 
-                           z_min::Int, 
-                           z_max::Int;
-                           extract_radical::Bool=false,
-                           alternating_sign::Bool=false)
-    
-    # Estimate initial capacity based on the summation bounds
-    initial_capacity = max(20, z_max + 10)
-    buf = CycloBuffer(initial_capacity)
-
-    return build_dcr!(buf, pref_func, base_func, ratio_func, z_min, z_max;
-                              extract_radical=extract_radical, 
-                              alternating_sign=alternating_sign)
+function qseries(summand::Function, z_range::UnitRange{Int}; kwargs...)
+    return build_series(summand, z_range; kwargs...)
 end
 
 
+"""
+    qeval(m::CyclotomicMonomial; k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
+
+Universal evaluation API for a single CyclotomicMonomial. 
+- Classical Limit: Pass `q = 1`.
+- Root of Unity (TQFT): Pass `k` (integer level).
+- Complex Analytic: Pass `q` (complex or real parameter).
+- Precision is controlled by `exact` (Float64 vs Rational/Cyclotomic).
+"""
+function qeval(m::CyclotomicMonomial; 
+               k=nothing, 
+               q=nothing, 
+               exact::Bool=false, 
+               T::Type=Float64)
+    
+    # ---  classical limit (q -> 1) ---
+    if !isnothing(q) && (q == 1 || q == 1.0)
+        return exact ? project_classical_exact(m) : project_classical(m, T)
+    end
+
+    # --- complex/analytic projection ---
+    if !isnothing(q)
+        return project_analytic(m, q)
+    end
+
+    # --- root of unity projection ---
+    if !isnothing(k)
+        return exact ? project_exact(m, k) : project_discrete(m, k, T)
+    end
+
+    throw(ArgumentError("Projection target missing. Specify `k` (integer level) or `q` (parameter)."))
+end
+
 
 """
-    project_dcr(dcr::DCR; k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
+    qeval(dcr::DCR; k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
 
 Universal evaluation API for a DCR. 
 - Classical Limit: Pass `q = 1`.
@@ -185,7 +341,7 @@ Universal evaluation API for a DCR.
 - Complex Analytic: Pass `q` (complex or real parameter).
 - Precision is controlled by `exact` (Float64 vs Rational/Cyclotomic).
 """
-function project_dcr(dcr::DCR; 
+function qeval(dcr::DCR; 
                      k=nothing, 
                      q=nothing, 
                      exact::Bool=false, 

@@ -25,6 +25,7 @@ include("recoupling_api.jl")
 
 # Export physics tqft and recoupling symbols api
 export q6j, q3j, fsymbol, gsymbol, rmatrix, qdim
+export qint, qfact, qbinomial, qseries, qeval
 
 #projection 
 export project_discrete, project_exact, project_analytic
@@ -33,6 +34,6 @@ export project_classical, project_classical_exact
 
 # Export api for generic series
 export CyclotomicMonomial, DCR
-export add_qint!, add_qfact!, build_dcr, build_dcr!, project_dcr
+export add_qint!, add_qfact!, build_dcr, build_series
 
 end

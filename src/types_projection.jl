@@ -153,9 +153,40 @@ function Base.:/(comp::CompositeExactResult{T}, c) where T
     iszero(c) && throw(DivideError())
     new_terms = Dict{CyclotomicMonomial, T}()
     for (rad, factor) in comp.terms
-        new_terms[rad] = factor / c # Nemo handles division beautifully
+        new_terms[rad] = factor / c # Nemo handles division 
     end
     return CompositeExactResult{T}(comp.k, new_terms)
+end
+
+
+# --- Division involving CompositeExactResult as the denominator ---
+
+# Scalar / Composite 
+function Base.:/(c, comp::CompositeExactResult{T}) where T
+    # If the composite is a single identity radical, extract the raw Nemo factor
+    if length(comp.terms) == 1
+        rad = first(keys(comp.terms))
+        fac = first(values(comp.terms))
+        if is_identity(rad)
+            return c / fac  # pure Nemo division
+        end
+    end
+    error("Algebraic division by a CompositeExactResult with unresolved square roots is not implemented.")
+end
+
+# 
+function Base.:/(a::CompositeExactResult{T}, b::CompositeExactResult{T}) where T
+    a.k != b.k && error("Level k mismatch in division")
+    
+    if length(b.terms) == 1
+        rad = first(keys(b.terms))
+        fac = first(values(b.terms))
+        if is_identity(rad)
+            # fall back to composite/scalar 
+            return a / fac 
+        end
+    end
+    error("Algebraic division by a CompositeExactResult with unresolved square roots is not implemented.")
 end
 
 

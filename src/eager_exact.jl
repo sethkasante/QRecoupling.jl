@@ -118,7 +118,7 @@ Computes the exact SU(2)k Racah symbol using the memory-optimized iterative eage
 Inputs uses twice spins (J = 2j).
 """
 function q6j_exact(J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int, k::Int)
-    !qδtet(J1, J2, J3, J4, J5, J6, k) && return ExactResult(k, ExactSU2kModel(k).K(1), ExactSU2kModel(k).K(0))
+    !_qδtet(J1, J2, J3, J4, J5, J6, k) && return ExactResult(k, ExactSU2kModel(k).K(1), ExactSU2kModel(k).K(0))
 
     model = ExactSU2kModel(k)
     
@@ -166,7 +166,7 @@ Computes the exact SU(2)k Wigner 3j symbol using the memory-optimized iterative 
 Inputs: twice spins (J = 2j, M = 2m).
 """
 function q3j_exact(J1::Int, J2::Int, J3::Int, M1::Int, M2::Int, M3::Int, k::Int)
-    (!qδ(J1, J2, J3, k) || M1+M2+M3 != 0) && return ExactResult(k, ExactSU2kModel(k).K(1), ExactSU2kModel(k).K(0))
+    (!_qδ(J1, J2, J3, k) || M1+M2+M3 != 0) && return ExactResult(k, ExactSU2kModel(k).K(1), ExactSU2kModel(k).K(0))
     
     model = ExactSU2kModel(k)
     

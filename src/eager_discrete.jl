@@ -96,7 +96,7 @@ Evaluates the quantum 6j-symbol using a direct Log-Sum-Exp (LSE) alternating sum
 Inputs must be doubled spins (J = 2j ∈ ℤ).
 """
 function q6j_direct(J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int, k::Int, T::Type{<:AbstractFloat})
-    !qδtet(J1, J2, J3, J4, J5, J6, k) && return zero(T)
+    !_qδtet(J1, J2, J3, J4, J5, J6, k) && return zero(T)
     
     model = NumericSU2kModel(k, T)
     table = model.logqnfact
@@ -143,7 +143,7 @@ end
 Inputs must be doubled spins (J = 2j ∈ ℤ) and doubled magnetic projections (M = 2m ∈ ℤ).
 """
 function q3j_direct(J1::Int, J2::Int, J3::Int, M1::Int, M2::Int, M3::Int, k::Int, T::Type{<:AbstractFloat})
-    (!qδ(J1, J2, J3, k) || M1 + M2 + M3 != 0) && return zero(T)
+    (!_qδ(J1, J2, J3, k) || M1 + M2 + M3 != 0) && return zero(T)
     
     model = NumericSU2kModel(k, T)
     table = model.logqnfact
