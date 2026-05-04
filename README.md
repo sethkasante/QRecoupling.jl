@@ -91,7 +91,7 @@ This representation is exact, minimal, and independent of evaluation field
 ### Projections 
 Project oe evaluate the same abstract symbol into your required target field using the `qeval` function:
 ```julia
-# 1. projection into discrete level `k` (Float64 by default)
+# 1. Projection into discrete level `k` (Float64 by default)
 julia> qeval(dcr6j,k=10)
 0.1547005383792515
 
@@ -101,21 +101,21 @@ julia> j=1;
 julia> q6j(j, j, j, j, j, j, k=10)
 0.1547005383792515
 
-# 2. exact algebraic projection in cyclotomic fields (ζ)
+# 2. Exact algebraic projection in cyclotomic fields (ζ)
 julia> qeval(dcr6j, k=10, exact=true)
 Exact Algebraic Result in ℚ(ζ₂₄):
   Value: (-2//3*ζ^6 + 4//3*ζ^2 - 1)
 
-julia> q6j(j, j, j, j, j, j, k=10, exact=true)
+julia> q6j(j, j, j, j, j, j, k=10, exact=true) #alternative
 Exact Algebraic Result in ℚ(ζ₂₄):
 -2//3*ζ^6 + 4//3*ζ^2 - 1
 
-# 3. generic complex q projection
-julia> q6j(j, j, j, j, j, j, q=exp(0.5im))
+#3. Generic complex q projection
+julia> qeval(dcr6j,q=exp(0.5im))
 0.035851185150113485 + 1.969762350587362e-17im
 
-# 4. Classical Ponzano-Regge Limit (q -> 1, WignerSymbols) 
-julia> q6j(j, j, j, j, j, j, q=1, exact=true)
+# 4. Classical projection: Ponzano-Regge Limit (q -> 1, WignerSymbols) 
+julia> qeval(dcr6j,q=1,exact=true)
 1//6
 ```
 ### Topological Tensors
