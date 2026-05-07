@@ -82,17 +82,13 @@ end
 """
     _log_mag_internal(m::CyclotomicMonomial, table::Vector{T}) where T
 Ultra-fast log-magnitude evaluator for the hot loop.
-Bypasses iterator allocations and safety branches to ensure nanosecond-scale execution.
 """
 @inline function _log_mag_internal(m::CyclotomicMonomial, table::Vector{T}) where T
     m.sign == 0 && return -T(Inf)
     
     lm = zero(T)
-    pe = m.phi_exps
-    
-    @inbounds for i in 1:length(pe)
-        p = pe[i]
-        lm += p.second * table[p.first]
+    @inbounds for (d, e) in m.phi_exps
+        lm += e * table[d]
     end
     
     return lm
@@ -104,16 +100,23 @@ end
 """
     project_discrete(m::CyclotomicMonomial, k::Int, ::Type{T}=Float64)
 Evaluates [n]_q or dimensions at SU(2)_k.
-Returns the real value (signs are tracked, complex phases are ignored)
+Returns the real value.
 """
 function project_discrete(m::CyclotomicMonomial, k::Int, ::Type{T}=Float64) where T
     m.sign == 0 && return zero(T)
+    h = k + 2
     
+    # check zero or pole 
+    e_val = _phi_exponent(m, h)
+    if e_val > 0
+        return zero(T)
+    elseif e_val < 0
+        throw(DomainError(k, "Topological pole at level k=$k."))
+    end
+    
+    # magnitude
     table = get_mag_table(k, m.max_d, T)
     lm = _log_mag_internal(m, table)
-    
-    # If lm is -Inf (topological zero)
-    (isinf(lm) && lm < 0) && return zero(T)
     
     return m.sign * exp(lm)
 end
@@ -167,6 +170,25 @@ end
 Thread-safe, Zero-Allocation evaluator for full DCR symbols (e.g., 6j, 3j).
 """
 function project_discrete(res::DCR, k::Int, ::Type{T}=Float64) where {T}
-    res.base.sign == 0 && return zero(T)
+    h = k + 2
+    
+    # check zeros and poles
+    # prevents NaN results from +Inf and -Inf in the LSE loop
+    e_rad  = _phi_exponent(res.radical, h)
+    e_root = _phi_exponent(res.root, h)
+    e_base = _phi_exponent(res.base, h)
+    
+    e_net = (e_rad / 2.0) + e_root + e_base
+    
+    if e_net > 0.0
+        return zero(T)
+    elseif e_net < 0.0
+        throw(DomainError(k, "Topological pole at level k=$k."))
+    end
+    
+    if res.radical.sign == 0 || res.base.sign == 0 || res.root.sign == 0
+        return zero(T)
+    end
+    
     return _evaluate_discrete_dcr(res, k, T)
 end

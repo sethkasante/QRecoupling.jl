@@ -15,8 +15,8 @@
 # 
 # As a rule of thumb, this exact engine is incredibly fast and stable for k < 500. 
 # Pushing past k = 1000 may cause RAM explosion or severe slowdowns due to 
-# dense polynomial arithmetic. If you are working in ultra-high level regimes. 
-# Consider using the `mode=:discrete` instead for exact evaluation.
+# dense polynomial arithmetic. If you are working in ultra-high level regimes, 
+# consider using the discrete numeric solver instead.
 # -------------------------------------------------------------------------------
 
 
@@ -72,7 +72,7 @@ end
     @inbounds for (d, e) in m.phi_exps
          if d == h
             e > 0 && return zero(ζ)
-            e < 0 && throw(DomainError(k, "Topological pole at level k"))
+            e < 0 && throw(DomainError(h-2, "Topological pole at level $(h-2)"))
             continue
         end
 
@@ -98,6 +98,15 @@ Evaluates a single monomial exactly. Returns a Nemo `nf_elem`.
 """
 function project_exact(m::CyclotomicMonomial, k::Int)
     h = k + 2
+    #check zero or pole 
+    e_val = _phi_exponent(m, h)
+    if e_val > 0
+        _, ζ = cyclotomic_field(2h, "ζ")
+        return zero(ζ)
+    elseif e_val < 0
+        throw(DomainError(k, "Topological pole at level k=$k."))
+    end
+
     K, ζ = cyclotomic_field(2h, "ζ")
     m.sign == 0 && return zero(ζ)
     V_exact, V_inv = get_phi_exact_table(m.max_d, k, ζ)
@@ -113,8 +122,25 @@ end
 Evaluates a DCR series exactly for discrete level `k`. Returns a CompositeExactResult.
 """
 function project_exact(dcr::DCR, k::Int)
-    h = k + 2
-    K, ζ = cyclotomic_field(2h, "ζ")
+    h = k + 2   
+
+    #check zero or pole 
+    e_rad  = _phi_exponent(dcr.radical, h)
+    e_root = _phi_exponent(dcr.root, h)
+    e_base = _phi_exponent(dcr.base, h)
+
+    e_net = (e_rad / 2.0) + e_root + e_base
+
+    if e_net > 0.0
+        # true topological zero 
+        _, ζ = cyclotomic_field(2h, "ζ")
+        return CompositeExactResult(k, dcr.radical, zero(ζ)) 
+    elseif e_net < 0.0
+        throw(DomainError(k, "Topological pole at level k=$k."))
+    end
+
+    
+    _, ζ = cyclotomic_field(2h, "ζ")
     
     if dcr.radical.sign == 0 || dcr.base.sign == 0
         return CompositeExactResult(k, ZERO_MONOMIAL, zero(ζ))
@@ -122,37 +148,42 @@ function project_exact(dcr::DCR, k::Int)
     
     V_exact, V_inv = get_phi_exact_table(dcr.max_d, k, ζ)
     
-    # --- Loop: Hypergeometric Sum ---
-    sum_val = one(ζ)
-    curr_term = one(ζ)
+    # bufffer to multiply monomials
+    buf = CycloBuffer(dcr.max_d)
     
+    # m_root * m_base (necessary to cancel certain poles) 
+    mul!(buf, dcr.root, dcr.base)
+    curr_mono = snapshot(buf)
+    
+    # project product
+    sum_val = _project_monomial_nemo_internal(curr_mono, V_exact, V_inv, ζ, h)
+
+    # fuse ratios then project
     for r in dcr.ratios
-        # internal monomial projection
-        r_val = _project_monomial_nemo_internal(r, V_exact, V_inv, ζ, h)
-        curr_term *= r_val
-        sum_val += curr_term
+        reset!(buf)
+        mul!(buf, curr_mono, r)
+        curr_mono = snapshot(buf)
+        
+        # project
+        sum_val += _project_monomial_nemo_internal(curr_mono, V_exact, V_inv, ζ, h)
     end
 
-    # root prefactor and base term
-    m_base_val = _project_monomial_nemo_internal(dcr.base, V_exact, V_inv, ζ, h)
-    m_root_val = _project_monomial_nemo_internal(dcr.root, V_exact, V_inv, ζ, h)
-    
-    return CompositeExactResult(k, dcr.radical, m_root_val * m_base_val * sum_val)
+    return CompositeExactResult(k, dcr.radical, sum_val)
 end
 
 
-
+# consistency checks 
 
 """
     evaluate_exact(res::CompositeExactResult, [T=ComplexF64])
-Projects the deferred cyclotomic exact result into a complex/real number.
-Just for consistency checks
+Projects the deferred cyclotomic exact result into a complex/real numeric type.
+Useful for precision stability checks against float evaluations.
 """
-function evaluate_exact(res::CompositeExactResult, ::Type{T}=ComplexF64) where T
-    h = res.k + 2
+function evaluate_exact(comp::CompositeExactResult, ::Type{T}=ComplexF64) where T
+    h = comp.k + 2
     target_z = cispi(one(BigFloat) / h)
     
-    # 1. Horner evaluation for the Nemo polynomial (safe BigFloat casting)
+    # horner evaluation for the Nemo polynomial 
     function _horner(poly, z)
         deg = degree(parent(poly))
         val = Complex{BigFloat}(0)
@@ -164,14 +195,21 @@ function evaluate_exact(res::CompositeExactResult, ::Type{T}=ComplexF64) where T
         return val
     end
     
-    # Evaluate the exact polynomial sum
-    B = _horner(res.sum_factor, target_z) 
+    total_val = Complex{BigFloat}(0)
     
-    # evaluate the radical (CyclotomicMonomial) directly
-    rad_val = project_discrete(res.radical, res.k )
+    # iterate over all terms 
+    for (rad, factor) in comp.terms
+        B = _horner(factor, target_z) 
+        
+        # Evaluate the radical EXACTLY in Nemo, then horner it 
+        rad_nemo = project_exact(rad, comp.k)
+        rad_val_bf = _horner(rad_nemo, target_z)
+        
+        # Take the principal complex square root (preserves TQFT phase cancellation!)
+        A = sqrt(rad_val_bf)
+        
+        total_val += A * B
+    end
     
-    A = sqrt(max(zero(BigFloat), real(rad_val)))
-    val = A * B
-    
-    return T <: Real ? T(real(val)) : T(val)
+    return T <: Real ? T(real(total_val)) : T(total_val)
 end

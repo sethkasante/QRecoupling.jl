@@ -302,7 +302,16 @@ function Base.hash(m::CyclotomicMonomial, h::UInt)
     return hash(m.phi_exps, h)
 end
 
-
+"""
+    _phi_exponent(m::CyclotomicMonomial, h::Int)
+Returns the exponent of Φ_h in the monomial. Returns 0 if not present.
+"""
+@inline function _phi_exponent(m::CyclotomicMonomial, h::Int)
+    for (d, e) in m.phi_exps
+        d == h && return e
+    end
+    return 0
+end
 
 # ---- REPL ---- 
 
