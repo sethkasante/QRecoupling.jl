@@ -188,61 +188,6 @@ function qdim(j::Spin; k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
     return exact ? project_exact(mono, k) : project_discrete(mono, k, T)
 end
 
-
-"""
-    rmatrix(j1::Spin, j2::Spin, j3::Spin; k=nothing, q=nothing, exact::Bool=false, T::Type=ComplexF64)
-
-Returns the R-matrix phase (braiding eigenvalue) for j1, j2 crossing into j3.
-Formula: R = (-1)^{j_1 + j_2 - j_3} q^{j_3(j_3+1) - j_1(j_1+1) - j_2(j_2+1)}
-"""
-function rmatrix(j1::Spin, j2::Spin, j3::Spin; 
-                 k=nothing, q=nothing, exact::Bool=false, T::Type=ComplexF64)
-    
-    J1, J2, J3 = doubled(j1, j2, j3)
-    
-    if !isnothing(k) && !_qδ(J1, J2, J3, k)
-        return exact ? zero(cyclotomic_field(1, "ζ")[1]) : T(0)
-    end
-
-    # phase formula: s * q^(p/2)
-    p = (J3*(J3+2) - J1*(J1+2) - J2*(J2+2)) ÷ 2
-    s = iseven((J1 + J2 - J3) ÷ 2) ? 1 : -1
-    
-    # q -> 1
-    if !isnothing(q) && (q == 1 || q == 1.0)
-        return exact ? s // 1 : T(s)
-    end
-    
-    # analytic
-    if !isnothing(q)
-        q_C = complex(float(q))
-        return T(s * (sqrt(q_C))^p)
-    end
-    
-    # exact algebraic (Nemo)
-    if exact
-        h = k + 2
-        # If p is even, p/2 is an integer. The phase naturally lives in ℚ(ζ_2h).
-        if iseven(p)
-            K, z = cyclotomic_field(2h, "ζ")
-            return s * z^(p ÷ 2)
-        else
-            @info "R-matrix phase involves q^{1/2}. Evaluated in expanded cyclotomic field ℚ(ζ_$(4h))." maxlog=1
-            K, z = cyclotomic_field(4h, "ζ") 
-            return s * z^p
-        end
-    end
-    
-    # discrete level k (root-of-unity)
-    if !isnothing(k)
-        h = k + 2
-        phase_angle = (pi * p) / (2 * h)
-        return T(s * cis(phase_angle))
-    end
-    
-    throw(ArgumentError("Must specify evaluation target `k` or `q`."))
-end
-
 #---- clear caches --- 
 
 clear_numeric_caches!() = (empty!(LOGQFACT_CACHE); nothing)

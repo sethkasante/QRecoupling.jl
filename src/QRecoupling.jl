@@ -20,6 +20,7 @@ include("projection_analytic.jl")
 include("eager_discrete.jl")  
 include("eager_exact.jl")    
 
+include("phases.jl")  
 include("recoupling_api.jl")  
 
 
