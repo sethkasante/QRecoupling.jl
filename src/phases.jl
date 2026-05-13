@@ -13,7 +13,7 @@ struct QPhase
     q_pow::Rational{Int}
 end
 
-# --- Basic Identities ---
+# --- Basic identities ---
 Base.iszero(p::QPhase) = p.sign == 0
 Base.one(::Type{QPhase}) = QPhase(Int8(1), 0//1)
 Base.zero(::Type{QPhase}) = QPhase(Int8(0), 0//1)
@@ -22,11 +22,11 @@ Base.copy(p::QPhase) = QPhase(p.sign, p.q_pow)
 
 Base.:(==)(a::QPhase, b::QPhase) = (iszero(a) && iszero(b)) || (a.sign == b.sign && a.q_pow == b.q_pow)
 
-# --- Unary Operators ---
+# --- unary operators ---
 Base.:-(p::QPhase) = QPhase(Int8(-p.sign), p.q_pow)
 Base.:+(p::QPhase) = p
 
-# --- Multiplicative Group ---
+# --- multiplication ---
 function Base.:*(a::QPhase, b::QPhase)
     (iszero(a) || iszero(b)) && return zero(QPhase)
     return QPhase(a.sign * b.sign, a.q_pow + b.q_pow)
@@ -39,7 +39,6 @@ end
 
 Base.:/(a::QPhase, b::QPhase) = a * inv(b)
 
-# --- Exponentiation ---
 function Base.:^(p::QPhase, n::Integer)
     iszero(p) && return n == 0 ? one(QPhase) : zero(QPhase)
     new_sign = iseven(n) ? Int8(1) : p.sign
@@ -56,7 +55,7 @@ function Base.:^(p::QPhase, r::Rational)
     return QPhase(new_sign, p.q_pow * r)
 end
 
-# --- Printing ---
+# --- print repl ---
 function Base.show(io::IO, p::QPhase)
     iszero(p) && return print(io, "0")
     s_str = p.sign == -1 ? "-" : ""
@@ -77,11 +76,10 @@ function Base.:*(phase::QPhase, m::CyclotomicMonomial)
     
     if denominator(phase.q_pow) == 1
         # It's a clean integer! Safe to absorb.
-        return CyclotomicMonomial(
-            phase.sign * m.sign,
+        return CyclotomicMonomial(phase.sign * m.sign,
             m.q_pow + Int(numerator(phase.q_pow)),
             m.phi_exps,
-            m.max_d     # <-- Passed safely through!
+            m.max_d     
         )
     else
         throw(ArgumentError("Cannot absorb fractional QPhase (q^$(phase.q_pow)) into a discrete CyclotomicMonomial. Multiply fractional phases against the parent CompositeExactResult instead."))
@@ -135,7 +133,7 @@ Creates a full `CyclotomicMonomial` requiring a strict integer power for q.
 Automatically calculates `max_d` from the provided polynomial exponents.
 """
 function q_mono(q_pow::Int; sign=1, phi_exps=Pair{Int,Int}[])
-    # Compute max_d dynamically so the CycloBuffer doesn't overflow later
+    # Compute max_d 
     d_max = isempty(phi_exps) ? 1 : maximum(first, phi_exps)
     return CyclotomicMonomial(Int8(sign), q_pow, phi_exps, d_max)
 end
@@ -161,33 +159,31 @@ function rmatrix(j1::Spin, j2::Spin, j3::Spin;
         return (exact || (isnothing(k) && isnothing(q))) ? zero(QPhase) : T(0)
     end
     
-    # if k is provided
     if !isnothing(k) && !_qδ(J1, J2, J3, k)
         return (exact || isnothing(q)) ? zero(QPhase) : T(0)
     end
 
-    # Phase formula variables
     p = (J3*(J3+2) - J1*(J1+2) - J2*(J2+2)) ÷ 2
     s = iseven((J1 + J2 - J3) ÷ 2) ? Int8(1) : Int8(-1)
     
-    # --- exact q phase ---
+    # exact q-phase
     if (isnothing(k) && isnothing(q)) || exact
         return QPhase(s, p // 2)
     end
     
-    # --- classical limit ---
+    # classical limit 
     if !isnothing(q) && (q == 1 || q == 1.0)
         return T(s)
     end
     
-    # --- Numeric (level k) ---
+    # level k
     if !isnothing(k)
         h = k + 2
-        phase_angle = (pi * p) / (2 * h)
-        return T(s * cis(phase_angle))
+        phase_angle = p / (2h)
+        return T(s * cispi(phase_angle))
     end
     
-    # --- generic q ---
+    # generic q
     if !isnothing(q)
         q_C = complex(float(q))
         return T(s * exp((p / 2) * log(q_C)))
