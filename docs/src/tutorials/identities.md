@@ -93,7 +93,7 @@ LHS - RHS = Exact Algebraic Result in ℚ(ζ₅₄):
   Value: 0
 Identity Holds!
 ```
-By leveraging `QRecoupling.jl`, the radical prefactors of the $6j$-symbols perfectly annihilate each other during multiplication, keeping the entire computation division-free and strictly inside the cyclotomic field $\mathbb{Q}(\zeta)$.
+By leveraging `QRecoupling.jl`, the radical prefactors of the $6j$-symbols perfectly annihilate each other (when possible) during multiplication, keeping the entire computation division-free and strictly inside the cyclotomic field $\mathbb{Q}(\zeta)$.
 
 --- 
 
