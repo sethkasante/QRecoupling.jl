@@ -9,9 +9,9 @@ In this tutorial, we will prove the two most important topological identities in
 
 ### Proof of Orthogonality 
 
-In a triangulated 3-manifold, integrating out an internal edge corresponds to the "Bubble Move". Mathematically, this enforces the orthogonality of the $6j$-symbols.
+The quantum $6j$ symbols satisfy the orthogonal relation generically for all $q \in \mathbb{C}^\times$. The orthogonal identity relates the sum of product of two $6j$ symbols to the Kronecker delta and quantum dimensions.
 
-We can prove this *exactly* (without floating-point errors) using the `exact=true` condition.
+We can prove this *exactly* for discrete level $k$ model (without floating-point errors) using the `exact=true` condition.
 
 ```julia
 using QRecoupling
@@ -29,14 +29,15 @@ function test_orthogonality(j1, j2, j3, j4, j5, j6;k=k)
             dim_x = qdim(x, k=k, exact=true)
             sym1  = q6j(j1, j2, x, j3, j4, j5, k=k, exact=true)
             sym2  = q6j(j1, j2, x, j3, j4, j6, k=k, exact=true)
+            val = dim_x * sym1 * sym2
             
-            LHS += dim_x * sym1 * sym2
+            LHS += iseven(2*(j1+j2+j3+j4)) ? val : - val
         end
     end
     
     # evaluate exact RHS
     RHS = 0
-    if j5 == j6 && abs(j1 - j2) <= j5 <= (j1 + j2) && (j1 + j2 + j5) <= k && abs(j3 - j4) <= j5 <= (j3 + j4) && (j3 + j4 + j5) <= k
+    if j5 == j6 && QRecoupling.qδ(j1,j4,j5,k) && QRecoupling.qδ(j2,j3,j5,k) 
         RHS = 1/qdim(j5, k=k, exact=true)
     end
     
@@ -61,13 +62,13 @@ LHS - RHS = Exact Algebraic Result in ℚ(ζ₁₄):
   Value: 0
 Identity Holds!
 
-julia> test_orthogonality(0.5, 0.5, 0.5, 0.5, 1.0, 1.0, k=10)
-Orthogonality Check for SU(2)_10
+julia> test_orthogonality(3/2,3/2,1/2,1/2,2,2, k=8)
+Orthogonality Check for SU(2)_8
 --------------------------------
-LHS (Sum): Exact Algebraic Result in ℚ(ζ₂₄):
-  Value: (-1//2*ζ^6 + ζ^2 - 1//2)
-RHS (Exact): -1//2*ζ^6 + ζ^2 - 1//2
-LHS - RHS = Exact Algebraic Result in ℚ(ζ₂₄):
+LHS (Sum): Exact Algebraic Result in ℚ(ζ₂₀):
+  Value: (-1//2*ζ^6 + 1//2*ζ^4)
+RHS (Exact): -1//2*ζ^6 + 1//2*ζ^4
+LHS - RHS = Exact Algebraic Result in ℚ(ζ₂₀):
   Value: 0
 Identity Holds!
 
@@ -79,6 +80,16 @@ LHS (Sum): Exact Algebraic Result in ℚ(ζ₁₂₄):
   Value: 0
 RHS (Exact): 0
 LHS - RHS = Exact Algebraic Result in ℚ(ζ₁₂₄):
+  Value: 0
+Identity Holds!
+
+test_orthogonality(13/2,13/2,11/2,15/2,2,2, k=25)
+Orthogonality Check for SU(2)_25
+--------------------------------
+LHS (Sum): Exact Algebraic Result in ℚ(ζ₅₄):
+  Value: (-ζ^17 + ζ^15 - ζ^13 + ζ^11 + ζ^10 - ζ^7 - ζ^6 + ζ^5 + ζ^4 - ζ^3 - ζ^2 + 1)
+RHS (Exact): -ζ^17 + ζ^15 - ζ^13 + ζ^11 + ζ^10 - ζ^7 - ζ^6 + ζ^5 + ζ^4 - ζ^3 - ζ^2 + 1
+LHS - RHS = Exact Algebraic Result in ℚ(ζ₅₄):
   Value: 0
 Identity Holds!
 ```
