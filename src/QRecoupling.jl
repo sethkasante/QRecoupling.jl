@@ -34,7 +34,7 @@ export project_classical, project_classical_exact
 
 
 # Export api for generic series
-export CyclotomicMonomial, DCR
+export CyclotomicMonomial, DCR, QPhase
 export add_qint!, add_qfact!, build_dcr!, build_series
 
 end
