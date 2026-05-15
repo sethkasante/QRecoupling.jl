@@ -2,6 +2,7 @@
 
 # ------------------------------------------------------------------------
 #           --- Projection to Classical Limit ----
+#  Evaluates unprojected CyclotomicMonomial and DCR at q = 1
 #  Classical Limit (q → 1): Numerical & Exact Projectors
 #  Computes the Ponzano-Regge classical limit where level k → ∞
 #
@@ -11,9 +12,10 @@
 
 using Base.GMP.MPZ
 
-# ----------------------------------------------------------------
-#  Prime-Power Sieve   Φ_d(1) = p  if d = pᵏ,  else 1
-# ----------------------------------------------------------------
+# --------------------------------
+#  Prime-Power Sieve   
+# Φ_d(1) = p if d = pᵏ, else 1
+# --------------------------------
 
 const CLASSICAL_SIEVE = Int[]
 const CLASSICAL_LOG = Float64[]
@@ -73,9 +75,9 @@ function ensure_classical_sieve(max_d::Int)
 end
 
 
-# ----------------------------------------------------------------
+# ----------------------------------
 #  Internal log-magnitude helpers
-# ----------------------------------------------------------------
+# ----------------------------------
 
 """
     _log_mag_classical(m::CyclotomicMonomial, lmag::Vector{Float64}, ::Type{T})
@@ -97,9 +99,9 @@ lookups in hot loops.
     return (lm, m.sign)
 end
 
-# ----------------------------------------------------------------
-#  Numerical Projectors  (Zero-Allocation Streaming LSE)
-# ----------------------------------------------------------------
+# --------------------------------------------------
+#  Numerical Projectors  (Zero-Allocation LSE)
+# --------------------------------------------------
 
 """
     project_classical(m::CyclotomicMonomial, ::Type{T}=Float64) -> T
@@ -120,7 +122,7 @@ function project_classical(m::CyclotomicMonomial, ::Type{T}=Float64) where T
     end
 
     isinf(lm) && lm < 0 && return zero(T)
-    # NaN here means 0*Inf in the exponents — degenerate input
+    # NaN = 0*Inf in the exponents 
     @assert !isnan(lm) "NaN in log-magnitude: degenerate monomial (sign=$(m.sign))"
 
     return m.sign * exp(lm)
@@ -170,15 +172,15 @@ function project_classical(dcr::DCR, ::Type{T}=Float64) where T
 end
 
 
-# ----------------------------------------------------------------
-#  Exact Projectors   (Rational BigInt / Zero-GCD)
-# ----------------------------------------------------------------
+# -------------------------------------------------
+#  Exact Result (Rational BigInt / Zero-GCD)
+# -------------------------------------------------
 
 """
     _fast_rat_inplace(m, sieve, buf) → Rational{BigInt}
 
 Compute `m` as an exact rational in the q->1 limit using the prime-power
-sieve.  `buf` is a reusable `BigInt` scratch buffer (mutated, not returned).
+sieve. `buf` is a reusable `BigInt` scratch buffer (mutated, not returned).
 """
 function _fast_rat_inplace(m::CyclotomicMonomial,sieve::Vector{Int},buf::BigInt)
     m.sign == 0 && return 0 // one(BigInt)
@@ -223,11 +225,11 @@ end
 
 Evaluate the full DCR series exactly at q -> 1 as a `Rational{BigInt}`.
 
-Algorithm (four passes, no GCD on every ratio):
+Algorithm: (four passes, no GCD on every ratio):
   1. Find the global denominator exponents
   2. Denominator + N_0 reconstruction
-  3. Sum hot loop — accumulate numerators over `D_glob`
-  4. Fuse prefactor — multiply root and radical
+  3. Sum hot loop: accumulate numerators over `D_glob`
+  4. Fuse prefactor: multiply root and radical
 
 Function is fully thread-safe.
 """
@@ -237,12 +239,11 @@ function project_classical_exact(dcr::DCR)
     ensure_classical_sieve(dcr.max_d)
     sieve = CLASSICAL_SIEVE
 
-    # --- local workspaces (thread-safe, no shared buffers) 
     max_p = dcr.max_d  # prime index never exceeds max_d
     curr_exps = zeros(Int, max_p)
     min_exps = zeros(Int, max_p)
 
-    # --- (denominator identification) ----
+    # denominator identification 
     @inbounds for (d, e) in dcr.base.phi_exps
         p = sieve[d];  p <= 1 && continue
         curr_exps[p] += e
@@ -257,7 +258,7 @@ function project_classical_exact(dcr::DCR)
         end
     end
 
-    # --- reconstruct D_glob and N_0 ---
+    # reconstruct D_glob and N_0 
     fill!(curr_exps, 0)
     @inbounds for (d, e) in dcr.base.phi_exps
         p = sieve[d];  p > 1 && (curr_exps[p] += e)
@@ -284,7 +285,7 @@ function project_classical_exact(dcr::DCR)
         end
     end
 
-    # ----- Integer Sum: hot loop ------
+    # Integer Sum: loop 
     Sum_N  = MPZ.set(N_0)
     dcr.base.sign < 0 && MPZ.neg!(Sum_N, Sum_N)
 
@@ -311,12 +312,11 @@ function project_classical_exact(dcr::DCR)
         curr_sign > 0 ? MPZ.add!(Sum_N, Sum_N, curr_N) : MPZ.sub!(Sum_N, Sum_N, curr_N)
     end
 
-    # ---- fuse prefactor -----
-    # _fast_rat_inplace includes m.sign; extract unsigned radical separately
+    # fuse prefactor 
     root_rat = _fast_rat_inplace(dcr.root,     sieve, buf)
     rad_rat  = _fast_rat_inplace(dcr.radical,  sieve, buf)
 
-    # Radical magnitude must be unsigned - sign is tracked via dcr.radical.sign
+    # Radical magnitude must be unsigned. Sign is tracked via dcr.radical.sign
     rad_unsigned = abs(rad_rat)
 
     total_sum_rat  = (Sum_N // D_glob) * root_rat
@@ -324,3 +324,9 @@ function project_classical_exact(dcr::DCR)
 
     return ClassicalResult(result_sign, rad_unsigned * total_sum_rat^2)
 end
+
+# ---------------------------------------- 
+#  QPhase Classical Projectors (q -> 1)
+# ----------------------------------------
+project_classical(p::QPhase, ::Type{T}=Float64) where T = T(p.sign)
+project_classical_exact(p::QPhase) = ClassicalResult(sign(p), p.sign == 0 ? 0//1 : 1//1)

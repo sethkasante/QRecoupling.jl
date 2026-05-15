@@ -1,15 +1,16 @@
-# TQFT & Quantum Gravity
+# Topological Symbols & Invariants
 
-`QRecoupling.jl` is purpose-built to provide the exact, high-performance topological kernels required for 3D Quantum Gravity (spin foam models), string-net condensates, and state-sum invariants like the Turaev-Viro model.
+`QRecoupling.jl` provides the exact, high-performance building blocks required for computing spin networks, knot invariants, and 3D state-sum models.
 
-This page demonstrates how to compute physical observables, manipulate tensor networks, and seamlessly transition between quantum and classical spacetime limits.
+This page demonstrates how to evaluate the core recoupling symbols, manipulate topological phases, and transition smoothly between discrete quantum topologies and continuous classical limits.
 
 ---
 
-## The Quantum Recoupling Symbols
-The core topological vertex in $SU(2)_q$ recoupling theory is the quantum $6j$-symbol (or Racah-Wigner symbol). It represents the probability amplitude of a tetrahedral quantum geometry. 
+## The Wigner 6j-Symbol
 
-To evaluate a $6j$-symbol, simply provide the six half-integer spins $j_i$ and the evaluation target (such as the topological level $k$).
+The fundamental vertex in $\rm SU(2)_q$ recoupling theory is the quantum $6j$-symbol (or Racah-Wigner symbol). It represents the probability amplitude of a tetrahedral quantum geometry.
+
+To evaluate a $6j$-symbol, simply provide the six half-integer spins $j_i$ and an evaluation target—such as the discrete Turaev-Viro level $k$.
 
 ```julia
 using QRecoupling
@@ -23,18 +24,23 @@ println(val)
 exact_val = q6j(1, 1, 1, 1, 1, 1, k=10, exact=true)
 println(exact_val) 
 # Output: Exact Algebraic Result in ℚ(ζ₂₄): Value: -2//3*ζ^6 + 4//3*ζ^2 - 1
+
 ```
 
-### Complex Deformations
-If you are studying analytic continuation or generic quantum groups, you can evaluate the geometry at any continuous complex deformation parameter $q$.
+### Generic Complex Deformations
+
+If you are studying analytic continuation, hyperbolic geometries, or generic quantum groups, you can evaluate the geometry at any continuous complex deformation parameter $q$.
+
 ```julia
 cval = q6j(1, 1, 1, 1, 1, 1, q=exp(0.5im))
+
 ```
 
 ---
 
 ## The Classical Limit (Ponzano-Regge)
-As the level $k \to \infty$, the quantum deformation parameter $q \to 1$. This limit reduces the Turaev-Viro spherical spacetime to a flat Ponzano-Regge geometry.
+
+As the level $k \to \infty$, the quantum deformation parameter $q \to 1$. This limit reduces the quantum spherical spacetime to a flat, classical Ponzano-Regge geometry.
 
 Setting `q = 1` dynamically routes the package to evaluate standard classical angular momentum coefficients.
 
@@ -45,15 +51,17 @@ cl_float = q6j(1, 1, 1, 1, 1, 1, q=1)
 # Exact, zero-loss rational classical limit
 cl_rational = q6j(1, 1, 1, 1, 1, 1, q=1, exact=true)
 println(cl_rational)
-# Output: 1//6
+# Output: Classical Result: 1//6
+
 ```
 
 ---
 
-## Topological Tensors
-When constructing large tensor networks or modular tensor categories, you often need composite symbols that include specific geometric phases or quantum dimension regularizations.
+## Auxiliary Tensors & Symbols
 
-`QRecoupling.jl` provides direct APIs for the full suite of TQFT observables:
+When constructing large tensor networks, fusion categories, or knot invariants, you often need composite symbols that include specific geometric phases or dimension regularizations.
+
+`QRecoupling.jl` provides direct APIs for the full suite of observables:
 
 ```julia
 k = 5
@@ -70,20 +78,40 @@ f_val = fsymbol(1, 1, 1, 1, 1, 1, k=k)
 # 4. G-Symbol (tetrahedrally symmetric invariant for state sums)
 g_val = gsymbol(1, 1, 1, 1, 1, 1, k=k)
 
-# 5. R-Matrix (braiding eigenvalue)
-r_val = rmatrix(1, 1, 1, k=k)
 ```
-*Note: Requesting `exact=true` on phase factors like `rmatrix` automatically scales the cyclotomic field extension to safely encapsulate fractional powers of $q$.*
+
+### Topological Phases (`QPhase`)
+
+Tracking fractional framing anomalies and braiding eigenvalues is notorious for causing floating-point drift or algebraic type errors. `QRecoupling.jl` safely handles these via a deferred fractional architecture.
+
+```julia
+# R-Matrix (braiding eigenvalue for two crossings)
+r_val = rmatrix(1, 1, 1, k=k)
+
+# Exact Evaluation dynamically returns an isolated QPhase object
+exact_phase = rmatrix(1/2, 1/2, 1, exact=true)
+println(exact_phase)
+# Output: q^(1//2)
+
+```
 
 ---
 
-## High-Performance Tensor Contractions
-To contract massive tensor networks (like an $S^3$ manifold or a dense knot complement), computation speed is critical. 
+## High-Performance quantum Wigner Symbols
 
-By default, `QRecoupling.jl` evaluates symbols by first compiling an exact symbolic graph (the DCR) to prevent overflow. However, if you are calling the same function millions of times in a tight loop, you can use the `eager=true` flag. This bypasses the symbolic graph allocation entirely and pushes floating-point data straight into the optimized Log-Sum-Exp numerical solver.
+To contract massive tensor networks (like an entire manifold triangulation), computation speed is critical.
+
+By default, `QRecoupling.jl` evaluates symbols by first compiling a deferred cyclotomic graph (the DCR) to prevent overflow/NaN poisoning. However, if you are calling the same function millions of times in a tight loop and are confident in the scale of the boundaries, you can use the `eager=true` flag.
+
+This bypasses the symbolic graph allocation entirely and pushes floating-point data straight into the optimized numerical solver.
 
 ```julia
-# Bypasses algebraic allocation for maximum speed inside tight loops
-fast_val = q6j(10, 10, 10, 10, 10, 10, k=50, eager=true)
+# Bypasses algebraic graph allocation for maximum speed inside tight loops
+fast_val = q6j(10, 10, 10, 10, 10, 10, k=5000, eager=true)
+#Output: -0.002916327224229094
+
 ```
+
 *(Note: `eager=true` is strictly available for discrete numerical evaluations where an integer level `k` is provided.)*
+
+---

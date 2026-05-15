@@ -12,6 +12,7 @@ include("symmetries.jl")
 
 include("generic_series_dcr.jl")   
 include("recoupling_symbols_dcr.jl") # recoupling symbols and tqft invariants
+include("phases.jl")  
 
 include("projection_classical.jl")
 include("projection_discrete.jl")
@@ -20,7 +21,6 @@ include("projection_analytic.jl")
 include("eager_discrete.jl")  
 include("eager_exact.jl")    
 
-include("phases.jl")  
 include("recoupling_api.jl")  
 
 
