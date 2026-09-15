@@ -80,6 +80,20 @@ function Base.:*(a::CompositeExactResult{T}, b::CompositeExactResult{T}) where T
     return result
 end
 
+"Non-negative integer powers, by repeated multiplication (radicals fuse at every step)."
+function Base.:^(comp::CompositeExactResult, n::Integer)
+    n < 0 && throw(ArgumentError("negative powers of a CompositeExactResult are not supported"))
+    if n == 0
+        K, _ = cyclotomic_field(2 * (comp.k + 2), "ζ")
+        return CompositeExactResult(comp.k, ONE_MONOMIAL, K(1))
+    end
+    result = comp
+    for _ in 2:n
+        result = result * comp
+    end
+    return result
+end
+
 function Base.:*(c, comp::CompositeExactResult{T}) where T
     iszero(c) && return zero(comp)
     new_terms = Dict{CyclotomicMonomial, T}()

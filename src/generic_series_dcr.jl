@@ -150,9 +150,10 @@ Multiplies the 'root' (rational) part of the DCR by `m`.
 Useful for quantum dimensions or integer phases.
 """
 function fuse_root(res::DCR, m::CyclotomicMonomial)
+    res.base.sign == 0 && return res
     new_root = res.root * m
     new_max_d = max(res.max_d, m.max_d)
-    return DCR(new_root, res.radical, res.base, res.ratios, new_max_d)
+    return DCR(new_root, res.radical, res.base, res.ratios, res.z_range, new_max_d)
 end
 
 
@@ -172,10 +173,9 @@ function build_series(summand::Function, z_range::UnitRange{Int};
 
     (z_min > z_max || prefactor.sign == 0) && return ZERO_DCR
 
-    # We allocate a single buffer to handle both the prefactor and ratio divisions
+    # a single buffer handles the prefactor and the ratio divisions
     buf = CycloBuffer(prefactor.max_d)
 
-    # evaluate Prefactor
     if extract_radical
         reset!(buf)
         add_monomial!(buf, prefactor, 1)
@@ -184,40 +184,47 @@ function build_series(summand::Function, z_range::UnitRange{Int};
         m_root = prefactor
         m_rad = ONE_MONOMIAL
     end
-
     g_max_d = max(m_root.max_d, m_rad.max_d)
 
-    # Base Term
+    # base term: skip leading zero terms
     m_base = summand(z_min)
-    m_base.sign == 0 && return ZERO_DCR  # Trivial zero series
+    while m_base.sign == 0
+        z_min == z_max && return ZERO_DCR
+        z_min += 1
+        m_base = summand(z_min)
+    end
     g_max_d = max(g_max_d, m_base.max_d)
 
-    # ratios
-    ratios = Vector{CyclotomicMonomial}(undef, z_max - z_min)
+    ratios = CyclotomicMonomial[]
+    sizehint!(ratios, z_max - z_min)
     curr_term = m_base
+    z_last = z_min
 
-    for (i, z) in enumerate(z_min:(z_max - 1))
+    for z in z_min:(z_max - 1)
         next_term = summand(z + 1)
-        # stop and truncate sum if we hit a structural zero
-        if next_term.sign == 0 
-            resize!(ratios, i - 1)
-            z_range = z_min:(z_min + i - 1)
-            break 
+        if next_term.sign == 0
+            # a DCR is a chain of ratios, so zero terms are only allowed at the end of the range
+            for z2 in (z + 2):z_max
+                summand(z2).sign == 0 || throw(ArgumentError(
+                    "summand is zero at z = $(z + 1) but nonzero at z = $z2; a DCR cannot hold interior zero terms. Split the range at z = $(z + 1)."))
+            end
+            break
         end
-        
-        # calculate next_term / curr_term 
+
+        # next_term / curr_term
         reset!(buf)
         add_monomial!(buf, next_term, 1)
         add_monomial!(buf, curr_term, -1)
-        
+
         ratio = snapshot(buf)
-        ratios[i] = ratio
+        push!(ratios, ratio)
         g_max_d = max(g_max_d, ratio.max_d)
 
         curr_term = next_term
+        z_last = z + 1
     end
 
-    return DCR(m_root, m_rad, m_base, ratios, z_range, g_max_d)
+    return DCR(m_root, m_rad, m_base, ratios, z_min:z_last, g_max_d)
 end
 
 
@@ -240,7 +247,7 @@ function build_dcr!(buf::CycloBuffer,
                             extract_radical::Bool=false,
                             alternating_sign::Bool=false)
     
-    (z_min > z_max || buf.sign == 0) && return ZERO_DCR
+    z_min > z_max && return ZERO_DCR
     
     # prefactor evaluation
     reset!(buf)

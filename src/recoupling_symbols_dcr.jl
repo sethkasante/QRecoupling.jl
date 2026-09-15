@@ -19,20 +19,14 @@ Inputs use twice spins (J = 2j).
 #qfact_mono
 
 """
-    rmatrix_mono(J1, J2, J3) -> CyclotomicMonomial
-The algebraic phase for the R-matrix braiding J1, J2 into J3.
-Uses the q^{1/4} power convention to securely encode quarter-integer 
-Inputs are 2*Spins (J = 2j ∈ ℤ).
+    rmatrix_mono(J1, J2, J3) -> QPhase
+The braiding phase (-1)^{j1+j2-j3} q^{j3(j3+1) - j1(j1+1) - j2(j2+1)} as an exact `QPhase`;
+the exponent can be a half-integer. Inputs are doubled spins (J = 2j).
 """
 function rmatrix_mono(J1::Int, J2::Int, J3::Int)
-    # The phase is (J3(J3+2) - J1(J1+2) - J2(J2+2)) / 2
-    # By SU(2) admissibility, J1+J2-J3 is even, guaranteeing this numerator is even.
     p = (J3*(J3+2) - J1*(J1+2) - J2*(J2+2)) ÷ 2
-    
-    # parity sign
-    s = iseven((J1 + J2 - J3) ÷ 2) ? 1 : -1
-    
-    return iseven(p) ? CyclotomicMonomial(Int8(s), p ÷ 2, Pair{Int,Int}[], 0) : "R-matrix phase for these spins requires a half-integer power: $(s) * q^($(p)/2). Not stored as CyclotomicMonomial"
+    s = iseven((J1 + J2 - J3) ÷ 2) ? Int8(1) : Int8(-1)
+    return QPhase(s, p // 2)
 end
 
 
@@ -55,24 +49,24 @@ end
 # --- Recoupling Symbols (3j & 6j) ---
 
 function q3j_dcr(J1::Int, J2::Int, J3::Int, M1::Int, M2::Int, M3::Int = -M1-M2)
-    # admissibile conditions
-    (!_δ(J1, J2, J3) || M1 + M2 + M3 != 0) && return ZERO_DCR
+    # admissibility: triangle, |m| ≤ j with matching parity, m1 + m2 + m3 = 0
+    (!_δ(J1, J2, J3) || !_mproj_ok(J1, J2, J3, M1, M2, M3)) && return ZERO_DCR
 
     # Standard summation bounds for Wigner 3j
     α1 = (J3 - J2 + M1) ÷ 2; α2 = (J3 - J1 - M2) ÷ 2
     β1 = (J1 + J2 - J3) ÷ 2; β2 = (J1 - M1) ÷ 2; β3 = (J2 + M2) ÷ 2
-    
+
     z_min = max(0, -α1, -α2)
     z_max = min(β1, β2, β3)
-    
-    # Initialize buffer 
+
+    # Initialize buffer
     buf = CycloBuffer(max(z_max + 2, (J1 + J2 + J3) ÷ 2 + 1))
 
-    return build_dcr!(buf,
+    dcr = build_dcr!(buf,
         # Prefactor
         b -> begin
             qtriangle!(b, J1, J2, J3)
-            # Add (j ± m)! terms explicitly 
+            # Add (j ± m)! terms explicitly
             add_qfact!(b, (J1 + M1) ÷ 2); add_qfact!(b, (J1 - M1) ÷ 2)
             add_qfact!(b, (J2 + M2) ÷ 2); add_qfact!(b, (J2 - M2) ÷ 2)
             add_qfact!(b, (J3 + M3) ÷ 2); add_qfact!(b, (J3 - M3) ÷ 2)
@@ -84,7 +78,7 @@ function q3j_dcr(J1::Int, J2::Int, J3::Int, M1::Int, M2::Int, M3::Int = -M1-M2)
             for a in (α1, α2); add_qfact!(b, a+z, -1); end
             for bv in (β1, β2, β3); add_qfact!(b, bv-z, -1); end
         end,
-        
+
         # Ratio R_z = Term(z+1)/Term(z)
         (b, z) -> begin
             for bv in (β1, β2, β3); add_qint!(b, bv-z); end
@@ -95,6 +89,10 @@ function q3j_dcr(J1::Int, J2::Int, J3::Int, M1::Int, M2::Int, M3::Int = -M1-M2)
         extract_radical = true,
         alternating_sign = true
     )
+
+    # Wigner phase (-1)^{j1 - j2 - m3}
+    isodd((J1 - J2 - M3) ÷ 2) || return dcr
+    return DCR(dcr.root, dcr.radical, -dcr.base, dcr.ratios, dcr.z_range, dcr.max_d)
 end
 
 function q6j_dcr(J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int)

@@ -90,20 +90,15 @@ Base.:*(m::CyclotomicMonomial, phase::QPhase) = phase * m
 Base.:/(m::CyclotomicMonomial, phase::QPhase) = m * inv(phase)
 
 # --- QPhase * CompositeExactResult ---
+# Only integer powers of q = ζ lie in ℚ(ζ_{2(k+2)}); they multiply every factor exactly.
 function Base.:*(phase::QPhase, comp::CompositeExactResult{T}) where T
-    # If phase is zero, return an empty dictionary composite
-    iszero(phase) && return CompositeExactResult{T}(comp.k, comp.global_phase, comp.radical, Dict{CyclotomicMonomial, T}())
-    
-    # Shift the global phase tracker
-    new_phase = comp.global_phase + phase.q_pow
-    
-    # Flip the signs in the evaluated Nemo dictionaries if necessary
-    new_terms = Dict{CyclotomicMonomial, T}()
-    for (rad, val) in comp.terms
-        new_terms[rad] = phase.sign == 1 ? val : -val
-    end
-    
-    return CompositeExactResult{T}(comp.k, new_phase, comp.radical, new_terms)
+    iszero(phase) && return zero(comp)
+    denominator(phase.q_pow) == 1 || throw(ArgumentError(
+        "q^($(phase.q_pow)) is not an element of ℚ(ζ$(to_subscript(2 * (comp.k + 2)))); only integer powers of q can multiply an exact result."))
+    isempty(comp.terms) && return comp
+    ζ = gen(parent(first(values(comp.terms))))
+    f = Int(phase.sign) * ζ^Int(numerator(phase.q_pow))
+    return CompositeExactResult{T}(comp.k, Dict{CyclotomicMonomial, T}(rad => f * val for (rad, val) in comp.terms))
 end
 
 Base.:*(comp::CompositeExactResult, phase::QPhase) = phase * comp

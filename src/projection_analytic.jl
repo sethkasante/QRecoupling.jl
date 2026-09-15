@@ -84,6 +84,21 @@ end
 
 # -----  Core Evaluator (Single-Pass) --- 
 
+"""
+    _radical_sqrt(v, rad, q)
+Square root of the radical value `v` on the balanced branch q^{P/2} √(v q^{-P}), with P the
+balanced phase of `rad`. For real q this is the ordinary square root.
+"""
+function _radical_sqrt(v::T, rad::CyclotomicMonomial, q::T) where T
+    T <: Real && return sqrt(v)
+    P = balanced_phase(rad)
+    w = v * q^(-P)
+    if abs(imag(w)) <= sqrt(eps(real(T))) * abs(w)
+        w = T(real(w))
+    end
+    return exp((P // 2) * log(q)) * sqrt(w)
+end
+
 function _eval_analytic_dcr(res::DCR, q::T, q_sq::T) where T
     # for cyclotomic polynomials
     table = build_analytic_table(res.max_d, q_sq)
@@ -94,7 +109,7 @@ function _eval_analytic_dcr(res::DCR, q::T, q_sq::T) where T
     val_base = _eval_mono_analytic(res.base, q, table)
     
     # root * √(radical) * base
-    pref_val = val_root * sqrt(val_rad) * val_base
+    pref_val = val_root * _radical_sqrt(val_rad, res.radical, q) * val_base
 
     iszero(pref_val) && return zero(T)
 

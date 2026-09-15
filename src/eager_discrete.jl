@@ -143,7 +143,7 @@ end
 Inputs must be doubled spins (J = 2j ∈ ℤ) and doubled magnetic projections (M = 2m ∈ ℤ).
 """
 function q3j_direct(J1::Int, J2::Int, J3::Int, M1::Int, M2::Int, M3::Int, k::Int, T::Type{<:AbstractFloat})
-    (!_qδ(J1, J2, J3, k) || M1 + M2 + M3 != 0) && return zero(T)
+    (!_qδ(J1, J2, J3, k) || !_mproj_ok(J1, J2, J3, M1, M2, M3)) && return zero(T)
     
     model = NumericSU2kModel(k, T)
     table = model.logqnfact
