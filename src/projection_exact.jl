@@ -27,31 +27,47 @@ const EXACT_PHI_LOCK = ReentrantLock()
 
 """
     _phi_exact_table(D_max::Int, k::Int, ζ::T)
-Constructs the cyclotomic basis Φ_d(ζ²) and its inverses in Q(ζ).
+Φ_d(ζ²) and their inverses in ℚ(ζ), ζ = e^{iπ/h}, for d = 1..D_max. The entry at d = h is zero
+(Φ_h is handled as a valuation); for d = mh with m ≥ 2 the value is the limit
+Λ̃(m) Π_{e | d, h ∤ e} (ζ^{2e} − 1)^{μ(d/e)}.
 """
 function _phi_exact_table(D_max::Int, k::Int, ζ::T) where T
     h = k + 2
+    μ, _ = arith_sieve(D_max)
+    divs = divisor_lists(D_max)
     V_exact = Vector{T}(undef, D_max)
     V_inv   = Vector{T}(undef, D_max)
-    
-    # Initialize with (q^2n - 1) where q = ζ
-    @inbounds for n in 1:D_max
-        V_exact[n] = (n % h == 0) ? zero(ζ) : ζ^(2n) - one(ζ)
+
+    # ζ^{2e} - 1
+    base = Vector{T}(undef, D_max)
+    ζ2 = ζ^2
+    p = one(ζ)
+    @inbounds for e in 1:D_max
+        p *= ζ2
+        base[e] = p - one(ζ)
     end
-    
-    # Sieve-based multiplicative Möbius inversion
+
     @inbounds for d in 1:D_max
-        iszero(V_exact[d]) && continue
-        for m in (2d):d:D_max
-            !iszero(V_exact[m]) && (V_exact[m] = divexact(V_exact[m], V_exact[d]))
+        if d == h
+            V_exact[d] = zero(ζ)
+            continue
         end
+        num = one(ζ)
+        den = one(ζ)
+        for e in divs[d]
+            e % h == 0 && continue
+            mu = μ[d ÷ e]
+            mu == 0 && continue
+            mu == 1 ? (num *= base[e]) : (den *= base[e])
+        end
+        d % h == 0 && (num *= lambda_tilde(d ÷ h))
+        V_exact[d] = divexact(num, den)
     end
-    
-    # Precompute inverses for zero-division hot loops
+
+    # inverses for division-free hot loops
     @inbounds for d in 1:D_max
         V_inv[d] = iszero(V_exact[d]) ? zero(ζ) : inv(V_exact[d])
     end
-    
     return V_exact, V_inv
 end
 
@@ -176,40 +192,42 @@ end
 
 """
     evaluate_exact(res::CompositeExactResult, [T=ComplexF64])
-Projects the deferred cyclotomic exact result into a complex/real numeric type.
-Useful for precision stability checks against float evaluations.
+Projects the deferred cyclotomic exact result into a complex/real numeric type (through BigFloat).
+Each radical R is square-rooted on the balanced branch √(q^P ΠΨ_d) = q^{P/2} √(ΠΨ_d), the same
+branch used by the discrete and analytic projections.
 """
 function evaluate_exact(comp::CompositeExactResult, ::Type{T}=ComplexF64) where T
     h = comp.k + 2
     target_z = cispi(one(BigFloat) / h)
-    
-    # horner evaluation for the Nemo polynomial 
+
+    # Horner evaluation of a Nemo number-field element at target_z
     function _horner(poly, z)
         deg = degree(parent(poly))
         val = Complex{BigFloat}(0)
         for i in (deg-1):-1:0
             c = coeff(poly, i)
-            c_bf = BigFloat(numerator(c)) / BigFloat(denominator(c))
-            val = val * z + c_bf
+            val = val * z + BigFloat(numerator(c)) / BigFloat(denominator(c))
         end
         return val
     end
-    
+
     total_val = Complex{BigFloat}(0)
-    
-    # iterate over all terms 
     for (rad, factor) in comp.terms
-        B = _horner(factor, target_z) 
-        
-        # Evaluate the radical EXACTLY in Nemo, then horner it 
-        rad_nemo = project_exact(rad, comp.k)
-        rad_val_bf = _horner(rad_nemo, target_z)
-        
-        # Take the principal complex square root (preserves TQFT phase cancellation!)
-        A = sqrt(rad_val_bf)
-        
-        total_val += A * B
+        B = _horner(factor, target_z)
+        R = _horner(project_exact(rad, comp.k), target_z)
+        total_val += _balanced_sqrt_at_root(R, balanced_phase(rad), h) * B
     end
-    
     return T <: Real ? T(real(total_val)) : T(total_val)
+end
+
+"√R on the balanced branch at q = e^{iπ/h}: q^{P/2} √(R q^{-P}), where R q^{-P} is real up to rounding."
+function _balanced_sqrt_at_root(R::Complex{BigFloat}, P::Int, h::Int)
+    w = R * cispi(-big(P) / h)
+    x = real(w)
+    if abs(imag(w)) <= sqrt(eps(BigFloat)) * max(abs(w), eps(BigFloat))
+        s = x >= 0 ? Complex(sqrt(x)) : Complex(zero(x), sqrt(-x))
+    else
+        s = sqrt(w)
+    end
+    return cispi(big(P) / (2h)) * s
 end

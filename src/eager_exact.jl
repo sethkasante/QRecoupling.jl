@@ -166,7 +166,7 @@ Computes the exact SU(2)k Wigner 3j symbol using the memory-optimized iterative 
 Inputs: twice spins (J = 2j, M = 2m).
 """
 function q3j_exact(J1::Int, J2::Int, J3::Int, M1::Int, M2::Int, M3::Int, k::Int)
-    (!_qδ(J1, J2, J3, k) || M1+M2+M3 != 0) && return ExactResult(k, ExactSU2kModel(k).K(1), ExactSU2kModel(k).K(0))
+    (!_qδ(J1, J2, J3, k) || !_mproj_ok(J1, J2, J3, M1, M2, M3)) && return ExactResult(k, ExactSU2kModel(k).K(1), ExactSU2kModel(k).K(0))
     
     model = ExactSU2kModel(k)
     

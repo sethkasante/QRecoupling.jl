@@ -89,7 +89,7 @@ This representation is exact, minimal, and independent of evaluation field
 
 
 ### Projections 
-Project oe evaluate the same abstract symbol into your required target field using the `qeval` function:
+Project or evaluate the same abstract symbol into your required target field using the `qeval` function:
 ```julia
 # 1. Projection into discrete level `k` (Float64 by default)
 julia> qeval(dcr6j,k=10)
@@ -141,7 +141,7 @@ julia> gsymbol(1, 1, 1, 1, 1, 1, k=5)
 ```
 
 ## Generic $q$-Series
-`QRecoupling.jl` can also be use to study generic basic $q$-hypergeometric series. Here's how to construct a DCR for a custom sequence, such as $\sum_{z=1}^{10} (-1)^z [z]_q!$:
+`QRecoupling.jl` can also be used to study generic basic $q$-hypergeometric series. Here's how to construct a DCR for a custom sequence, such as $\sum_{z=1}^{10} (-1)^z [z]_q!$:
 ```julia
 
 # build the q-series 

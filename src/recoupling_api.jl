@@ -190,25 +190,26 @@ end
 
 #---- clear caches --- 
 
-clear_numeric_caches!() = (empty!(LOGQFACT_CACHE); nothing)
+clear_numeric_caches!() = (@lock _NUMERIC_MODEL_LOCK empty!(_NUMERIC_MODEL_CACHE); nothing)
 
-clear_exact_caches!() = begin
-    empty!(EXACT_PHI_CACHE)
-    empty!(EXACT_MODEL_CACHE)
-    nothing
+function clear_exact_caches!()
+    @lock EXACT_PHI_LOCK empty!(EXACT_PHI_CACHE)
+    @lock EXACT_MODEL_LOCK empty!(EXACT_MODEL_CACHE)
+    return nothing
 end
 
-clear_sieve_caches!() = (empty!(MAG_SIEVE_CACHE); nothing)
+clear_sieve_caches!() = (@lock ROU_TABLE_LOCK empty!(ROU_TABLE_CACHE); nothing)
 
 """
     empty_caches!()
-Useful for freeing RAM during long interactive sessions or resetting state for benchmarking.
+
+Clear the cached level-k tables (numeric, root-of-unity and exact cyclotomic). Useful for freeing
+memory in long sessions or before benchmarking. The small classical prime-power sieve is kept,
+because it is read without a lock.
 """
 function empty_caches!()
-    clear_numeric_caches!() 
+    clear_numeric_caches!()
     clear_exact_caches!()
     clear_sieve_caches!()
-    
-    @info "QRecoupling internal caches have been successfully cleared." maxlog=1
     return nothing
 end

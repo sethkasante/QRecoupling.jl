@@ -1,196 +1,123 @@
-# ----------------------------------------------------------
+# ----------------------------------------------------------------------------------
 #     --- Project DCR to discrete level k ----
-#  Evaluate at SU(2)_k roots of unity (q = exp(iπ/(k+2)))
-# ----------------------------------------------------------
+#  Evaluate at SU(2)_k roots of unity, q = exp(iπ/(k+2)).
+#  Magnitudes are summed in log space (Log-Sum-Exp); signs and phases are exact integers
+#  (see cyclotomic_values.jl), and vanishing at Φ_{k+2} is tracked as a valuation.
+# ----------------------------------------------------------------------------------
 
 
-# Cache for the magnitude table log|Φ_d(q²)|
-const MAG_SIEVE_CACHE = Dict{Tuple{DataType, Int, Int}, Any}()
-const MAG_SIEVE_LOCK  = ReentrantLock()
-const MAG_SIEVE_MAXSIZE = 7_000
+const ROU_TABLE_CACHE = Dict{Tuple{DataType, Int, Int}, Any}()
+const ROU_TABLE_LOCK = ReentrantLock()
+const ROU_TABLE_MAXSIZE = 7_000
 
 """
-    get_mag_table(k::Int, max_d::Int, ::Type{T})
-Unified cache for the magnitude table log|Φ_d(q²)|.
+    get_rou_table(k::Int, max_d::Int, ::Type{T})
+Cached `RootOfUnityTable` for q = exp(iπ/(k+2)) covering d = 1..max_d. Thread-safe.
 """
-function get_mag_table(k::Int, max_d::Int, ::Type{T}) where T
-
-    key_prec = T === BigFloat ? precision(BigFloat) : 53
-    key = (T, k, key_prec)
-
-    h   = k + 2
-
-    if haskey(MAG_SIEVE_CACHE, key)
-        table = MAG_SIEVE_CACHE[key]::Vector{T}
-        # return if it's large enough!
-        if length(table) >= max_d
-            return table
+function get_rou_table(k::Int, max_d::Int, ::Type{T}) where {T}
+    key = (T, k, T === BigFloat ? precision(BigFloat) : 0)
+    tab = @lock ROU_TABLE_LOCK begin
+        cached = get(ROU_TABLE_CACHE, key, nothing)
+        if cached === nothing || length(cached.logmag) < max_d
+            length(ROU_TABLE_CACHE) >= ROU_TABLE_MAXSIZE && empty!(ROU_TABLE_CACHE)
+            old = cached === nothing ? 0 : length(cached.logmag)
+            cached = build_rou_table(max(max_d, 2old), k, T)
+            ROU_TABLE_CACHE[key] = cached
         end
+        cached
     end
-
-    return @lock MAG_SIEVE_LOCK begin
-        existing = get(MAG_SIEVE_CACHE, key, nothing)
-
-        if existing !== nothing && length(existing) >= max_d
-            existing::Vector{T}               
-        else
-            length(MAG_SIEVE_CACHE) >= MAG_SIEVE_MAXSIZE && empty!(MAG_SIEVE_CACHE)
-            new_table = build_mag_table(max(max_d, h), k, T)
-            MAG_SIEVE_CACHE[key] = new_table
-            new_table
-        end
-    end::Vector{T}
+    return tab::RootOfUnityTable{T}
 end
 
 
-"""
-    build_mag_table(D_max::Int, k::Int, ::Type{T})
-Computes log|Φ_d(q²)| at q = exp(iπ/(k+2)). 
-Uses log-domain Möbius inversion.
-"""
-function build_mag_table(D_max::Int, k::Int, ::Type{T}) where T
-    h = k + 2
-    table = Vector{T}(undef, D_max)
-    h_inv = inv(T(h))
-    
-    # Initialize with log|q^2n - 1| = log|2*sin(πn/h)|
-    @inbounds for n in 1:D_max
-        if n == h # primitive root of unity  
-            table[n] = -T(Inf) # pole
-        else
-            table[n] = log(2 * abs(sinpi(n * h_inv)))
-        end
-    end
-    
-    # multiplicative sieve (log-domain Möbius inversion)
-    @inbounds for d in 1:D_max
-        val = table[d]
-        isinf(val) && continue
-
-        for m in (2d):d:D_max
-            if !isinf(table[m])
-                table[m] -= val
-            end
-        end
-    end
-    return table
-end
-
-
-
-
-"""
-    _log_mag_internal(m::CyclotomicMonomial, table::Vector{T}) where T
-Ultra-fast log-magnitude evaluator for the hot loop.
-"""
-@inline function _log_mag_internal(m::CyclotomicMonomial, table::Vector{T}) where T
-    m.sign == 0 && return -T(Inf)
-    
-    lm = zero(T)
-    exps = m.phi_exps
-    @inbounds for i in eachindex(exps)
-        pair = exps[i]
-        lm += pair.second * table[pair.first]
-    end
-    
-    return lm
-end
-
-
-#  --- Projection to discrete level k ---- 
+#  --- Projection to discrete level k ----
 
 """
     project_discrete(m::CyclotomicMonomial, k::Int, ::Type{T}=Float64)
-Evaluates [n]_q or dimensions at SU(2)_k.
-Returns the real value.
+Value of a monomial at q = exp(iπ/(k+2)). Returns a real `T` when the value is real and a
+`Complex{T}` otherwise. Throws a `DomainError` at a pole (negative exponent of Φ_{k+2}).
 """
-function project_discrete(m::CyclotomicMonomial, k::Int, ::Type{T}=Float64) where T
+function project_discrete(m::CyclotomicMonomial, k::Int, ::Type{T}=Float64) where {T}
     m.sign == 0 && return zero(T)
-    h = k + 2
-    
-    # check zero or pole 
-    e_val = _phi_exponent(m, h)
-    if e_val > 0
-        return zero(T)
-    elseif e_val < 0
-        throw(DomainError(k, "Topological pole at level k=$k."))
-    end
-    
-    # magnitude
-    table = get_mag_table(k, m.max_d, T)
-    lm = _log_mag_internal(m, table)
-    
-    return m.sign * exp(lm)
+    tab = get_rou_table(k, m.max_d, T)
+    lm, s, w, v = mono_at_root(m, tab)
+    v > 0 && return zero(T)
+    v < 0 && throw(DomainError(k, "Topological pole at level k=$k."))
+    return apply_phase(s * exp(lm), w, tab.h)
 end
 
 
-
-function _evaluate_discrete_dcr(res::DCR, k::Int, ::Type{T}) where {T}
-    table = get_mag_table(k, res.max_d, T)
-
-    # project prefactors
-    lm_root = _log_mag_internal(res.root, table)
-    lm_rad  = _log_mag_internal(res.radical, table)
-    lm_base = _log_mag_internal(res.base, table)
-    
-    pref_lm = lm_root + (0.5 * lm_rad) + lm_base
-    pref_sign = res.root.sign * res.base.sign 
-
-    # exit if zero
-    if isnan(pref_lm) || (isinf(pref_lm) && pref_lm < 0) || pref_sign == 0
-        return zero(T)
-    end
-
-    ratios = res.ratios
-    num_ratios = length(ratios)
-    
-    max_lm = pref_lm
-    curr_lm = pref_lm
-    curr_sign = pref_sign
-    res_scaled = T(curr_sign)
-    
-    # Single-Pass LSE summation
-    @inbounds for i in 1:num_ratios
-        r_lm = _log_mag_internal(ratios[i], table)
-        curr_lm += r_lm
-        curr_sign *= ratios[i].sign
-        
-        if curr_lm > max_lm
-            res_scaled = res_scaled * exp(max_lm - curr_lm) + curr_sign
-            max_lm = curr_lm
-        else
-            res_scaled += curr_sign * exp(curr_lm - max_lm)
+"""
+Log-Sum-Exp over the terms of a DCR relative to its first term. Terms whose Φ_h valuation
+(`v2`, doubled) is positive vanish; a negative valuation is a pole. With a real `S`, returns
+`ok = false` as soon as a contributing term has a phase other than 0 or π.
+Returns (max_log, scaled_sum, ok).
+"""
+function _dcr_lse(::Type{S}, ratios::Vector{CyclotomicMonomial}, tab::RootOfUnityTable{T},
+                  l0::T, s0::Int, v2::Int) where {S, T}
+    h = tab.h
+    max_l = typemin(T)
+    acc = zero(S)
+    cur_l, cur_s, cur_w, cur_v2 = l0, s0, 0, v2
+    n = length(ratios)
+    i = 0
+    @inbounds while true
+        if cur_v2 == 0
+            if S <: Real
+                cur_w % (2h) == 0 || return max_l, acc, false
+                u = S(cur_w == 0 ? cur_s : -cur_s)
+            else
+                u = cur_s * cispi(real(S)(cur_w) / (2h))
+            end
+            if cur_l > max_l
+                acc = acc * exp(max_l - cur_l) + u
+                max_l = cur_l
+            else
+                acc += u * exp(cur_l - max_l)
+            end
+        elseif cur_v2 < 0
+            throw(DomainError(h - 2, "Topological pole at level k=$(h - 2)."))
         end
+        i == n && break
+        i += 1
+        rl, rs, rw, rv = mono_at_root(ratios[i], tab)
+        cur_l += rl
+        cur_s *= rs
+        cur_w += rw
+        cur_w >= 4h && (cur_w -= 4h)
+        cur_v2 += 2rv
     end
-
-    return exp(max_lm) * res_scaled
+    return max_l, acc, true
 end
 
 
 """
     project_discrete(res::DCR, k::Int, ::Type{T}=Float64)
-Thread-safe, Zero-Allocation evaluator for full DCR symbols (e.g., 6j, 3j).
+Value of a DCR at q = exp(iπ/(k+2)) by single-pass Log-Sum-Exp summation. Signs and phases are
+exact; terms vanishing at Φ_{k+2} are skipped by valuation. The radical is square-rooted on the
+balanced branch q^{P/2} √(ΠΨ_d). Returns a real `T` when the value is real.
 """
 function project_discrete(res::DCR, k::Int, ::Type{T}=Float64) where {T}
-    h = k + 2
-    
-    # check zeros and poles
-    # prevents NaN results from +Inf and -Inf in the LSE loop
-    e_rad  = _phi_exponent(res.radical, h)
-    e_root = _phi_exponent(res.root, h)
-    e_base = _phi_exponent(res.base, h)
-    
-    e_net = (e_rad / 2.0) + e_root + e_base
-    
-    if e_net > 0.0
-        return zero(T)
-    elseif e_net < 0.0
-        throw(DomainError(k, "Topological pole at level k=$k."))
+    (res.base.sign == 0 || res.root.sign == 0 || res.radical.sign == 0) && return zero(T)
+    tab = get_rou_table(k, res.max_d, T)
+    h = tab.h
+    isodd(_phi_exponent(res.radical, 1)) &&
+        throw(ArgumentError("a radical containing Φ₁ to an odd power has no real balanced square root"))
+
+    lr, sr, wr, vr = mono_at_root(res.root, tab)
+    lq, _, wrad, vq = mono_at_root(res.radical, tab)
+    lb, sb, wb, vb = mono_at_root(res.base, tab)
+
+    # √radical = q^{P/2} √(ΠΨ); ΠΨ has phase wrad - 2P, and a negative ΠΨ contributes a factor i
+    P = balanced_phase(res.radical, tab)
+    wq = P + (mod(wrad - 2P, 4h) == 2h ? h : 0)
+
+    l0 = lr + lq / 2 + lb
+    s0 = sr * sb
+    v2 = vq + 2(vr + vb)
+    max_l, acc, ok = _dcr_lse(T, res.ratios, tab, l0, s0, v2)
+    if !ok
+        max_l, acc, _ = _dcr_lse(Complex{T}, res.ratios, tab, l0, s0, v2)
     end
-    
-    if res.radical.sign == 0 || res.base.sign == 0 || res.root.sign == 0
-        return zero(T)
-    end
-    
-    return _evaluate_discrete_dcr(res, k, T)
+    return apply_phase(exp(max_l) * acc, wr + wq + wb, h)
 end
