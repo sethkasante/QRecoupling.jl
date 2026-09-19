@@ -23,7 +23,15 @@ include("projection_analytic.jl")
 include("eager_discrete.jl")
 include("eager_exact.jl")
 
+include("modular_arithmetic.jl")
+include("factorial_sums.jl")
+include("multiword.jl")
+include("classical_sums.jl")
+
 include("recoupling_api.jl")
+include("batch.jl")
+include("queries.jl")
+include("targets.jl")
 
 
 # Export physics tqft and recoupling symbols api
@@ -33,6 +41,10 @@ export qint, qfact, qbinomial, qseries, qeval
 #projection
 export project_discrete, project_exact, project_analytic
 export project_classical, project_classical_exact
+
+# evaluation targets, batching and structural queries
+export EvalTarget, Level, Exact, At, Classical
+export all_6j, iszero_at, ispole_at, level_spectrum
 
 # cache management
 export empty_caches!
