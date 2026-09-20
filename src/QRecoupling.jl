@@ -23,8 +23,9 @@ include("projection_analytic.jl")
 include("eager_discrete.jl")
 include("eager_exact.jl")
 
+
 include("modular_arithmetic.jl")
-include("factorial_sums.jl")
+include("factorial_rule.jl")
 include("multiword.jl")
 include("classical_sums.jl")
 
@@ -44,13 +45,14 @@ export project_classical, project_classical_exact
 
 # evaluation targets, batching and structural queries
 export EvalTarget, Level, Exact, At, Classical
-export all_6j, iszero_at, ispole_at, level_spectrum
+export all_6j, iszero_at, issingular_at, level_spectrum
 
 # cache management
 export empty_caches!
 
 # Export api for generic series
 export CyclotomicMonomial, DCR, QPhase
+export AffineFactorial, FactorialSum, EvaluationWorkspace
 export add_qint!, add_qfact!, build_dcr!, build_series
 
 end
