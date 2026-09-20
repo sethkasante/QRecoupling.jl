@@ -133,13 +133,13 @@ function _horner_sum(s::FactorialSum)
         a = s.alternating ? -1 : 1
         b = 1
         for f in s.fac
-            abs(f.c) == 1 || return nothing
-            n = _arg(f, z)
-            x = f.a == 1 ? n + 1 : n
-            if (f.a == 1) == (f.c > 0)
-                a = Base.checked_mul(a, x)
-            else
-                b = Base.checked_mul(b, x)
+            lo,hi,c = _factor_step(f,z)
+            for x in lo:hi, _ in 1:abs(c)
+                if c > 0
+                    a = Base.checked_mul(a,x)
+                else
+                    b = Base.checked_mul(b,x)
+                end
             end
         end
         MPZ.mul_si!(T1, Q, b)
@@ -181,14 +181,18 @@ The symbol described by rule `s` at q = 1. Same contract as the level path: the 
 cancellation is measured, exact zeros come back as zero, and when too few digits survive a `Float64`
 result is recomputed exactly (Horner nesting in integers); other types escalate in `BigFloat`.
 """
-function classical_value(s::FactorialSum, ::Type{T}) where {T}
+function classical_value(s::FactorialSum, ::Type{T}; labels = nothing, workspace=nothing) where {T}
     is_empty_sum(s) && return zero(T)
     N = max_argument(s)
-    segs = UnitRange{Int}[s.zlo:s.zhi]
-    v, st = _certified_value(s, segs, 0, classical_tables(T, N))
+    segs = (s.zlo:s.zhi,)
+    v, st = _certified_value(s, segs, 0, classical_tables(T, N), workspace)
     st === :done && return v
     target = _target_digits(T)
     _, loss = _sum_at_level(s, segs, 0, classical_tables(T, N))
+    if T === Float64 && labels !== nothing       # the symbol as one entry of its column: O(distance), no κ
+        vr = sixj_entry(labels, ClassicalQ(), _column_workspace(workspace))
+        vr === nothing || return T(vr)           # a returned value is certified far from zero
+    end
     is_classical_zero(s) && return zero(T)
     if T === Float64
         v = classical_exact_float(s)

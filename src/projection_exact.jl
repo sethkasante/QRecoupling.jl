@@ -140,22 +140,7 @@ Evaluates a DCR series exactly for discrete level `k`. Returns a CompositeExactR
 function project_exact(dcr::DCR, k::Int)
     h = k + 2   
 
-    #check zero or pole 
-    e_rad  = _phi_exponent(dcr.radical, h)
-    e_root = _phi_exponent(dcr.root, h)
-    e_base = _phi_exponent(dcr.base, h)
-
-    e_net = (e_rad / 2.0) + e_root + e_base
-
-    if e_net > 0.0
-        # true topological zero 
-        _, ζ = cyclotomic_field(2h, "ζ")
-        return CompositeExactResult(k, dcr.radical, zero(ζ)) 
-    elseif e_net < 0.0
-        throw(DomainError(k, "Topological pole at level k=$k."))
-    end
-
-    
+    e_rad = _phi_exponent(dcr.radical, h)
     _, ζ = cyclotomic_field(2h, "ζ")
     
     if dcr.radical.sign == 0 || dcr.base.sign == 0
@@ -172,7 +157,12 @@ function project_exact(dcr::DCR, k::Int)
     curr_mono = snapshot(buf)
     
     # project product
-    sum_val = _project_monomial_nemo_internal(curr_mono, V_exact, V_inv, ζ, h)
+    function term_value(m)
+        v2 = e_rad + 2 * _phi_exponent(m,h)
+        v2 < 0 && throw(DomainError(k, "Topological pole at level k=$k."))
+        return v2 > 0 ? zero(ζ) : _project_monomial_nemo_internal(m,V_exact,V_inv,ζ,h)
+    end
+    sum_val = term_value(curr_mono)
 
     # fuse ratios then project
     for r in dcr.ratios
@@ -181,7 +171,7 @@ function project_exact(dcr::DCR, k::Int)
         curr_mono = snapshot(buf)
         
         # project
-        sum_val += _project_monomial_nemo_internal(curr_mono, V_exact, V_inv, ζ, h)
+        sum_val += term_value(curr_mono)
     end
 
     return CompositeExactResult(k, dcr.radical, sum_val)
