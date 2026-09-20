@@ -23,11 +23,16 @@ include("projection_analytic.jl")
 include("eager_discrete.jl")
 include("eager_exact.jl")
 
-
 include("modular_arithmetic.jl")
 include("factorial_rule.jl")
+include("level_tables.jl")
+include("double_word.jl")
+include("factorial_kernels.jl")
 include("multiword.jl")
 include("classical_sums.jl")
+include("families.jl")
+include("workspace.jl")
+include("factorial_series.jl")
 
 include("recoupling_api.jl")
 include("batch.jl")
