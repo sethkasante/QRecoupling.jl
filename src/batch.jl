@@ -74,21 +74,23 @@ function _level_batch(rule::R, fallback::F, labels, k::Int, ::Type{T}, threads;
             work = EvaluationWorkspace()
             for i in rng
                 l = L[i]
-                if !_rule_admissible(rule,l,k)
+                s = rule(l)                      # the rule carries the triangle conditions already
+                if is_empty_sum(s) || !_rule_admissible(rule,s,l,k)
                     out[i] = zero(T)
                     continue
                 end
-                out[i] = _value_prefetched(rule(l),k,tab,()->fallback(l);
+                out[i] = _value_prefetched(s,k,tab,()->fallback(l);
                                           family=_rule_family(rule),workspace=work)
             end
         end
     else
         rest = _family_pass!(out, J, family, LevelQ(tab, k), threads)
         _run_workspace(rest,n,threads) do i,work
-            if !_qδtet(J[i]...,k)
+            s = _family_rule(family,J[i])
+            if is_empty_sum(s) || s.zlo > k      # the level bound, read off the rule (see `_rule_admissible`)
                 out[i] = zero(T)
             else
-                out[i] = _value_prefetched(_family_rule(family,J[i]),k,tab,
+                out[i] = _value_prefetched(s,k,tab,
                                            ()->_family_fallback(family,J[i],k,T);
                                            labels=family === Val(:sixj) ? J[i] : nothing,
                                            family=family,workspace=work)
@@ -364,8 +366,16 @@ _rule_family(::typeof(_rule_6j)) = Val(:sixj)
 _rule_family(::typeof(_rule_3j)) = Val(:threej)
 _rule_family(::typeof(_rule_f)) = Val(:f)
 _rule_family(::typeof(_rule_g)) = Val(:g)
-_rule_admissible(rule, l, k) = _qδtet(doubled(l...)...,k)
-_rule_admissible(::typeof(_rule_3j),l,k) = _qδ(doubled(l[1],l[2],l[3])...,k)
+"""
+    _rule_admissible(rule, s, l, k) -> Bool
+
+Is the symbol admissible at level `k`? The rule `s` already encodes the triangle conditions (an inadmissible
+label gives an empty rule), so for the 6j, F and G only the level bound is left — and it is free: their
+summation starts at `zlo = max α`, so `zlo ≤ k` says exactly that every triangle sum is at most 2k. The 3j
+needs its one triangle, from three labels rather than six.
+"""
+_rule_admissible(rule, s::FactorialSum, l, k) = s.zlo <= k
+_rule_admissible(::typeof(_rule_3j), s::FactorialSum, l, k) = _qδ(doubled(l[1],l[2],l[3])...,k)
 
 _fb_6j(l, k, ::Type{T}) where {T} = project_discrete(q6j_dcr(canonical_spins(l...)...), k, T)
 _fb_3j(l, k, ::Type{T}) where {T} = (p = _pad3j(l); project_discrete(q3j_dcr(doubled(p...)...), k, T))

@@ -664,10 +664,24 @@ close(a, b; tol = 1e-11) = isapprox(a, b; atol = tol, rtol = tol)
             @test b !== nothing && a[1] === b[1] && (a[1] === :pole || a[2] == collect(b[2]))
             nchecked += 1
         end
-        # a short level sum allocates nothing (longer ones allocate only the lazy ratio buffer)
+        # The level kernel itself allocates nothing for a short sum (longer ones allocate only the lazy
+        # ratio buffer). The public wrapper is checked with a bound rather than zero: its return type is a
+        # union (value, DCR, exact, complex), which Julia 1.10 boxes at ~16 B per call and 1.11+ elides.
+        # (referenced through the module, not the local `QR` alias: a call through a non-const local is
+        # dynamically dispatched and would allocate for that reason alone)
+        sfix = QRecoupling.sixj_sum(QRecoupling.doubled(1, 1, 1, 1, 1, 1)...)
+        tabfix = QRecoupling.qint_tables(Float64, 10)
+        segfix = (sfix.zlo:sfix.zhi,)
+        QRecoupling._certified_value(sfix, segfix, 10, tabfix)
+        QRecoupling.level_pass1(sfix, 10, tabfix)
+        # The bounds are what the invariant needs: nothing may be allocated per term, so a regression there
+        # would cost hundreds of bytes. A few words of boxing on the older compiler are tolerated.
+        slack = VERSION >= v"1.11" ? 0 : 64
+        @test (@allocated QRecoupling._certified_value(sfix, segfix, 10, tabfix)) <= slack
+        @test (@allocated QRecoupling.level_pass1(sfix, 10, tabfix)) <= slack
         f() = q6j(1, 1, 1, 1, 1, 1; k = 10) + q6j(5//2, 2, 3//2, 2, 5//2, 3; k = 20) + q6j(1, 2, 3, 3, 2, 1; k = 9)
         f()
-        @test (@allocated f()) == 0
+        @test (@allocated f()) <= 3 * slack
     end
 
     @testset "Families by the three-term recurrence" begin
