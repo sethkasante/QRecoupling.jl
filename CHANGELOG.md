@@ -1,6 +1,29 @@
 # Changelog
 
-## v0.3.4 (unreleased)
+## v0.4.0 (unreleased)
+
+### Breaking API changes
+- Symbol functions and `qeval` evaluate classically when `q` and `k` are omitted.
+  Use `Symbolic()` as the first argument for the previous symbolic output.
+- Conflicting targets (`k` together with `q`, or a target object together with
+  competing evaluation keywords) now raise an error. Generic analytic requests
+  with `exact=true` are rejected rather than silently returning numeric results.
+- `rmatrix(...; exact=true)` without a level returns the classical integer phase;
+  explicit symbolic requests and exact level requests retain `QPhase`.
+
+### Changed
+- `eager=true` warns and delegates to the standard factorial-rule evaluator,
+  including its standard exact result type instead of the old eager result wrapper.
+- 3j, 6j, F, G, and tetrahedron DCRs are constructed from their factorial rules.
+- General DCR ratios with non-unit slopes accumulate cyclotomic exponents in one
+  pass over indices instead of expanding each q-integer.
+- Symbolic batch construction and explicit lowering with `qeval(Symbolic(), rule)`.
+
+See `docs/src/migration.md` for examples. This is a development version, not a
+registered release. Zero-certification and concurrency follow-ups remain open.
+
+
+## v0.3.4 (released)
 
 Correctness release. Several results were wrong without any warning; upgrading is recommended.
 
