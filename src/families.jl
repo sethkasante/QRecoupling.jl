@@ -111,14 +111,22 @@ end
 
 Fills `out[i]` with {x j2 j3; l1 l2 l3} for the i-th admissible x (doubled labels, `Float64`), at level k
 (`tab` the level's q-integer tables) or, with `Q = ClassicalQ()`, at q = 1. `work.w[i]` holds the same
-values as double words. Exact zeros inside the column come out as tiny values of the order of the
+values as double words.
+
+With `xdim = true` each entry carries the extra factor √[2x+1] and with `cfac` a constant factor, which
+together give the tetrahedrally symmetric normalisation (the G-symbol, and the F-symbol when its running
+label is one of the two that carry a dimension). Both are folded into the square root that leaves the gauge
+and into the normalising scale, so they cost nothing per entry — where multiplying each finished entry by
+√(Π[2j+1]) costs six double-word products and a square root. The orthogonality sum is unchanged by the
+folding, because Σ_x [2x+1] f² = Σ_x (√[2x+1] f)². Exact zeros inside the column come out as tiny values of the order of the
 column's rounding error; callers that promise exact zeros test those entries.
 """
 sixj_column!(out, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int, k::Int, tab::QIntTables{Float64},
-             work::ColumnWork = ColumnWork()) = sixj_column!(out, J2, J3, L1, L2, L3, LevelQ(tab, k), work)
+             work::ColumnWork = ColumnWork(); kwargs...) =
+    sixj_column!(out, J2, J3, L1, L2, L3, LevelQ(tab, k), work; kwargs...)
 
 function sixj_column!(out, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int, Q::Union{LevelQ,ClassicalQ},
-                      work::ColumnWork = ColumnWork())
+                      work::ColumnWork = ColumnWork(); xdim::Bool = false, cfac::DWord = (1.0, 0.0))
     X = _column_range(Q, J2, J3, L1, L2, L3)
     n = length(X)
     n == 0 && return X
@@ -148,14 +156,14 @@ function sixj_column!(out, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int, Q::Union
     # ---- forward from the left end in the h-gauge, to the first local maximum of |f| ----
     # Only the running h(x−1), h(x), P(x)² are kept in the gauge; each entry leaves it as it is made, so a
     # rescaling (P² spans far more than the exponent range over a long column) touches three numbers.
-    w[1] = (1.0, 0.0)
+    w[1] = xdim ? _dwsqrt(q(X[1] + 1)) : (1.0, 0.0)   # f(x₁) = 1 in the gauge, times the folded factor
     hm = (0.0, 0.0); hc = (1.0, 0.0); P2 = (1.0, 0.0)
     m = n
     @inbounds for i in 1:n-1
         hn = _dwn(_dwm(di[i], hc))
         i > 1 && (hn = _dwa(hn, _dwn(_dwm(e[i], hm))))
         P2 = _dwm(P2, e[i+1])                                          # P(x+1)² = P(x)² up(x)²
-        w[i+1] = _dwdiv(hn, _dwsqrt(P2))                               # f = h / P
+        w[i+1] = _leave_gauge(hn, P2, xdim ? q(X[i+1] + 1) : nothing)  # f = h / P, with √[2x+1] folded in
         hm, hc = hc, hn
         if !(2.0^-600 <= P2[1] <= 2.0^600)
             sc = P2[1] > 1 ? 2.0^-300 : 2.0^300
@@ -174,13 +182,13 @@ function sixj_column!(out, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int, Q::Union
     # ---- backward from the right end in the g-gauge, to m, matched to the forward value there ----
     if m < n
         @inbounds begin
-            w[n] = (1.0, 0.0)
+            w[n] = xdim ? _dwsqrt(q(X[n] + 1)) : (1.0, 0.0)
             gp = (0.0, 0.0); gc = (1.0, 0.0); R2 = (1.0, 0.0)           # g(x+1), g(x), R(x)²
             for i in n:-1:m+1
                 gn = _dwn(_dwm(di[i], gc))
                 i < n && (gn = _dwa(gn, _dwn(_dwm(e[i+1], gp))))         # up(x)² = e at x + 1
                 R2 = _dwm(R2, e[i])                                      # R(x−1)² = R(x)² up(x−1)²
-                fv = _dwdiv(gn, _dwsqrt(R2))
+                fv = _leave_gauge(gn, R2, xdim ? q(X[i-1] + 1) : nothing)
                 if i - 1 == m
                     _divide!(w, m+1:n, fv)                               # backward f(m) = 1 as well
                 else
@@ -201,9 +209,10 @@ function sixj_column!(out, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int, Q::Union
     # ---- normalise by orthogonality, sign from a certified entry ----
     tot = (0.0, 0.0)
     @inbounds for i in 1:n
-        tot = _dwa(tot, _dwm(q(X[i] + 1), _dwm(w[i], w[i])))
+        sq = _dwm(w[i], w[i])
+        tot = _dwa(tot, xdim ? sq : _dwm(q(X[i] + 1), sq))   # Σ [2x+1] f² either way
     end
-    sc = _dwdiv((1.0, 0.0), _dwsqrt(_dwm(q(L1 + 1), tot)))
+    sc = _dwm(cfac, _dwdiv((1.0, 0.0), _dwsqrt(_dwm(q(L1 + 1), tot))))
     ie, ref = _sign_reference(w, X, J2, J3, L1, L2, L3, Q)
     signbit(ref) == signbit(w[ie][1]) || (sc = _dwn(sc))
     @inbounds for i in 1:n
@@ -213,6 +222,13 @@ function sixj_column!(out, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int, Q::Union
     end
     return X
 end
+
+"""
+Leave the gauge: f = h/P, optionally with the factor √[2x+1] folded into the same square root. Passing the
+`q`-integer rather than multiplying afterwards saves a double-word square root per entry.
+"""
+@inline _leave_gauge(h::DWord, P2::DWord, ::Nothing) = _dwdiv(h, _dwsqrt(P2))
+@inline _leave_gauge(h::DWord, P2::DWord, xq::DWord) = _dwm(h, _dwsqrt(_dwdiv(xq, P2)))
 
 "Scale entries by 2⁻⁵⁰⁰ (exact; entries far below the column's peak may underflow)."
 @inline function _shrink!(w, rng)
@@ -298,6 +314,79 @@ const _TO_FIRST = ((1, 2, 3, 4, 5, 6), (2, 1, 3, 5, 4, 6), (3, 2, 1, 6, 5, 4),
 
 "How often the single-entry recurrence leaves the gauge to sample |f| for its error estimate."
 const SAMPLE = 8
+
+"""
+Racah terms an entry may have and still be certified by the single-symbol kernel. Along a column the term
+count grows with the distance from either end, and the certified region ends where the compensated pass runs
+out (κ ≈ 10¹⁵); measured, that boundary sits at 60–82 terms over k = 1000–2000 and spins 100–250
+(`dev/prototypes/check_turning_points.jl`), so a conservative threshold places the seed analytically instead
+of probing for it.
+"""
+const SEED_TERMS = 48
+
+"""
+Largest rise above the target that the single-entry recurrence will accept, as a power of two. The error
+estimate alone would tolerate a ratio of ~10¹⁶, which is too permissive for an entry that is an exact zero or
+sits on a node: seeded from nearby, the run never sees the column's scale. Declining above 2²⁰ keeps those
+entries with the modular test and the precision tiers, where they belong.
+"""
+const MAX_RISE_LOG2 = 20
+
+"Steps saved must be worth the two certified seed evaluations."
+const SEED_MIN_SAVING = 16
+
+"Number of Racah terms of one entry of a column (doubled labels), in closed form."
+@inline function _nterms(X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int)
+    α, β = racah_sums(X2, J2, J3, L1, L2, L3)
+    return β[1] - α[4] + 1
+end
+
+"""
+    _seed_index(X, i, from_left, J...) -> index or 0
+
+The entry closest to the target from which the certified kernel can still start: the farthest index from the
+chosen end whose Racah sum stays under `SEED_TERMS`. The term count is unimodal along a column, so a binary
+search over the prefix (or suffix) finds it in a handful of O(1) evaluations. Returns 0 when the whole run
+from the end is short anyway, in which case the end seed is used.
+"""
+function _seed_index(X, i::Int, from_left::Bool, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int)
+    n = length(X)
+    nt(j) = _nterms(X[j], J2, J3, L1, L2, L3)
+    if from_left
+        lo, hi = 2, i - 1                       # need seeds at s−1 and s, and s < i
+        hi < lo + 1 && return 0
+        nt(hi) <= SEED_TERMS && return hi        # the certified region reaches the target's neighbour
+        while lo < hi                            # largest s in [lo, hi] with nt(s) ≤ SEED_TERMS
+            mid = (lo + hi + 1) ÷ 2
+            nt(mid) <= SEED_TERMS ? (lo = mid) : (hi = mid - 1)
+        end
+        return nt(lo) <= SEED_TERMS ? lo : 0
+    else
+        lo, hi = i + 1, n - 1
+        hi < lo && return 0
+        nt(lo) <= SEED_TERMS && return lo
+        while lo < hi
+            mid = (lo + hi) ÷ 2
+            nt(mid) <= SEED_TERMS ? (hi = mid) : (lo = mid + 1)
+        end
+        return nt(hi) <= SEED_TERMS ? hi : 0
+    end
+end
+
+"A certified value of one entry, only if the kernel certifies it without escalating (`nothing` otherwise)."
+function _certified_entry(Q::LevelQ, X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int)
+    s = sixj_sum(X2, J2, J3, L1, L2, L3)
+    is_empty_sum(s) && return nothing
+    v, st, _ = level_pass1(s, Q.k, Q.tab)
+    return st === :done ? v : nothing
+end
+function _certified_entry(Q::ClassicalQ, X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int)
+    s = sixj_sum(X2, J2, J3, L1, L2, L3)
+    is_empty_sum(s) && return nothing
+    N = max_argument(s)
+    v, st = _certified_value(s, (s.zlo:s.zhi,), 0, classical_tables(Float64, N))
+    return st === :done ? v : nothing
+end
 
 "A value in split form: mantissa (double word) times 2^exp, so tiny end values do not underflow."
 struct SplitValue
@@ -420,19 +509,45 @@ function sixj_entry(J0::NTuple{6,Int}, Q::Union{LevelQ,ClassicalQ}, work::Column
     n == 1 && return nothing                                  # the symbol *is* its own edge
     _resize!(work, n)
     from_left = i - 1 <= n - i
-    seed = _edge_split(Q, from_left ? first(X) : last(X), J2, J3, L1, L2, L3)
-    seed === nothing && return nothing
-    if from_left
-        _coefficients!(work, Q, X, J2, J3, L1, L2, L3, 1, i)
-    else
-        _coefficients!(work, Q, X, J2, J3, L1, L2, L3, i, n)
+    # Where to start. Two certified entries near the end of the certified region start the recursion directly
+    # and shorten the run; failing that, one value at the column end does, because the boundary condition
+    # supplies the second. `s == 0` means "use the end".
+    s = _seed_index(X, i, from_left, J2, J3, L1, L2, L3)
+    steps_end = from_left ? i - 1 : n - i
+    s == 0 || (steps_end - (from_left ? i - s : s - i) >= SEED_MIN_SAVING) || (s = 0)
+    seedm = seedc = (0.0, 0.0)                                # f at the two seed entries
+    if s != 0
+        s2 = from_left ? s - 1 : s + 1
+        v1 = _certified_entry(Q, X[s], J2, J3, L1, L2, L3)
+        v2 = v1 === nothing ? nothing : _certified_entry(Q, X[s2], J2, J3, L1, L2, L3)
+        if v1 === nothing || v2 === nothing || iszero(v1) || iszero(v2)
+            s = 0                                             # not usable: fall back to the end
+        else
+            seedc = (v1, 0.0); seedm = (v2, 0.0)
+        end
     end
+    seed = s == 0 ? _edge_split(Q, from_left ? first(X) : last(X), J2, J3, L1, L2, L3) : nothing
+    (s == 0 && seed === nothing) && return nothing
+    lo = from_left ? (s == 0 ? 1 : s - 1) : i
+    hi = from_left ? i : (s == 0 ? n : s + 1)
+    _coefficients!(work, Q, X, J2, J3, L1, L2, L3, lo, hi)
     di, e = work.di, work.e
     # Gauge recurrence: forward h(x+1) = −di h(x) − up(x−1)² h(x−1), backward g(x−1) = −di g(x) − up(x)² g(x+1).
     # f = h·2^eH / √(P²·2^eP) (eP kept even), so rescaling is exact and nothing over- or underflows.
     hm = (0.0, 0.0); hc = (1.0, 0.0); P2 = (1.0, 0.0); eP = 0; eH = 0
     fv = (1.0, 0.0); fexp = 0; fmax_log = 0
-    steps = from_left ? (1:i-1) : (n:-1:i+1)
+    if s != 0
+        # start at the seed pair: with P = 1 at the outer seed, h = f there and h = f·up at the inner one,
+        # where up² is the coefficient the recursion already carries
+        up2 = from_left ? e[s] : e[s+1]
+        up2[1] > 0 || return nothing
+        up = _dwsqrt(up2)
+        hm = seedm; hc = _dwm(seedc, up); P2 = up2
+        fv = seedc
+        fmax_log = max(exponent(abs(seedm[1])), exponent(abs(seedc[1])))
+    end
+    steps = from_left ? ((s == 0 ? 1 : s):i-1) : ((s == 0 ? n : s):-1:i+1)
+    isempty(steps) && return s == 0 ? nothing : ldexp(seedc[1] + seedc[2], 0)
     @inbounds for j in steps
         hn = _dwn(_dwm(di[j], hc))
         if from_left
@@ -460,9 +575,18 @@ function sixj_entry(J0::NTuple{6,Int}, Q::Union{LevelQ,ClassicalQ}, work::Column
         end
     end
     iszero(fv[1]) && return nothing
-    # the double-word error of the run, relative to the target entry (large only very close to a node)
-    est = length(steps) * 2.0^-104 * exp2(fmax_log - (exponent(abs(fv[1])) + fexp))
+    # How far the path rose above the target. A large rise means the target is near a node (or is an exact
+    # zero), and then this tier must not answer at all, whatever its rounding estimate says.
+    rise_log = fmax_log - (exponent(abs(fv[1])) + fexp)
+    rise_log > MAX_RISE_LOG2 && return nothing
+    # the double-word error of the run, relative to the target entry
+    est = length(steps) * 2.0^-104 * exp2(rise_log)
+    # a certified seed carries its own rounding, which the run then propagates
+    s == 0 || (est += 4 * 2.0^-53)
     est > rtol && return nothing
+    if s != 0
+        return ldexp(fv[1] + fv[2], fexp)                     # the seeds are already normalised values
+    end
     val = _dwm(fv, seed.m)
     iszero(val[1]) && return nothing
     return ldexp(val[1] + val[2], seed.e + fexp)

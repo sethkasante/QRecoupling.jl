@@ -293,6 +293,37 @@ _family_fallback(::Val{:f}, J::NTuple{6,Int}, k::Int, ::Type{T}) where {T} =
 _family_fallback(::Val{:g}, J::NTuple{6,Int}, k::Int, ::Type{T}) where {T} =
     project_discrete(gsymbol_dcr(J...), k, T)
 
+"""
+    _column_normalisation(family, Q, J, p) -> (xdim, cfac)
+
+How to run the column so that it comes out in the symbol's own normalisation. The G-symbol carries
+√(Π[2j+1]), the F-symbol √([2j3+1][2j6+1]); the factor of the *running* label is folded into the column
+(`xdim`), the rest is the constant `cfac`. What is left per entry is at most a sign.
+"""
+@inline _column_normalisation(::Val{:sixj}, Q, J, p) = (false, (1.0, 0.0))
+
+@inline function _column_normalisation(::Val{:g}, Q, J, p)
+    c = (1.0, 0.0)
+    for t in 1:6
+        t == p || (c = _dwm(c, _qint_dw(Q, J[t] + 1)))
+    end
+    return true, _dwsqrt(c)
+end
+
+@inline function _column_normalisation(::Val{:f}, Q, J, p)
+    if p == 3
+        return true, _dwsqrt(_qint_dw(Q, J[6] + 1))
+    elseif p == 6
+        return true, _dwsqrt(_qint_dw(Q, J[3] + 1))
+    end
+    return false, _dwsqrt(_dwm(_qint_dw(Q, J[3] + 1), _qint_dw(Q, J[6] + 1)))
+end
+
+"The per-entry sign of the symbol relative to the 6j (the F-symbol's phase; 1 for the 6j and G)."
+@inline _family_sign(::Val{:sixj}, J) = 1.0
+@inline _family_sign(::Val{:g}, J) = 1.0
+@inline _family_sign(::Val{:f}, J) = iseven((J[1] + J[2] + J[4] + J[5]) ÷ 2) ? 1.0 : -1.0
+
 "Factor from the 6j to the symbol, as a double word: 1, (−1)^{j1+j2+j4+j5}√([2j3+1][2j6+1]), or √Π[2j+1]."
 @inline _family_factor(::Val{:sixj}, Q, J) = (1.0, 0.0)
 @inline function _family_factor(::Val{:f}, Q, J)
@@ -338,7 +369,8 @@ function _family_run!(out, done, J, run, family, Q, work)
     X = _column_range(Q, J2, J3, L1, L2, L3)
     nx = length(X)
     (nx >= FAMILY_MIN_RUN && nx <= 4 * (i1 - i0 + 1) + 8) || return nothing   # a small part of a long column
-    sixj_column!(nothing, J2, J3, L1, L2, L3, Q, work)
+    xdim, cfac = _column_normalisation(family, Q, c, p)     # run the column in the symbol's normalisation
+    sixj_column!(nothing, J2, J3, L1, L2, L3, Q, work; xdim = xdim, cfac = cfac)
     w = work.w
     mx = 0.0
     @inbounds for t in 1:nx
@@ -349,8 +381,7 @@ function _family_run!(out, done, J, run, family, Q, work)
         (iseven(d) && 0 <= d <= last(X) - first(X)) || continue
         v = w[d ÷ 2 + 1]
         abs(v[1]) >= 1e-12 * mx || continue      # near a node or an exact zero: the certified path decides
-        vv = _dwm(v, _family_factor(family, Q, J[i]))
-        out[i] = vv[1] + vv[2]
+        out[i] = _family_sign(family, J[i]) * (v[1] + v[2])
         done[i] = true
     end
     return nothing
