@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------------
-#  Per-level tables: exact zero tests, q-integer and split-factorial tables, ratio helpers
+#  Per-level tables: exact zero tests, q-integer and split-factorial tables, ratio helpers 
 #
 #  Everything a level needs before any symbol is evaluated. Tables are built once per level and read
 #  without a lock (`LevelCache`), which is what makes batches at one level cheap: the tables are the
@@ -34,12 +34,12 @@ function LevelZeroTable(k::Int)
     for (c, e) in enumerate(exps)
         r = mont_pow(m, g, e)
         ri = mont_inv(m, r)
-        dinv = mont_inv(m, mont_sub(m, r, ri))
+        dinv = mont_inv(m, mont_sub(m, r, ri))     # 1/(r − r^{−1}
         rn = m.one; rin = m.one
         fact[1, c] = m.one
         for n in 1:N
             rn = mont_mul(m, rn, r); rin = mont_mul(m, rin, ri)
-            qv[n] = mont_mul(m, mont_sub(m, rn, rin), dinv)        # [n] = (r^n − r^{−n}) / (r − r^{−1})
+            qv[n] = mont_mul(m, mont_sub(m, rn, rin), dinv)       # [n] = (r^n − r^{−n}) / (r − r^{−1})
             fact[n+1, c] = mont_mul(m, fact[n, c], qv[n])
         end
         invf[N+1, c] = mont_inv(m, fact[N+1, c])

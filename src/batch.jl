@@ -55,6 +55,30 @@ function _run(work::F, n::Int, threads) where {F}
 end
 
 """
+    BatchScratch
+
+Per-batch scratch. The doubled labels and the runs along one spin depend on the *labels* only, not on the
+level, so a grid over many levels builds them once (they were rebuilt per level: 48 B per label per level).
+`done` and `rest` are per level but reused.
+"""
+struct BatchScratch
+    J::Vector{NTuple{6,Int}}
+    runs::Vector{NTuple{3,Int}}
+    done::Vector{Bool}
+    rest::Vector{Int}
+end
+
+"Scratch for these labels, or `nothing` when the batch has no family structure to exploit."
+function _batch_scratch(L, family, ::Type{T}) where {T}
+    T === Float64 || return nothing
+    J = _doubled_labels(L, family)
+    J === nothing && return nothing
+    runs = _find_runs(J, FAMILY_MIN_RUN)
+    isempty(runs) && return nothing
+    return BatchScratch(J, runs, zeros(Bool, length(J)), Int[])
+end
+
+"""
     _level_batch(rule, fallback, labels, k, T, threads) -> Vector{T}
 
 Values of one symbol family over many label tuples at a single level: the tables are built once and the
@@ -67,8 +91,15 @@ function _level_batch(rule::R, fallback::F, labels, k::Int, ::Type{T}, threads;
     n = length(L)
     out = Vector{T}(undef, n)
     n == 0 && return out
+    _level_batch!(out, rule, fallback, L, k, T, threads, family, _batch_scratch(L, family, T))
+    return out
+end
+
+function _level_batch!(out, rule::R, fallback::F, L, k::Int, ::Type{T}, threads, family,
+                       sc) where {R,F,T}
+    n = length(L)
     tab = qint_tables(T, k)                     # built once here, read-only afterwards
-    J = T === Float64 ? _doubled_labels(L, family) : nothing
+    J = sc === nothing ? nothing : sc.J
     if J === nothing
         _run(n, threads) do rng
             work = EvaluationWorkspace()
@@ -84,7 +115,7 @@ function _level_batch(rule::R, fallback::F, labels, k::Int, ::Type{T}, threads;
             end
         end
     else
-        rest = _family_pass!(out, J, family, LevelQ(tab, k), threads)
+        rest = _family_pass!(out, sc, family, LevelQ(tab, k), threads)
         _run_workspace(rest,n,threads) do i,work
             s = _family_rule(family,J[i])
             if is_empty_sum(s) || s.zlo > k      # the level bound, read off the rule (see `_rule_admissible`)
@@ -106,7 +137,8 @@ function _classical_batch(rule::R, labels, ::Type{T}, threads; family = nothing)
     n = length(L)
     out = Vector{T}(undef, n)
     n == 0 && return out
-    J = T === Float64 ? _doubled_labels(L, family) : nothing
+    sc = _batch_scratch(L, family, T)
+    J = sc === nothing ? nothing : sc.J
     if J === nothing
         _run(n, threads) do rng
             work = EvaluationWorkspace()
@@ -115,7 +147,7 @@ function _classical_batch(rule::R, labels, ::Type{T}, threads; family = nothing)
             end
         end
     else
-        rest = _family_pass!(out, J, family, ClassicalQ(), threads)
+        rest = _family_pass!(out, sc, family, ClassicalQ(), threads)
         _run_workspace(rest,n,threads) do i,work
             out[i] = classical_value(_family_rule(family, J[i]), T;
                                      labels=family === Val(:sixj) ? J[i] : nothing,workspace=work)
@@ -179,8 +211,10 @@ end
 
 "Maximal runs (first, last, position) of consecutive labels stepping in one position."
 function _find_runs(J::Vector{NTuple{6,Int}}, minrun::Int)
-    runs = NTuple{3,Int}[]
     n = length(J)
+    runs = NTuple{3,Int}[]
+    sizehint!(runs, cld(n, minrun + 1))          # `push!` growth alone cost ~10 B per label
+
     i = 1
     while i < n
         p = _step_position(J[i], J[i+1])
@@ -274,23 +308,26 @@ end
 end
 
 """
-    _family_pass!(out, J, family, Q, threads) -> indices still to compute, or nothing
+    _family_pass!(out, sc, family, Q, threads) -> indices still to compute
 
-Fills `out` for the labels (doubled, `J`) that sit in runs along one spin, from column recurrences; returns
-the indices left for the single-symbol path (`nothing` means all of them).
+Fills `out` for the labels that sit in runs along one spin, from column recurrences; returns the indices left
+for the single-symbol path, in the scratch's own buffer.
 """
-function _family_pass!(out::Vector{Float64}, J::Vector{NTuple{6,Int}}, family, Q, threads)
+function _family_pass!(out::Vector{Float64}, sc::BatchScratch, family, Q, threads)
+    J, runs, done, rest = sc.J, sc.runs, sc.done, sc.rest
     n = length(J)
-    runs = _find_runs(J, FAMILY_MIN_RUN)
-    isempty(runs) && return nothing
-    done = zeros(Bool, n)                        # one byte per entry: safe to write from several threads
+    fill!(done, false)                           # one byte per entry: safe to write from several threads
     _run(length(runs), threads) do rr
         work = ColumnWork()
         for r in rr
             _family_run!(out, done, J, runs[r], family, Q, work)
         end
     end
-    return [i for i in 1:n if !done[i]]
+    empty!(rest)
+    @inbounds for i in 1:n
+        done[i] || push!(rest, i)
+    end
+    return rest
 end
 
 function _family_run!(out, done, J, run, family, Q, work)
@@ -323,9 +360,13 @@ end
 function _level_grid(rule::R, fallback::F, labels, ks, ::Type{T}, threads; family = nothing) where {R,F,T}
     L = _as_vector(labels); K = _as_vector(ks)
     out = Matrix{T}(undef, length(L), length(K))
+    isempty(L) && return out
+    sc = _batch_scratch(L, family, T)            # labels only: shared by every level of the grid
+    col = Vector{T}(undef, length(L))
     for (j, k) in enumerate(K)
         kk = Int(k)
-        out[:, j] = _level_batch(rule, l -> fallback(l, kk), L, kk, T, threads; family = family)
+        _level_batch!(col, rule, l -> fallback(l, kk), L, kk, T, threads, family, sc)
+        @inbounds out[:, j] = col
     end
     return out
 end

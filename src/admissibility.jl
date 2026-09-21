@@ -1,5 +1,5 @@
 
-#admissibility tests for classical and quantum symbols
+#admissibility tests for all classical and quantum symbols
 
 # Admissibility tests strictly using twice spins (J = 2j ∈ ℤ)
 

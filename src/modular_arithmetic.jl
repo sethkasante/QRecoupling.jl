@@ -1,6 +1,6 @@
 
 # ---------------------------------------------------------------------------------
-#   Word-size modular arithmetic for exact zero tests
+#   Word-size modular arithmetic for exact zero tests 
 #
 #   Montgomery multiplication modulo odd primes p < 2^63, primes p ≡ 1 (mod n) found with a
 #   deterministic Miller–Rabin test, and primitive n-th roots of unity modulo p. No dependencies.
@@ -69,7 +69,7 @@ end
 
 const _MR_BASES = (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37)
 
-"Deterministic primality test for 64-bit integers (Miller–Rabin with the first twelve prime bases)."
+"Deterministic primality test for 64-bit integers (Miller-Rabin with the first twelve prime bases)."
 function is_prime_u64(n::UInt64)
     n < 2 && return false
     for b in _MR_BASES

@@ -1,7 +1,7 @@
 """
     qseries(factors, range; prefactor=(), sqrt_prefactor=false, alternating=false, sign=1)
 
-Build a compact `FactorialSum` from affine factorial triples `(a,b,c)` representing
+Build a compact `FactorialSum` from affine factorial triples `(a,b,c)` representing 
 `[a*z+b]!^c`. Unlike the callback form of `qseries`, this does not expand a DCR.
 Example: `qeval(qseries([(2,0,1)], 1:3); q=1)` is `2!+4!+6! = 746`.
 """

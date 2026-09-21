@@ -7,7 +7,7 @@
 #  an ordinary factorial), but cancellation zeros exist classically too — the "non-trivial zeros" of
 #  6j symbols — and are settled the same way, by evaluating the rational sum modulo large primes.
 #
-#  This replaces a floating-point projection of the expanded form that lost all accuracy at large spin
+#  This replaces a floating-point projection of the expanded form that lost all accuracy at large spins
 #  (12% off at j = 100 for {j j j; j j j}).
 # ---------------------------------------------------------------------------------
 
