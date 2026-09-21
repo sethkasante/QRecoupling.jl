@@ -376,3 +376,9 @@ function _within_level_tables(s::FactorialSum, segs, k::Int)
     end
     return true
 end
+
+"Closed tetrahedron in the existing normalization: the 6j rule with its full triangle prefactor."
+function tetrahedron_sum(Js::Vararg{Int,6})
+    s = sixj_sum(Js...)
+    return FactorialSum(s.pre,false,s.fac,s.alternating,s.sign0,s.zlo,s.zhi)
+end
