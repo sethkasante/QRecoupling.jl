@@ -208,8 +208,8 @@ end
 #
 #  * **Bounded multiplicities.** For the 6j the seven denominator arguments n_r satisfy Σ_r n_r = z (because
 #    Σ_j β_j = Σ_i α_i), so writing n_r = d ℓ_r + ρ_r gives E_d(z) = ⌊(1 + Σ_r ρ_r)/d⌋, hence 0 ≤ E_d(z) ≤ 6
-#    (carry counting, as in Kummer's theorem for multinomials). In particular a *term* never has negative
-#    multiplicity: it either contributes (E = 0) or vanishes, to order at most 6.
+#    (carry the counting). In particular a *term* never has negative multiplicity: it either contributes 
+#    (E = 0) or vanishes, to order at most 6.
 #  * **No poles for admissible labels.** Level admissibility gives α_i ≤ k, so ⌊(α_i+1)/h⌋ = 0 with h = k+2
 #    and the prefactor multiplicity Σ_{i,j} ⌊(β_j − α_i)/h⌋ ≥ 0. With the bound above, no contributing term
 #    can have negative valuation: an admissible symbol at a level is always finite (possibly zero). The
@@ -299,7 +299,7 @@ function classify_at_level(s::FactorialSum, k::Int)
 end
 
 """
-Do all factorial arguments over the whole range lie in 0..h−1? Then no factor carries Φ_h: there is one
+Do all factorial arguments over the whole range lie in 0..h-1? Then no factor carries Φ_h: there is one
 contributing segment, no pole and no vanishing term, and every factorial is in the level tables. Arguments
 are affine in z, so the two ends of the range decide it. This is the common case, settled without
 allocating; `classify_at_level` handles the rest.
