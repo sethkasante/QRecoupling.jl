@@ -49,7 +49,7 @@ export project_discrete, project_exact, project_analytic
 export project_classical, project_classical_exact
 
 # evaluation targets, batching and structural queries
-export EvalTarget, Level, Exact, At, Classical
+export EvalTarget, Level, Exact, At, Classical, Symbolic
 export all_6j, iszero_at, issingular_at, level_spectrum
 
 # cache management

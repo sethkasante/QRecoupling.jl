@@ -1,3 +1,22 @@
+# generic constructors and evaluation API for Deferred Cyclotomic Representations (DCRs)
+ 
+"Validate evaluation targets and supply the classical default without overriding a level."
+function _evaluation_q(k,q,exact::Bool)
+    isnothing(k) || isnothing(q) || throw(ArgumentError("specify k or q, not both"))
+    if !isnothing(k)
+        if k isa AbstractVector
+            all(x -> x isa Integer && x >= 0,k) || throw(ArgumentError("levels must be nonnegative integers"))
+        else
+            k isa Integer || throw(ArgumentError("k must be an integer level"))
+            k >= 0 || throw(DomainError(k,"level must be nonnegative"))
+        end
+        return nothing
+    end
+    qq = isnothing(q) ? 1 : q
+    exact && qq != 1 && throw(ArgumentError("exact evaluation requires k or the classical target q=1"))
+    return qq
+end
+
 
 # ---------------------------------------------------------------------
 # Generic Skeletal Assembler for Deferred Cyclotomic Representations
@@ -309,7 +328,7 @@ end
     qeval(m::CyclotomicMonomial; k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
 
 Universal evaluation API for a single CyclotomicMonomial. 
-- Classical Limit: Pass `q = 1`.
+- Classical limit: the default, or pass `q = 1`.
 - Root of Unity (TQFT): Pass `k` (integer level).
 - Complex Analytic: Pass `q` (complex or real parameter).
 - Precision is controlled by `exact` (Float64 vs Rational/Cyclotomic).
@@ -320,6 +339,8 @@ function qeval(m::CyclotomicMonomial;
                exact::Bool=false, 
                T::Type=Float64)
     
+    q = _evaluation_q(k,q,exact)
+
     # ---  classical limit (q -> 1) ---
     if !isnothing(q) && (q == 1 || q == 1.0)
         return exact ? project_classical_exact(m) : project_classical(m, T)
@@ -332,7 +353,7 @@ function qeval(m::CyclotomicMonomial;
 
     # --- root of unity projection ---
     if !isnothing(k)
-        return exact ? project_exact(m, k) : project_discrete(m, k, T)
+        return exact ? project_exact(m, Int(k)) : project_discrete(m, Int(k), T)
     end
 
     throw(ArgumentError("Projection target missing. Specify `k` (integer level) or `q` (parameter)."))
@@ -343,7 +364,7 @@ end
     qeval(dcr::DCR; k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
 
 Universal evaluation API for a DCR. 
-- Classical Limit: Pass `q = 1`.
+- Classical limit: the default, or pass `q = 1`.
 - Root of Unity (TQFT): Pass `k` (integer level).
 - Complex Analytic: Pass `q` (complex or real parameter).
 - Precision is controlled by `exact` (Float64 vs Rational/Cyclotomic).
@@ -354,6 +375,8 @@ function qeval(dcr::DCR;
                      exact::Bool=false, 
                      T::Type=Float64)
     
+    q = _evaluation_q(k,q,exact)
+
     # ---  classical limit (q -> 1) ---
     if !isnothing(q) && (q == 1 || q == 1.0)
         return exact ? project_classical_exact(dcr) : project_classical(dcr, T)
@@ -366,7 +389,7 @@ function qeval(dcr::DCR;
 
     # --- root of unity projection ---
     if !isnothing(k)
-        return exact ? project_exact(dcr, k) : project_discrete(dcr, k, T)
+        return exact ? project_exact(dcr, Int(k)) : project_discrete(dcr, Int(k), T)
     end
 
     throw(ArgumentError("Projection target missing. Specify `k` (integer level) or `q` (parameter)."))

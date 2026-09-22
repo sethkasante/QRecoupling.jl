@@ -26,230 +26,156 @@ function _level_value(s::FactorialSum, admissible::Bool, dcr, k::Int, exact::Boo
 end
 
 
-"""
-Level-k (`q === nothing`) or classical (`q == 1`) value of the symbol with factorial rule `s`.
-`admissible()` is the level admissibility test and `dcr()` builds the DCR for the exact and fallback routes;
-both run only when needed. The public functions take `T::Type{TT}` so that this call is compiled for the
-number type: with a plain `T::Type` keyword it was a dynamic dispatch costing ~100 ns and an allocation.
-"""
-@inline function _rule_value(s::FactorialSum, admissible::A, dcr::D, k, q, exact::Bool,
-                             ::Type{T}; labels=nothing, family=nothing, workspace=nothing) where {A,D,T}
-    isnothing(q) || return classical_value(s,T; labels=labels, workspace=workspace)
-    return _level_value(s, admissible(), dcr, k,exact,T; labels=labels, family=family, workspace=workspace)
+"Warn once: eager is now a compatibility alias for the standard evaluator."
+_deprecated_eager() = @warn("`eager=true` is deprecated and now uses the standard factorial-rule evaluator; remove the keyword. It will be removed in v0.5.", maxlog=1)
+
+"Evaluate one symbol rule, constructing its DCR only for projections that need it."
+@inline function _symbol_value(s::FactorialSum, admissible::A, k, q, exact, ::Type{T};
+                               labels=nothing, family=nothing, workspace=nothing) where {A,T}
+    if !isnothing(k)
+        return _level_value(s, admissible(), () -> _factorial_dcr(s), Int(k), exact, T;
+                            labels=labels, family=family, workspace=workspace)
+    elseif _is_classical(q)
+        return exact ? project_classical_exact(_factorial_dcr(s)) :
+                       classical_value(s,T; labels=labels,workspace=workspace)
+    end
+    return qeval(_factorial_dcr(s);q=q,exact=exact,T=T)
 end
 
-"Warn once that the eager route is on its way out."
-_deprecated_eager() = @warn("`eager = true` is deprecated: the default level path is faster and more " *
-                            "accurate, and the keyword will be removed in v0.5.", maxlog = 1)
-
 """
-    q6j(j1, j2, j3, j4, j5, j6; k=nothing, q=nothing, exact::Bool=false, eager::Bool=false, T=Float64)
+    q6j(j1, j2, j3, j4, j5, j6; k=nothing, q=nothing, exact=false, T=Float64, workspace=nothing)
 
-Returns the Quantum 6j-symbol.
-- If `k` and `q` are omitted, returns the abstract `DCR` object.
-- If `k` is provided, projects to the root of unity (Float64 by default, Cyclotomic if `exact=true`).
-  Zeros and poles are decided from the symbol's factorial rule before any arithmetic, and exact zeros
-  are returned as zero.
-- If `q=1`, computes the exact classical Ponzano-Regge limit.
-- If `eager=true`, bypasses DCR construction for raw speed (only valid for root of unity `k`).
+Evaluate the q6j symbol; the default is its classical value.
+Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
+`exact=true` requests an exact classical or level value. `q6j(Symbolic(), ...)`
+constructs a DCR from the factorial rule. Numerical classical/level calls evaluate the rule directly.
+`eager=true` is deprecated and uses the same evaluator.
 """
 function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
-             k=nothing, q=nothing, exact::Bool=false, eager::Bool=false, T::Type{TT}=Float64, workspace=nothing) where {TT}
-
-    # --- a range of levels is a sweep ---
+                  k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64,
+                  workspace=nothing, eager::Bool=false) where {TT}
+    q = _evaluation_q(k,q,exact)
+    eager && _deprecated_eager()
     k isa AbstractVector && workspace !== nothing &&
-        throw(ArgumentError("workspace is for scalar calls; level sweeps manage their own scratch"))
-    k isa AbstractVector &&
-        return _sweep_levels(q6j, (j1, j2, j3, j4, j5, j6), k; q=q, exact=exact, T=T, threads=nothing)
-
-    # --- level k and q = 1: factorial rule (symmetric by construction, no canonical form needed) ---
-    if !eager && ((!isnothing(k) && isnothing(q)) || (_is_classical(q) && !exact))
-        Jd = doubled(j1, j2, j3, j4, j5, j6)
-        return _rule_value(sixj_sum(Jd...), () -> _qδtet(Jd..., k),
-                           () -> q6j_dcr(canonical_spins(j1, j2, j3, j4, j5, j6)...), k, q, exact, T;
-                           labels=Jd, family=Val(:sixj), workspace=workspace)
-    end
-
-    js = canonical_spins(j1, j2, j3, j4, j5, j6)
-
-    # --- eager evaluation circuit ---
-    if eager && !isnothing(k) && isnothing(q)
-        _deprecated_eager()
-        return exact ? q6j_exact(js..., k) : q6j_direct(js..., k, T)
-    end
-
-    # --- DCR construction ---
-    dcr = q6j_dcr(js...)
-
-    # --- return raw graph if no target is specified ---
-    isnothing(q) && return dcr
-
-    # --- DCR Projections ---
-    return qeval(dcr; k=k, q=q, exact=exact, T=T)
+        throw(ArgumentError("workspace is for scalar calls; level sweeps do not accept caller-owned scratch"))
+    k isa AbstractVector && return _sweep_levels(q6j, (j1, j2, j3, j4, j5, j6), k;
+                                                q=q,exact=exact,T=T,threads=nothing)
+    Js = doubled(j1, j2, j3, j4, j5, j6)
+    s = sixj_sum(Js...)
+    return _symbol_value(s, () -> _qδtet(Js...,Int(k)), k,q,exact,T;
+                         family=Val(:sixj),workspace=workspace,labels=Js)
 end
 
-
 """
-    q3j(j1, j2, j3, m1, m2, m3; k=nothing, q=nothing, exact::Bool=false, eager::Bool=false, T=Float64)
-Returns the quantum Wigner 3j-symbol.
+    q3j(j1, j2, j3, m1, m2, m3; k=nothing, q=nothing, exact=false, T=Float64, workspace=nothing)
+
+Evaluate the Wigner 3j symbol; the default is its classical value.
+Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
+`exact=true` requests an exact classical or level value. `q3j(Symbolic(), ...)`
+constructs a DCR from the factorial rule. Numerical classical/level calls evaluate the rule directly.
+`eager=true` is deprecated and uses the same evaluator.
 """
 function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin=-m1-m2;
-             k=nothing, q=nothing, exact::Bool=false, eager::Bool=false, T::Type{TT}=Float64, workspace=nothing) where {TT}
-
-    Js = doubled(j1, j2, j3, m1, m2, m3)
-
-    # --- a range of levels is a sweep ---
+                  k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64,
+                  workspace=nothing, eager::Bool=false) where {TT}
+    q = _evaluation_q(k,q,exact)
+    eager && _deprecated_eager()
     k isa AbstractVector && workspace !== nothing &&
-        throw(ArgumentError("workspace is for scalar calls; level sweeps manage their own scratch"))
-    k isa AbstractVector &&
-        return _sweep_levels(q3j, (j1, j2, j3, m1, m2, m3), k; q=q, exact=exact, T=T, threads=nothing)
-
-    # --- eager evaluation circuit ---
-    if eager && !isnothing(k) && isnothing(q)
-        _deprecated_eager()
-        return exact ? q3j_exact(Js..., k) : q3j_direct(Js..., k, T)
-    end
-
-    # --- level k and q = 1: factorial rule ---
-    if (!isnothing(k) && isnothing(q)) || (_is_classical(q) && !exact)
-        return _rule_value(threej_sum(Js...), () -> _qδ(Js[1], Js[2], Js[3], k), () -> q3j_dcr(Js...),
-                           k,q,exact,T; family=Val(:threej),workspace=workspace)
-    end
-
-    # --- DCR Construction ---
-    dcr = q3j_dcr(Js...)
-
-    # --- Return raw graph if no target is specified ---
-    isnothing(q) && return dcr
-
-    # --- DCR Projections ---
-    return qeval(dcr; k=k, q=q, exact=exact, T=T)
+        throw(ArgumentError("workspace is for scalar calls; level sweeps do not accept caller-owned scratch"))
+    k isa AbstractVector && return _sweep_levels(q3j, (j1, j2, j3, m1, m2, m3), k;
+                                                q=q,exact=exact,T=T,threads=nothing)
+    Js = doubled(j1, j2, j3, m1, m2, m3)
+    s = threej_sum(Js...)
+    return _symbol_value(s, () -> _qδ(Js[1],Js[2],Js[3],Int(k)), k,q,exact,T;
+                         family=Val(:threej),workspace=workspace)
 end
 
-
 """
-    fsymbol(j1, j2, j3, j4, j5, j6; k=nothing, q=nothing, exact::Bool=false, T=Float64)
-Unitary crossing matrix element: √([d3][d6]) * {6j}.
+    fsymbol(j1, j2, j3, j4, j5, j6; k=nothing, q=nothing, exact=false, T=Float64, workspace=nothing)
+
+Evaluate (−1)^(j1+j2+j4+j5) √([2j3+1][2j6+1]) {6j}, classically by default.
+Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
+`exact=true` requests an exact classical or level value. `fsymbol(Symbolic(), ...)`
+constructs a DCR from the factorial rule. Numerical classical/level calls evaluate the rule directly.
 """
 function fsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
-                 k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64, workspace=nothing) where {TT}
-
-    # F-symbol not fully symmetric! Just double
-    Js = doubled(j1, j2, j3, j4, j5, j6)
-
+                  k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64,
+                  workspace=nothing) where {TT}
+    q = _evaluation_q(k,q,exact)
     k isa AbstractVector && workspace !== nothing &&
-        throw(ArgumentError("workspace is for scalar calls; level sweeps manage their own scratch"))
-    k isa AbstractVector &&
-        return _sweep_levels(fsymbol, (j1, j2, j3, j4, j5, j6), k; q=q, exact=exact, T=T, threads=nothing)
-
-    if (!isnothing(k) && isnothing(q)) || (_is_classical(q) && !exact)
-        return _rule_value(fsymbol_sum(Js...), () -> _qδtet(Js..., k), () -> fsymbol_dcr(Js...),k,q,exact,T; family=Val(:f),workspace=workspace)
-    end
-
-    dcr = fsymbol_dcr(Js...)
-    isnothing(q) && return dcr
-
-    return qeval(dcr; k=k, q=q, exact=exact, T=T)
+        throw(ArgumentError("workspace is for scalar calls; level sweeps do not accept caller-owned scratch"))
+    k isa AbstractVector && return _sweep_levels(fsymbol, (j1, j2, j3, j4, j5, j6), k;
+                                                q=q,exact=exact,T=T,threads=nothing)
+    Js = doubled(j1, j2, j3, j4, j5, j6)
+    s = fsymbol_sum(Js...)
+    return _symbol_value(s, () -> _qδtet(Js...,Int(k)), k,q,exact,T;
+                         family=Val(:f),workspace=workspace)
 end
 
-
 """
-    gsymbol(j1, j2, j3, j4, j5, j6; k=nothing, q=nothing, exact::Bool=false, T=Float64)
-Tetrahedrally symmetric invariant: √(Π[di]) * {6j}.
+    gsymbol(j1, j2, j3, j4, j5, j6; k=nothing, q=nothing, exact=false, T=Float64, workspace=nothing)
+
+Evaluate √(Πᵢ[2ji+1]) {6j}, classically by default.
+Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
+`exact=true` requests an exact classical or level value. `gsymbol(Symbolic(), ...)`
+constructs a DCR from the factorial rule. Numerical classical/level calls evaluate the rule directly.
 """
 function gsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
-                 k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64, workspace=nothing) where {TT}
-
+                  k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64,
+                  workspace=nothing) where {TT}
+    q = _evaluation_q(k,q,exact)
     k isa AbstractVector && workspace !== nothing &&
-        throw(ArgumentError("workspace is for scalar calls; level sweeps manage their own scratch"))
-    k isa AbstractVector &&
-        return _sweep_levels(gsymbol, (j1, j2, j3, j4, j5, j6), k; q=q, exact=exact, T=T, threads=nothing)
-
-    # --- level k and q = 1: factorial rule (symmetric by construction, no canonical form needed) ---
-    if (!isnothing(k) && isnothing(q)) || (_is_classical(q) && !exact)
-        Jd = doubled(j1, j2, j3, j4, j5, j6)
-        return _rule_value(gsymbol_sum(Jd...), () -> _qδtet(Jd..., k),
-                           () -> gsymbol_dcr(canonical_spins(j1, j2, j3, j4, j5, j6)...),k,q,exact,T;
-                           family=Val(:g),workspace=workspace)
-    end
-
-    # G-symbol is fully symmetric.
-    Js = canonical_spins(j1, j2, j3, j4, j5, j6)
-
-    dcr = gsymbol_dcr(Js...)
-    isnothing(q) && return dcr
-
-    return qeval(dcr; k=k, q=q, exact=exact, T=T)
+        throw(ArgumentError("workspace is for scalar calls; level sweeps do not accept caller-owned scratch"))
+    k isa AbstractVector && return _sweep_levels(gsymbol, (j1, j2, j3, j4, j5, j6), k;
+                                                q=q,exact=exact,T=T,threads=nothing)
+    Js = doubled(j1, j2, j3, j4, j5, j6)
+    s = gsymbol_sum(Js...)
+    return _symbol_value(s, () -> _qδtet(Js...,Int(k)), k,q,exact,T;
+                         family=Val(:g),workspace=workspace)
 end
 
-
 """
-    tetrahedron(j1, j2, j3, j4, j5, j6; k=nothing, q=nothing, exact::Bool=false, T=Float64)
-Evaluates the standard closed tetrahedron network.
+    tetrahedron(j1, j2, j3, j4, j5, j6; k=nothing, q=nothing, exact=false, T=Float64, workspace=nothing)
+
+Evaluate the closed tetrahedron in the package’s existing normalization, classically by default.
+Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
+`exact=true` requests an exact classical or level value. `tetrahedron(Symbolic(), ...)`
+constructs a DCR from the factorial rule. Numerical classical/level calls evaluate the rule directly.
 """
 function tetrahedron(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
-                     k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
-
-    # Tetrahedron is symmetric.
-    Js = canonical_spins(j1, j2, j3, j4, j5, j6)
-
-    if !isnothing(k) && !_qδtet(Js..., k)
-        dcr = ZERO_DCR
-    else
-        dcr = tetrahedron_dcr(Js...)
-    end
-
-    if isnothing(k) && isnothing(q)
-        return dcr
-    end
-
-    return qeval(dcr; k=k, q=q, exact=exact, T=T)
+                  k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64,
+                  workspace=nothing) where {TT}
+    q = _evaluation_q(k,q,exact)
+    k isa AbstractVector && workspace !== nothing &&
+        throw(ArgumentError("workspace is for scalar calls; level sweeps do not accept caller-owned scratch"))
+    k isa AbstractVector && return _sweep_levels(tetrahedron, (j1, j2, j3, j4, j5, j6), k;
+                                                q=q,exact=exact,T=T,threads=nothing)
+    Js = doubled(j1, j2, j3, j4, j5, j6)
+    s = tetrahedron_sum(Js...)
+    return _symbol_value(s, () -> _qδtet(Js...,Int(k)), k,q,exact,T;
+                         family=nothing,workspace=workspace)
 end
 
-
 """
-    theta_value(j1, j2, j3; k=nothing, q=nothing, exact::Bool=false, T=Float64)
-Value of the Theta-graph.
+    theta_value(j1, j2, j3; k=nothing, q=nothing, exact=false, T=Float64)
+
+Theta-graph value, classical by default. Use `Symbolic()` for the monomial representation.
 """
-function theta_value(j1::Spin, j2::Spin, j3::Spin;
-                     k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
-
-    Js = doubled(j1, j2, j3)
-
-    if !isnothing(k) && !_qδ(Js..., k)
-        mono = ZERO_MONOMIAL
-    else
-        mono = theta_mono(Js...)
-    end
-
-    # classical limit
-    if !isnothing(q) && (q == 1 || q == 1.0)
-        return exact ? project_classical_exact(mono) : project_classical(mono, T)
-    end
-
-    !isnothing(q) && return project_analytic(mono, q)
-    isnothing(k) && return mono
-
-    return exact ? project_exact(mono, k) : project_discrete(mono, k, T)
+function theta_value(j1::Spin,j2::Spin,j3::Spin; k=nothing,q=nothing,exact::Bool=false,T::Type=Float64)
+    q = _evaluation_q(k,q,exact)
+    Js = doubled(j1,j2,j3)
+    mono = !isnothing(k) && !_qδ(Js...,Int(k)) ? ZERO_MONOMIAL : theta_mono(Js...)
+    return qeval(mono;k=k,q=q,exact=exact,T=T)
 end
 
-
 """
-    qdim(j; k=nothing, q=nothing, exact::Bool=false, T=Float64)
-Quantum dimension [2j+1]_q.
+    qdim(j; k=nothing, q=nothing, exact=false, T=Float64)
+
+Quantum dimension [2j+1], classical by default. Use `qdim(Symbolic(), j)` for a monomial.
 """
-function qdim(j::Spin; k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
-    J = doubled(j)
-    mono = qdim_mono(J)
-
-    if !isnothing(q) && (q == 1 || q == 1.0)
-        return exact ? project_classical_exact(mono) : project_classical(mono, T)
-    end
-
-    !isnothing(q) && return project_analytic(mono, q)
-    isnothing(k) && return mono
-
-    return exact ? project_exact(mono, k) : project_discrete(mono, k, T)
+function qdim(j::Spin; k=nothing,q=nothing,exact::Bool=false,T::Type=Float64)
+    q = _evaluation_q(k,q,exact)
+    return qeval(qdim_mono(doubled(j));k=k,q=q,exact=exact,T=T)
 end
 
 #---- clear caches ---

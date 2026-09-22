@@ -142,33 +142,32 @@ end
 
 Returns the R-matrix phase. 
 Formula: R = (-1)^{j_1 + j_2 - j_3} q^{j_3(j_3+1) - j_1(j_1+1) - j_2(j_2+1)}. 
-If no evaluation target is provided, returns the exact `QPhase`.
+The default is the classical value. `rmatrix(Symbolic(), ...)` returns a `QPhase`.
+At a level, `exact=true` retains the exact `QPhase` representation.
 """
 function rmatrix(j1::Spin, j2::Spin, j3::Spin; 
                  k=nothing, q=nothing, exact::Bool=false, T::Type=ComplexF64)
     
+    q = _evaluation_q(k,q,exact)
     J1, J2, J3 = doubled(j1, j2, j3)
     
     # check admissibility 
     if !_δ(J1, J2, J3)
-        return (exact || (isnothing(k) && isnothing(q))) ? zero(QPhase) : T(0)
+        return exact ? (isnothing(k) ? 0 : zero(QPhase)) : T(0)
     end
     
-    if !isnothing(k) && !_qδ(J1, J2, J3, k)
-        return (exact || isnothing(q)) ? zero(QPhase) : T(0)
+    if !isnothing(k) && !_qδ(J1, J2, J3, Int(k))
+        return exact ? zero(QPhase) : T(0)
     end
 
     p = (J3*(J3+2) - J1*(J1+2) - J2*(J2+2)) ÷ 2
     s = iseven((J1 + J2 - J3) ÷ 2) ? Int8(1) : Int8(-1)
     
-    # exact q-phase
-    if (isnothing(k) && isnothing(q)) || exact
+    _is_classical(q) && return exact ? Int(s) : T(s)
+
+    # exact q-phase at a level
+    if exact
         return QPhase(s, p // 2)
-    end
-    
-    # classical limit 
-    if !isnothing(q) && (q == 1 || q == 1.0)
-        return T(s)
     end
     
     # level k
