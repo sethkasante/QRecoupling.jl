@@ -9,7 +9,7 @@
 """
     EvalTarget
 
-Where a symbol should be evaluated: [`Level`](@ref), [`Exact`](@ref), [`At`](@ref) or [`Classical`](@ref).
+Where a symbol should be evaluated: [`Level`](@ref), [`Exact`](@ref), [`At`](@ref), [`Classical`](@ref), or [`Symbolic`](@ref).
 Any of them can be passed as the first argument of a symbol function in place of the `k`, `q`, `exact` and
 `T` keywords.
 """
@@ -72,5 +72,44 @@ Base.show(io::IO, t::At) = print(io, "At(", t.q, ")")
 Base.show(io::IO, t::Classical) = print(io, "Classical(", t.exact ? "; exact = true" : "", ")")
 
 for f in (:q6j, :q3j, :fsymbol, :gsymbol, :rmatrix, :tetrahedron, :theta_value, :qdim, :qeval)
-    @eval $f(t::EvalTarget, args...; kw...) = $f(args...; target_kwargs(t)..., kw...)
+    @eval function $f(t::EvalTarget, args...; kw...)
+        t isa Symbolic && throw(ArgumentError("Symbolic() does not accept evaluation keywords"))
+        fixed = target_kwargs(t)
+        any(key -> key in (:k,:q) || haskey(fixed,key),keys(kw)) &&
+            throw(ArgumentError("evaluation target conflicts with explicit evaluation keywords"))
+        return $f(args...; fixed...,kw...)
+    end
+end
+
+"""
+    Symbolic()
+
+Request a parameter-independent representation instead of evaluation. Recoupling symbols
+return a `DCR` built from their factorial rule; `qdim` and `theta_value` return a
+`CyclotomicMonomial`, and `rmatrix` returns a `QPhase`. No evaluation keywords are accepted.
+Use `qeval(Symbolic(), rule)` to lower a `FactorialSum` to a DCR.
+"""
+struct Symbolic <: EvalTarget end
+Base.show(io::IO,::Symbolic) = print(io,"Symbolic()")
+
+q6j(::Symbolic,js::Vararg{Spin,6}) = _factorial_dcr(sixj_sum(doubled(js...)...))
+q3j(::Symbolic,j1::Spin,j2::Spin,j3::Spin,m1::Spin,m2::Spin,m3::Spin=-m1-m2) =
+    _factorial_dcr(threej_sum(doubled(j1,j2,j3,m1,m2,m3)...))
+fsymbol(::Symbolic,js::Vararg{Spin,6}) = _factorial_dcr(fsymbol_sum(doubled(js...)...))
+gsymbol(::Symbolic,js::Vararg{Spin,6}) = _factorial_dcr(gsymbol_sum(doubled(js...)...))
+tetrahedron(::Symbolic,js::Vararg{Spin,6}) = _factorial_dcr(tetrahedron_sum(doubled(js...)...))
+qdim(::Symbolic,j::Spin) = qdim_mono(doubled(j))
+theta_value(::Symbolic,js::Vararg{Spin,3}) = theta_mono(doubled(js...)...)
+function rmatrix(::Symbolic,js::Vararg{Spin,3})
+    Js = doubled(js...)
+    return _δ(Js...) ? rmatrix_mono(Js...) : zero(QPhase)
+end
+qeval(::Symbolic,s::FactorialSum) = _factorial_dcr(_validate_rule(s))
+qeval(::Symbolic,s::Union{DCR,CyclotomicMonomial,QPhase}) = s
+
+for (f,nlab) in ((:q6j,:((6,))),(:q3j,:((5,6))),(:fsymbol,:((6,))),(:gsymbol,:((6,))))
+    @eval function $f(t::Symbolic,labels::Union{AbstractVector,Base.Generator,Base.Iterators.Filter,Tuple{Any,Vararg{Any}}})
+        L = _normalize_labels(labels,$nlab,$(string(f)))
+        return DCR[$f(t,l...) for l in L]
+    end
 end

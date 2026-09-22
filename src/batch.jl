@@ -478,6 +478,7 @@ not, otherwise an element-by-element fall back to the generic single-symbol rout
 """
 function _batched(rule::R, fallback::F, symbol::S, labels, nlab, fname;
                   k, q, exact::Bool, T::Type, threads) where {R,F,S}
+    q = _evaluation_q(k,q,exact)
     labels = _normalize_labels(labels, nlab, fname)
     fam = _family(symbol)
     if !isnothing(k) && isnothing(q) && !exact
