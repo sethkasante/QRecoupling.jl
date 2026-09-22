@@ -13,7 +13,7 @@
 
 """
     build_analytic_table(max_d::Int, q_sq::T) where T <: Number
-Computes exact complex values of Φ_d(q²) up to max_d.
+Computes numerical values of Φ_d(q²) up to max_d.
 """
 function build_analytic_table(max_d::Int, q_sq::T) where T
     max_d == 0 && return Vector{T}(undef, 0)
@@ -22,16 +22,19 @@ function build_analytic_table(max_d::Int, q_sq::T) where T
     q_pow = q_sq  # tracks (q²)^n
     @inbounds for n in 1:max_d
         val = q_pow - one(T)  # (q²)^n - 1 = ∏_{d|n} Φ_d(q²)
-        for d in 1:(n-1)
-            if n % d == 0
-                td = table[d]
-                iszero(td) && throw(DomainError(q_sq,
-                    "q² is a primitive $(d)-th root of unity; Φ_$n is singular here."))
-                val /= td
-            end
-        end
         table[n] = val
         q_pow *= q_sq
+    end
+    # Sieve over multiples instead of testing every possible divisor. At step d,
+    # table[d] is finalized; each entry is still divided in ascending divisor order.
+    # This preserves the arithmetic of the old loop in O(N log N) visits.
+    @inbounds for d in 1:(max_d ÷ 2)
+        td = table[d]
+        iszero(td) && throw(DomainError(q_sq,
+            "q² is a primitive $(d)-th root of unity; Φ_$(2d) is singular here."))
+        for n in (2d):d:max_d
+            table[n] /= td
+        end
     end
     return table
 end
