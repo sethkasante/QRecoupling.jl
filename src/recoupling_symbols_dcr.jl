@@ -48,129 +48,15 @@ end
 
 # --- Recoupling Symbols (3j & 6j) ---
 
-function q3j_dcr(J1::Int, J2::Int, J3::Int, M1::Int, M2::Int, M3::Int = -M1-M2)
-    # admissibility: triangle, |m| ≤ j with matching parity, m1 + m2 + m3 = 0
-    (!_δ(J1, J2, J3) || !_mproj_ok(J1, J2, J3, M1, M2, M3)) && return ZERO_DCR
-
-    # Standard summation bounds for Wigner 3j
-    α1 = (J3 - J2 + M1) ÷ 2; α2 = (J3 - J1 - M2) ÷ 2
-    β1 = (J1 + J2 - J3) ÷ 2; β2 = (J1 - M1) ÷ 2; β3 = (J2 + M2) ÷ 2
-
-    z_min = max(0, -α1, -α2)
-    z_max = min(β1, β2, β3)
-
-    # Initialize buffer
-    buf = CycloBuffer(max(z_max + 2, (J1 + J2 + J3) ÷ 2 + 1))
-
-    dcr = build_dcr!(buf,
-        # Prefactor
-        b -> begin
-            qtriangle!(b, J1, J2, J3)
-            # Add (j ± m)! terms explicitly
-            add_qfact!(b, (J1 + M1) ÷ 2); add_qfact!(b, (J1 - M1) ÷ 2)
-            add_qfact!(b, (J2 + M2) ÷ 2); add_qfact!(b, (J2 - M2) ÷ 2)
-            add_qfact!(b, (J3 + M3) ÷ 2); add_qfact!(b, (J3 - M3) ÷ 2)
-        end,
-
-        # Base Term (at z_min)
-        (b, z) -> begin
-            add_qfact!(b, z, -1)
-            for a in (α1, α2); add_qfact!(b, a+z, -1); end
-            for bv in (β1, β2, β3); add_qfact!(b, bv-z, -1); end
-        end,
-
-        # Ratio R_z = Term(z+1)/Term(z)
-        (b, z) -> begin
-            for bv in (β1, β2, β3); add_qint!(b, bv-z); end
-            add_qint!(b, z+1, -1)
-            for a in (α1, α2); add_qint!(b, a+z+1, -1); end
-        end,
-        z_min, z_max;
-        extract_radical = true,
-        alternating_sign = true
-    )
-
-    # Wigner phase (-1)^{j1 - j2 - m3}
-    isodd((J1 - J2 - M3) ÷ 2) || return dcr
-    return DCR(dcr.root, dcr.radical, -dcr.base, dcr.ratios, dcr.z_range, dcr.max_d)
-end
-
-function q6j_dcr(J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int)
-    !_δtet(J1, J2, J3, J4, J5, J6) && return ZERO_DCR
-
-    α1 = (J1+J2+J3) ÷ 2; α2 = (J1+J5+J6) ÷ 2; α3 = (J2+J4+J6) ÷ 2; α4 = (J3+J4+J5) ÷ 2
-    β1 = (J1+J2+J4+J5) ÷ 2; β2 = (J1+J3+J4+J6) ÷ 2; β3 = (J2+J3+J5+J6) ÷ 2
-    
-    α = (α1, α2, α3, α4)
-    β = (β1, β2, β3)
-    
-    z_min = max(α1, α2, α3, α4)
-    z_max = min(β1, β2, β3)
-    buf = CycloBuffer(max(z_max + 2, β1, β2, β3))
-
-    return build_dcr!(buf,
-        b -> qtetrahedron!(b, J1, J2, J3, J4, J5, J6),
-        
-        # base term 
-        (b, z) -> begin 
-            add_qfact!(b, z+1)
-            for a in α; add_qfact!(b, z-a, -1); end
-            for bv in β; add_qfact!(b, bv-z, -1); end
-        end,
-
-        # ratios 
-        (b, z) -> begin 
-            add_qint!(b, z+2)
-            for bv in β; add_qint!(b, bv-z); end
-            for a in α; add_qint!(b, z+1-a, -1); end
-        end,
-        z_min, z_max;
-        extract_radical = true,
-        alternating_sign = true
-    )
-end
-
-
-
-#  ---- TQFT invariants (F & G Symbols) ---
-
-"""
-    fsymbol_dcr(J1, J2, J3, J4, J5, J6)
-Algebraically fused F-symbol: sqrt([2j3+1][2j6+1]) * {6j}, fuses √([d3][d6]) into the radical.
-Matches the unitary crossing matrix in Spin Networks.
-Inputs are twice spins (J = 2j ∈ ℤ).
-"""
-function fsymbol_dcr(J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int)
-    dcr = q6j_dcr(J1, J2, J3, J4, J5, J6)
-    dcr.base.sign == 0 && return dcr
-    
-    dims = qdim_mono(J3) * qdim_mono(J6)
-    res = fuse_radical(dcr, dims)
-    
-    # phase factor 
-    phase = iseven((J1 + J2 + J4 + J5) ÷ 2) ? 1 : -1
-    new_base = phase * res.base
-    
-    return DCR(res.root, res.radical, new_base, res.ratios, res.z_range, res.max_d)
-end
-
-
-"""
-    gsymbol_dcr(J1, J2, J3, J4, J5, J6)
-Fully symmetric G-symbol: sqrt(product of all 6 dims) * {6j}.
-"""
-function gsymbol_dcr(J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int)
-    dcr = q6j_dcr(J1, J2, J3, J4, J5, J6)
-    dcr.base.sign == 0 && return dcr
-    
-    buf = CycloBuffer(max(J1, J2, J3, J4, J5, J6) + 1)
-    for J in (J1, J2, J3, J4, J5, J6)
-        add_qint!(buf, J + 1)
-    end
-    
-    return fuse_radical(dcr, snapshot(buf))
-end
-
+# Symbol formulas live in factorial_rule.jl; these internal methods use doubled labels.
+q3j_dcr(J1::Int,J2::Int,J3::Int,M1::Int,M2::Int,M3::Int=-M1-M2) =
+    _factorial_dcr(threej_sum(J1,J2,J3,M1,M2,M3))
+q6j_dcr(J1::Int,J2::Int,J3::Int,J4::Int,J5::Int,J6::Int) =
+    _factorial_dcr(sixj_sum(J1,J2,J3,J4,J5,J6))
+fsymbol_dcr(J1::Int,J2::Int,J3::Int,J4::Int,J5::Int,J6::Int) =
+    _factorial_dcr(fsymbol_sum(J1,J2,J3,J4,J5,J6))
+gsymbol_dcr(J1::Int,J2::Int,J3::Int,J4::Int,J5::Int,J6::Int) =
+    _factorial_dcr(gsymbol_sum(J1,J2,J3,J4,J5,J6))
 
 # ---- Graph evaluators (Theta & Tetrahedron Values)  ----
 
@@ -196,19 +82,5 @@ end
 Evaluates the value of a closed tetrahedral network (6j symbol * triangle dims).
 
 """
-function tetrahedron_dcr(J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int)
-    dcr = q6j_dcr(J1, J2, J3, J4, J5, J6)
-    dcr.base.sign == 0 && return dcr
-    
-    # Value = {6j} * (θ(j1,j2,j3)θ(j1,j5,j6)θ(j2,j4,j6)θ(j3,j4,j5))^(1/2)
-    # We build the product of the four theta values
-    m_max = (J1 + J2 + J3 + J4 + J5 + J6) ÷ 2
-    
-    # inline theta prefactors 
-    buf = CycloBuffer(m_max)
-    qtetrahedron!(buf, J1, J2, J3, J4, J5, J6)
-
-    # This is essentially the inverse of the qtetrahedron! prefactor in q6j
-    # Resulting in the closed graph value.
-    return fuse_radical(dcr, snapshot(buf))
-end
+tetrahedron_dcr(J1::Int,J2::Int,J3::Int,J4::Int,J5::Int,J6::Int) =
+    _factorial_dcr(tetrahedron_sum(J1,J2,J3,J4,J5,J6))
