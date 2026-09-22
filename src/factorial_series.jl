@@ -48,7 +48,8 @@ end
 
 Evaluate a finite factorial rule, classically when no target is supplied.
 Use `qeval(Symbolic(), rule)` to construct its DCR. Classical and in-table level evaluations use ratio
-kernels; exact, analytic and out-of-table evaluations use its explicit DCR view.
+kernels; exact classical evaluation uses integer arithmetic directly. Exact level,
+analytic and out-of-table evaluations use its explicit DCR view.
 Factorial arguments must be nonnegative; individually polar terms are rejected even
 if the complete sum might have a removable singularity. `k` and `q` are exclusive.
 For general functions, use the existing callback `qseries`/DCR interface instead.
@@ -57,8 +58,8 @@ function qeval(s::FactorialSum; k=nothing,q=nothing,exact::Bool=false,
                T::Type{TT}=Float64,workspace=nothing) where {TT}
     _validate_rule(s)
     q = _evaluation_q(k,q,exact)
-    if _is_classical(q) && !exact
-        return classical_value(s,T;workspace=workspace)
+    if _is_classical(q)
+        return exact ? classical_exact(s) : classical_value(s,T;workspace=workspace)
     elseif !isnothing(k)
         k isa Integer || throw(ArgumentError("k must be an integer level"))
         kk=Int(k)

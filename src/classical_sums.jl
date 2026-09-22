@@ -126,7 +126,7 @@ function _split_product(tab::QIntTables{Float64}, pairs)
     return _renorm(m, e)
 end
 
-"Exact S / t_lo = P / Q by Horner nesting; `nothing` if a ratio would overflow a machine word."
+"Exact S / t_lo = P / Q by Horner nesting; throws OverflowError if a ratio exceeds a machine word."
 function _horner_sum(s::FactorialSum)
     P = big(1); Q = big(1); T1 = big(0); T2 = big(0)
     for z in (s.zhi - 1):-1:s.zlo
