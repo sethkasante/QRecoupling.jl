@@ -36,7 +36,7 @@ _deprecated_eager() = @warn("`eager=true` is deprecated and now uses the standar
         return _level_value(s, admissible(), () -> _factorial_dcr(s), Int(k), exact, T;
                             labels=labels, family=family, workspace=workspace)
     elseif _is_classical(q)
-        return exact ? project_classical_exact(_factorial_dcr(s)) :
+        return exact ? classical_exact(s) :
                        classical_value(s,T; labels=labels,workspace=workspace)
     end
     return qeval(_factorial_dcr(s);q=q,exact=exact,T=T)
@@ -195,6 +195,7 @@ function clear_sieve_caches!()
     empty!(LEVEL_ZERO_TABLES)
     empty!(CLASSICAL_F64_TABLES)
     empty!(CLASSICAL_MOD_TABLES)
+    empty!(CLASSICAL_EXACT_PRIMES)
     empty!(MW3_TABLES)
     empty!(MW4_TABLES)
     @lock CLASSICAL_TABLES_LOCK empty!(CLASSICAL_TABLES)
