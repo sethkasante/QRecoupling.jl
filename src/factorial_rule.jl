@@ -1,6 +1,6 @@
 
 # ---------------------------------------------------------------------------------
-#  Factorial sums: the rule of a terminating q-hypergeometric sum
+#  Factorial sums: the rule of a terminating/finite q-hypergeometric sum
 #
 #  value = σ₀ · (√) Π_n [n]!^{c_n} · Σ_{z = zlo}^{zhi} (±1)^z Π_i [a_i z + b_i]!^{c_i}
 #
@@ -204,21 +204,18 @@ end
 
 # ---- valuations at q = e^{iπ/h} ----
 #
-#  Two facts about the Φ_d multiplicity E_d of a term shape the whole classification.
+#  the classification is shaped by:
 #
-#  * **Bounded multiplicities.** For the 6j the seven denominator arguments n_r satisfy Σ_r n_r = z (because
-#    Σ_j β_j = Σ_i α_i), so writing n_r = d ℓ_r + ρ_r gives E_d(z) = ⌊(1 + Σ_r ρ_r)/d⌋, hence 0 ≤ E_d(z) ≤ 6
-#    (carry the counting). In particular a *term* never has negative multiplicity: it either contributes 
-#    (E = 0) or vanishes, to order at most 6.
-#  * **No poles for admissible labels.** Level admissibility gives α_i ≤ k, so ⌊(α_i+1)/h⌋ = 0 with h = k+2
+#  * For the 6j, each the exponent of each summand is bounded; (0≤ E ≤ 6).
+#  * Level admissibility gives α_i ≤ k, so ⌊(α_i+1)/h⌋ = 0 with h = k+2
 #    and the prefactor multiplicity Σ_{i,j} ⌊(β_j − α_i)/h⌋ ≥ 0. With the bound above, no contributing term
-#    can have negative valuation: an admissible symbol at a level is always finite (possibly zero). The
+#    can have negative valuation. Thus, an admissible symbol at a level is always finite (possibly zero). The
 #    `:pole` status below is therefore reachable only for labels outside the level's admissible set, where the
-#    symbol has no representation in the first place. Checked in the test suite.
-#  * **Segment count.** E_d changes only where one of the seven arguments wraps modulo d, so at most 7 times
+#    symbol has no representation in the first place. 
+#  * E_d changes only where one of the seven arguments wraps modulo d, so at most 7 times
 #    per period, and the summation range of a 6j is short: min_j β_j − max_i α_i ≤ Σβ/3 − Σα/4 = Σα/12 ≤ k/3
 #    < h. So a level 6j has at most 8 contributing segments, which is why the fixed-size `SegList{8}` path
-#    below is complete rather than heuristic (measured: it is always 1 segment for admissible labels).
+#    below is complete rather than heuristic (it's always 1 segment for admissible labels).
 
 "⌊n/h⌋, the Φ_h exponent of [n]!; negative arguments never reach a contributing term."
 @inline fld(n::Int, h::Int) = Base.fld(n, h)
