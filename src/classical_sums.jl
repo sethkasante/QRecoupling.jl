@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------------
-#  The classical limit q → 1 from the same factorial rule
+#  The classical limit q → 1 from the factorial rule
 #
 #  At q = 1 every q-integer is an ordinary integer, so the rule that describes a symbol at a level also
 #  describes it classically: the same ratio loop runs over tables of n and log n!, with the same
@@ -188,7 +188,7 @@ function classical_value(s::FactorialSum, ::Type{T}; labels = nothing, workspace
     v, st = _certified_value(s, segs, 0, classical_tables(T, N), workspace)
     st === :done && return v
     target = _target_digits(T)
-    _, loss = _sum_at_level(s, segs, 0, classical_tables(T, N))
+    pess = _bound_pessimism(s, segs, classical_tables(Float64, N))
     if T === Float64 && labels !== nothing       # the symbol as one entry of its column: O(distance), no κ
         vr = sixj_entry(labels, ClassicalQ(), _column_workspace(workspace))
         vr === nothing || return T(vr)           # a returned value is certified far from zero
@@ -198,12 +198,12 @@ function classical_value(s::FactorialSum, ::Type{T}; labels = nothing, workspace
         v = classical_exact_float(s)
         v === nothing || return v
     end
-    bits = 64 * cld(ceil(Int, (target + min(loss, 1e6) + 10) * log2(10)), 64)
+    bits = 64 * cld(ceil(Int, (target + 26) * log2(10)), 64)
     while true
-        w, lossw = setprecision(BigFloat, bits) do
+        w, B = setprecision(BigFloat, bits) do
             _sum_at_level(s, segs, 0, classical_tables(BigFloat, N))
         end
-        bits * log10(2.0) - lossw >= target + 2 && return T(w)
+        _surviving_digits(w, B, pess) >= target + 2 && return T(w)
         bits *= 2
     end
 end
