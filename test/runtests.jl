@@ -409,7 +409,7 @@ close(a, b; tol = 1e-11) = isapprox(a, b; atol = tol, rtol = tol)
             (st === :finite && QR._within_level_tables(s, segs, k)) || continue
             r = setprecision(() -> sixj_ref_level_big(J, k), BigFloat, 512)
             tab = QR.qint_tables(Float64, k)
-            v, _, B, _ = QR._sum_at_level(s, segs, k, tab)
+            v, B = QR._sum_at_level(s, segs, k, tab)
             vc, Bc = QR._sum_compensated(s, segs, k, tab)
             viol += (abs(big(v) - r) > B) + (abs(big(vc) - r) > Bc)
             n += 1
@@ -791,7 +791,11 @@ close(a, b; tol = 1e-11) = isapprox(a, b; atol = tol, rtol = tol)
         end
     end
 
+    # include("near_edge.jl")
+    # include("analytic.jl")
+    # include("analytic_rules.jl")
     # include("factorial_rules.jl")
+    # include("classical_exact.jl")
     # include("api_v04.jl")
 
     # @testset "Large spins stay finite" begin
