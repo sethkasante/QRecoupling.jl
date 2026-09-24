@@ -39,7 +39,7 @@ _deprecated_eager() = @warn("`eager=true` is deprecated and now uses the standar
         return exact ? classical_exact(s) :
                        classical_value(s,T; labels=labels,workspace=workspace)
     end
-    return qeval(_factorial_dcr(s);q=q,exact=exact,T=T)
+    return analytic_value(s,q;workspace=workspace)
 end
 
 """

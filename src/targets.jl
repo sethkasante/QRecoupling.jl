@@ -41,51 +41,6 @@ struct Exact{K} <: EvalTarget
     k::K
 end
 
-"Internal target selected by Exact(k; backend=:native)."
-struct NativeExact <: EvalTarget
-    k::Int
-end
-
-"""
-    Exact(k::Integer; backend=:nemo)
-
-Choose the existing Nemo projection or the experimental `:native` direct
-factorial-rule backend. Native results use BigInt polynomial arithmetic and a
-positive radical; see [`exact_level`](@ref) for supported rules and limitations.
-The package still loads Nemo for its existing symbolic/exact APIs.
-"""
-function Exact(k::Integer;backend::Symbol=:nemo)
-    k>=0 || throw(DomainError(k,"level must be nonnegative"))
-    backend===:nemo && return Exact{typeof(k)}(k)
-    backend===:native && return NativeExact(Int(k))
-    throw(ArgumentError("exact backend must be :nemo or :native"))
-end
-Base.show(io::IO,t::NativeExact)=print(io,"Exact(",t.k,"; backend=:native)")
-target_kwargs(::NativeExact)=throw(ArgumentError("native exact target requires a supported scalar symbol or FactorialSum"))
-
-qeval(t::NativeExact,s::FactorialSum;workspace=nothing)=exact_level(s,t.k;workspace=workspace)
-function q6j(t::NativeExact,js::Vararg{Spin,6};workspace=nothing)
-    J=doubled(js...)
-    s=_qδtet(J...,t.k) ? sixj_sum(J...) : EMPTY_FACTORIAL_SUM
-    exact_level(s,t.k;workspace=workspace)
-end
-function q3j(t::NativeExact,j1::Spin,j2::Spin,j3::Spin,m1::Spin,m2::Spin,m3::Spin=-m1-m2;workspace=nothing)
-    J=doubled(j1,j2,j3,m1,m2,m3)
-    s=_qδ(J[1],J[2],J[3],t.k) ? threej_sum(J...) : EMPTY_FACTORIAL_SUM
-    exact_level(s,t.k;workspace=workspace)
-end
-for (f,rule) in ((:fsymbol,:fsymbol_sum),(:gsymbol,:gsymbol_sum),(:tetrahedron,:tetrahedron_sum))
-    @eval function $f(t::NativeExact,js::Vararg{Spin,6};workspace=nothing)
-        J=doubled(js...)
-        s=_qδtet(J...,t.k) ? $rule(J...) : EMPTY_FACTORIAL_SUM
-        exact_level(s,t.k;workspace=workspace)
-    end
-end
-function evaluate_exact(r::NativeLevelResult,::Type{T}=ComplexF64) where T
-    v=NativeLevelArithmetic.approximate(r)
-    T<:Real ? T(real(v)) : T(v)
-end
-
 """
     At(q)
 

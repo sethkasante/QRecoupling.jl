@@ -33,6 +33,7 @@ include("classical_sums.jl")
 include("classical_exact.jl")
 include("families.jl")
 include("workspace.jl")
+include("analytic_rules.jl")
 include("factorial_series.jl")
 
 include("recoupling_api.jl")
