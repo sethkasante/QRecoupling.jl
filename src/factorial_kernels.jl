@@ -1,4 +1,65 @@
 # ---------------------------------------------------------------------------------
+#  Shared pieces of the two kernels: 
+#  the prefactor ∏[n]!^c (with the square root folded in when the rule carries one)
+#  and the number of roundings a term or a ratio costs. 
+#  Both kernels differ only in how they traverse a segment
+#   -- forward by ratios, or backward by compensated Horner -- 
+#  so everything before and after the traversal lives here once.
+# ---------------------------------------------------------------------------------
+
+"Prefactor in split form `(mantissa, exponent, relative error bound)`, single word."
+@inline function _rule_prefactor(s::FactorialSum, tab::QIntTables{T}) where {T}
+    mp = one(T); ep = 0; np = 0
+    @inbounds for (n, c) in s.pre
+        mp, ep = _split_mul(mp, ep, tab, Int(n), c)
+        np += abs(Int(c))
+    end
+    mp, ep = _renorm(mp, ep)
+    rel = _gamma(T, 2np)
+    if s.sqrt_pre
+        isodd(ep) && (mp *= 2; ep -= 1)
+        mp = sqrt(mp); ep = ep ÷ 2
+        rel = (rel / 2) + _unit(T)    # halving the exponent is exact; the root adds one rounding
+    end
+    return mp, ep, rel
+end
+
+"The same prefactor as a double word."
+@inline function _rule_prefactor_dw(s::FactorialSum, tab::QIntTables{T}) where {T}
+    ph = one(T); pl = zero(T); ep = 0
+    @inbounds for (n, c) in s.pre
+        ph, pl, ep = _split_mul_dw(ph, pl, ep, tab, Int(n), c)
+    end
+    ph, pl, ep = _renorm_dw(ph, pl, ep)
+    if s.sqrt_pre
+        isodd(ep) && (ph *= 2; pl *= 2; ep -= 1)
+        ph, pl = _dw_sqrt(ph, pl); ep = ep ÷ 2
+    end
+    return ph, pl, ep
+end
+
+"Factorials multiplied into a segment's first term: the roundings it carries."
+@inline _first_term_cost(s::FactorialSum) = sum(f -> abs(Int(f.c)), s.fac; init = 0)
+
+"A segment's first term ∏[arg(f,z0)]!^c in split form, single word."
+@inline function _first_term(s::FactorialSum, z0::Int, tab::QIntTables{T}) where {T}
+    m0 = one(T); e0 = 0
+    @inbounds for f in s.fac
+        m0, e0 = _split_mul(m0, e0, tab, _arg(f, z0), f.c)
+    end
+    return _renorm(m0, e0)
+end
+
+"The same first term as a double word."
+@inline function _first_term_dw(s::FactorialSum, z0::Int, tab::QIntTables{T}) where {T}
+    mh = one(T); ml = zero(T); e0 = 0
+    @inbounds for f in s.fac
+        mh, ml, e0 = _split_mul_dw(mh, ml, e0, tab, _arg(f, z0), f.c)
+    end
+    return _renorm_dw(mh, ml, e0)
+end
+
+# ---------------------------------------------------------------------------------
 #  Summation kernels for a factorial rule, with certified error bounds
 #
 #  The plain ratio loop with a running error bound (Theorem 1 of `dev/results/certified_compensated.md`),
@@ -7,63 +68,44 @@
 # ---------------------------------------------------------------------------------
 
 """
-    _sum_at_level(s, segs, k, tab) -> (value, loss, bound, kappa)
+    _sum_at_level(s, segs, k, tab) -> (value, bound)
 
 Σ over the contributing segments in type T by the term ratio, with the prefactor.
 
-- `loss`: decimal digits lost to cancellation, log₁₀(max |term| / |Σ|) (the old estimate).
-- `bound`: a rigorous bound on |value − exact| (see `dev/results/certified_compensated.md`, Theorem 1).
-  Every table entry is the correct rounding of its value, so a term reached after j ratio steps carries at
-  most j(2K+1) relative roundings (K factorials per ratio); summation adds at most u Σ|partial sums|; the
-  prefactor and first terms are products of correctly rounded split entries.
-- `kappa`: Σ|terms| / |Σ|, the condition number of the sum that every fixed-precision method pays.
+`bound` is a rigorous bound on |value - exact|. Every table entry is the correct rounding of 
+its value, so a term reached after j ratio steps carries at most j(2K+1) relative roundings 
+(K factorials per ratio); summation adds at most u Σ|partial sums|; the prefactor and first 
+terms are products of correctly rounded split entries.
 
-All bookkeeping is in split form, mantissa · 2^exponent: rescaling is by exact powers of two and segments
-are combined by aligning exponents. No `log` or `exp` is taken.
+digits lost to cancellation, the condition number — follows from the pair 
+(see [`_digits_lost`](@ref)).
+
+All bookkeeping is in split form, mantissa · 2^exponent: rescaling is by exact powers of 
+two and segments are combined by aligning exponents. No `log` or `exp` is taken.
 """
 function _sum_at_level(s::FactorialSum, segs, k::Int, tab::QIntTables{T},
                        buf::B = nothing) where {T,B<:Union{Nothing,Vector}}
-    q, qi = tab.q, tab.qi
-    ql, qil = tab.ql, tab.qil
-    ib = 0                                         # buffer cursor: (rh, rl) per step, segment by segment
+    q = tab.q
+
+    ib = 0     # buffer: (rh, rl) per step, segment by segment
     u = _unit(T)
-    mp = one(T); ep = 0; np = 0
-    @inbounds for (n, c) in s.pre
-        mp, ep = _split_mul(mp, ep, tab, Int(n), c)
-        np += abs(Int(c))
-    end
-    mp, ep = _renorm(mp, ep)
-    relpre = _gamma(T, 2np)
-    if s.sqrt_pre
-        isodd(ep) && (mp *= 2; ep -= 1)
-        mp = sqrt(mp); ep = ep ÷ 2
-        relpre = relpre / 2 + u
-    end
-    K = 0
-    for f in s.fac
-        K += abs(Int(f.c))
-    end
+    mp, ep, relpre = _rule_prefactor(s, tab)
     intr = _integer_ratios(s, segs, tab)
     qq, qql = tab.qq, tab.qql
     unit, plan = _ratio_plan(s, length(q))
     rsign = s.alternating ? -one(T) : one(T)
     Kratio = _ratio_cost(s)
-    cstep = intr ? 2 : 2Kratio + 1                      # roundings per step: a/b and t·r, or K entries + K products
-    relfirst = _gamma(T, 2K)
+    cstep = intr ? 2 : 2Kratio + 1     # roundings per step: a/b and t·r, or K entries + K products
+    relfirst = _gamma(T, 2 * _first_term_cost(s))
     big_ = ldexp(one(T), SCALE_BITS)
-    am = zero(T); ae = 0; started = false          # the sum, and its error bound and Σ|terms| in the same frame
-    Eacc = zero(T); Aacc = zero(T)
-    tm = zero(T); te = 0; seen = false             # the largest |term|
+    am = zero(T); ae = 0; started = false          # the sum, and its error bound in the same frame
+    Eacc = zero(T)
     @inbounds for seg in segs
         z0 = first(seg)
         nsteps = length(seg) - 1
-        m0 = one(T); e0 = 0
-        for f in s.fac
-            m0, e0 = _split_mul(m0, e0, tab, _arg(f, z0), f.c)
-        end
-        m0, e0 = _renorm(m0, e0)
-        t = one(T); ssum = one(T); tmax = one(T); sc = 0
-        W = zero(T); SA = one(T); SS = zero(T); j = 0
+        m0, e0 = _first_term(s, z0, tab)
+        t = one(T); ssum = one(T); sc = 0
+        W = zero(T); SS = zero(T); j = 0           # Σ j|t_j| and Σ|partial sums|: the bound needs only these
         for z in z0:last(seg)-1
             j += 1
             if intr
@@ -96,51 +138,88 @@ function _sum_at_level(s::FactorialSum, segs, k::Int, tab::QIntTables{T},
             t *= r
             ssum += t
             at = abs(t)
-            at > tmax && (tmax = at)
-            W = fma(T(j), at, W); SA += at; SS += abs(ssum)
+            W = fma(T(j), at, W); SS += abs(ssum)
             if at > big_
-                t = ldexp(t, -SCALE_BITS); ssum = ldexp(ssum, -SCALE_BITS); tmax = ldexp(tmax, -SCALE_BITS)
-                W = ldexp(W, -SCALE_BITS); SA = ldexp(SA, -SCALE_BITS); SS = ldexp(SS, -SCALE_BITS)
+                t = ldexp(t, -SCALE_BITS); ssum = ldexp(ssum, -SCALE_BITS)
+                W = ldexp(W, -SCALE_BITS); SS = ldexp(SS, -SCALE_BITS)
                 sc += SCALE_BITS
             end
-        end
-        fr, ex = frexp(tmax * m0)
-        ex += sc + e0
-        if !seen || ex > te || (ex == te && fr > tm)
-            tm, te, seen = fr, ex, true
         end
         # error of this segment in units of 2^(sc+e0): terms, summation, first term, final product
         g = _gamma(T, cstep * nsteps)
         Eraw = abs(m0) * (cstep * u * W / (1 - g)^2 + u / (1 - u) * SS) + abs(ssum * m0) * (relfirst + u)
-        Araw = abs(m0) * SA
         sgn = (s.alternating && isodd(z0)) ? -one(T) : one(T)
         vm, ve = frexp(sgn * ssum * m0)
         ve = iszero(vm) ? sc + e0 : ve + sc + e0
-        Em = ldexp(Eraw, sc + e0 - ve); Am = ldexp(Araw, sc + e0 - ve)
+        Em = ldexp(Eraw, sc + e0 - ve)
         if !started
-            am, ae, Eacc, Aacc, started = vm, ve, Em, Am, true
+            am, ae, Eacc, started = vm, ve, Em, true
         else
             if ve > ae
-                am = ldexp(am, ae - ve); Eacc = ldexp(Eacc, ae - ve); Aacc = ldexp(Aacc, ae - ve); ae = ve
-                am += vm; Eacc += Em; Aacc += Am
+                am = ldexp(am, ae - ve); Eacc = ldexp(Eacc, ae - ve); ae = ve
+                am += vm; Eacc += Em
             else
-                am += ldexp(vm, ve - ae); Eacc += ldexp(Em, ve - ae); Aacc += ldexp(Am, ve - ae)
+                am += ldexp(vm, ve - ae); Eacc += ldexp(Em, ve - ae)
             end
             Eacc += u * abs(am)
         end
         if !iszero(am)
             fr2, ex2 = frexp(am)
             am = fr2; ae += ex2
-            Eacc = ldexp(Eacc, -ex2); Aacc = ldexp(Aacc, -ex2)
+            Eacc = ldexp(Eacc, -ex2)
         end
     end
-    started || return zero(T), Inf, zero(T), T(Inf)
-    bound = ldexp(Eacc * abs(mp) * (1 + relpre) + abs(am * mp) * (relpre + u), ae + ep) * (1 + T(1e-6))
-    iszero(am) && return zero(T), Inf, bound, T(Inf)
-    value = s.sign0 * ldexp(am * mp, ae + ep)
-    loss = log10(Float64(tm) / abs(Float64(am))) + (te - ae) * log10(2.0)
-    kappa = Aacc / abs(am)
-    return value, loss, bound, kappa
+    started || return zero(T), zero(T)
+    bound = ldexp(Eacc * abs(mp) * (1 + relpre) + abs(am * mp) * (relpre + u), ae + ep) * BOUND_SLACK(T)
+    iszero(am) && return zero(T), bound
+    return s.sign0 * ldexp(am * mp, ae + ep), bound
+end
+
+"Covers the rounding of the bound's own evaluation; the bound itself is computed in working precision."
+BOUND_SLACK(::Type{T}) where {T} = one(T) + T(1e-6)
+
+"""
+    _digits_lost(value, bound) -> Float64
+
+Decimal digits of the working precision that cancellation has consumed, read off the certified bound:
+a bound of B on a value v means the surviving relative accuracy is B/|v|, so log₁₀(B/(u|v|)) digits are
+gone, where u is the unit roundoff of the type the sum ran in. Measured against the term-by-term estimate
+max|term|/|Σ| this **over**states the loss by 1.3–3.9 digits (the bound's own pessimism), which is the safe
+direction: it is used only to size the precision of an escalated pass. `Inf` for a value that the bound does
+not separate from zero.
+"""
+function _digits_lost(value::T, bound) where {T}
+    v = abs(Float64(value)); b = Float64(bound)
+    (iszero(v) || !isfinite(b)) && return Inf
+    return max(0.0, log10(b / v) - log10(Float64(_unit(T))))
+end
+
+"""
+    _bound_pessimism(s, segs, tab) -> Float64
+
+The factor `c·n` — roundings charged per ratio step, over every segment — by which the rigorous bound
+exceeds the sharp O(u Σ|terms|) size of the error. Callers keep the rigorous bound; only *estimates* of how
+many digits a pass kept divide it out, which is how the ladder sized and stopped itself before bounds existed.
+"""
+function _bound_pessimism(s::FactorialSum, segs, tab::QIntTables)
+    nsteps = sum(seg -> length(seg) - 1, segs; init = 0)
+    cstep = _integer_ratios(s, segs, tab) ? 2 : 2 * _ratio_cost(s) + 1
+    return max(1.0, Float64(cstep * nsteps))
+end
+
+"""
+    _surviving_digits(value, bound, pessimism) -> Float64
+
+Decimal digits of `value` that its `bound` leaves standing, with the bound's own pessimism removed. This is
+an estimate, not a certificate: it is what decides when an escalated pass has reached its target, because a
+pass that has lost *every* digit reports a bound of order `u·c·n·Σ|terms|` against a value of order
+`u·Σ|terms|`, i.e. `bound/|value| ≈ c·n` — a constant carrying no information about the cancellation at all.
+Sizing a pass from that number is what makes escalation overshoot.
+"""
+function _surviving_digits(value, bound, pessimism)
+    v = abs(Float64(value)); b = Float64(bound)
+    (iszero(v) || !isfinite(b)) && return -Inf
+    return log10(pessimism) - log10(b / v)
 end
 
 """
@@ -159,22 +238,10 @@ The result is as accurate as the plain loop run in doubled precision: relative e
 """
 function _sum_compensated(s::FactorialSum, segs, k::Int, tab::QIntTables{T},
                           buf::B = nothing) where {T,B<:Union{Nothing,Vector}}
-    q, qi, ql, qil = tab.q, tab.qi, tab.ql, tab.qil
+    q = tab.q
     base = 0                                       # buffer offset of the current segment
     u = _unit(T)
-    ph = one(T); pl = zero(T); ep = 0
-    @inbounds for (n, c) in s.pre
-        ph, pl, ep = _split_mul_dw(ph, pl, ep, tab, Int(n), c)
-    end
-    ph, pl, ep = _renorm_dw(ph, pl, ep)
-    if s.sqrt_pre
-        isodd(ep) && (ph *= 2; pl *= 2; ep -= 1)
-        ph, pl = _dw_sqrt(ph, pl); ep = ep ÷ 2
-    end
-    K = 0
-    for f in s.fac
-        K += abs(Int(f.c))
-    end
+    ph, pl, ep = _rule_prefactor_dw(s, tab)
     intr = _integer_ratios(s, segs, tab)
     qq, qql = tab.qq, tab.qql
     unit, plan = _ratio_plan(s, length(q))
@@ -185,11 +252,7 @@ function _sum_compensated(s::FactorialSum, segs, k::Int, tab::QIntTables{T},
     @inbounds for seg in segs
         z0 = first(seg); z1 = last(seg)
         nseg = z1 - z0
-        mh = one(T); ml = zero(T); e0 = 0
-        for f in s.fac
-            mh, ml, e0 = _split_mul_dw(mh, ml, e0, tab, _arg(f, z0), f.c)
-        end
-        mh, ml, e0 = _renorm_dw(mh, ml, e0)
+        mh, ml, e0 = _first_term_dw(s, z0, tab)
         y = one(T); c = zero(T); one_s = one(T); A = one(T); EA = zero(T); sc = 0
         for z in (z1 - 1):-1:z0
             if buf !== nothing
@@ -287,8 +350,9 @@ valuations before any arithmetic. The sum runs in T and reports how many digits 
 If that leaves fewer than `_target_digits(T)`, the modular test first decides whether the value is exactly
 zero; otherwise the sum is redone in BigFloat with enough bits for the loss (doubling until the digits
 are there). The digit count is an estimate from max|term|/|Σ|, so a `Float64` result that is accepted
-carries about 11 significant digits or better; escalated results carry the full target. `fallback()` is used if a factorial falls outside the level tables. With `labels` (the doubled labels of a
-6j), the escalation first tries the column recurrence, which has no condition number at all.
+carries about 11 significant digits or better; escalated results carry the full target. `fallback()` 
+is used if a factorial falls outside the level tables. With `labels` (the doubled labels of a 6j), the 
+escalation first tries the column recurrence, which has no condition number at all.
 """
 function value_at_level(s::FactorialSum, k::Int, ::Type{T}; fallback, labels = nothing, family = nothing, workspace = nothing) where {T}
     v, status, segs = level_pass1(s, k, qint_tables(T, k); family=family, workspace=workspace)
@@ -343,29 +407,35 @@ end
     _certified_value(s, segs, k, tab, workspace) -> (value, :done | :escalate)
 
 Plain pass with its certified bound; if the bound is too loose, the compensated pass with its own. Thread
-safe (no global state). For types other than `Float64` the heuristic digit budget is used, as before.
+safe (no global state). One rule for every type: a value is kept when its own bound certifies the target
+relative accuracy for that type.
 """
 function _certified_value(s::FactorialSum, segs, k::Int, tab::QIntTables{T}, workspace=nothing) where {T}
-    if T !== Float64
-        v, loss, _, _ = _sum_at_level(s, segs, k, tab)
-        return v, (_decimal_digits(T) - loss >= _target_digits(T) ? :done : :escalate)
+    if T !== Float64                     # a wider type keeps its own digit budget, as before
+        v, B = _sum_at_level(s, segs, k, tab)
+        kept = _surviving_digits(v, B, _bound_pessimism(s, segs, tab))
+        return v, (kept >= _target_digits(T) ? :done : :escalate)
     end
     mode = POLICY[]
     if mode === :compensated_only
         vc, Bc = _sum_compensated(s, segs, k, tab)
-        return vc, ((isfinite(Bc) && !iszero(vc) && Bc <= RTOL_CERTIFIED * abs(vc)) ? :done : :escalate)
+        return vc, (_certifies(vc, Bc, RTOL_CERTIFIED) ? :done : :escalate)
     end
     rtol = mode === :strict || mode === :strict_lazy ? RTOL_CERTIFIED : RTOL_PLAIN
     nsteps = sum(seg -> length(seg) - 1, segs; init = 0)
     # A one-step sum recomputes its ratio on fallback: cheaper than allocating a buffer on every call.
     lazy = (mode === :lazy || mode === :strict_lazy) && nsteps >= LAZY_MIN_STEPS
     buf = lazy ? _ratio_buffer(workspace, T, 2 * nsteps) : nothing
-    v, _, B, _ = _sum_at_level(s, segs, k, tab, buf)
-    (isfinite(B) && B <= rtol * abs(v)) && return v, :done
+    v, B = _sum_at_level(s, segs, k, tab, buf)
+    _certifies(v, B, rtol) && return v, :done
     vc, Bc = _sum_compensated(s, segs, k, tab, buf)
-    (isfinite(Bc) && !iszero(vc) && Bc <= RTOL_CERTIFIED * abs(vc)) && return vc, :done
+    _certifies(vc, Bc, RTOL_CERTIFIED) && return vc, :done
     return vc, :escalate
 end
+
+"Does `bound` place `value` within a relative `rtol` of the exact value? A zero never certifies."
+@inline _certifies(value, bound, rtol) =
+    !iszero(value) && isfinite(bound) && bound <= rtol * abs(value)
 
 """
 Evaluation policy for `Float64` level and classical values (`dev/results/kfold_lazy_families.md`):
@@ -403,21 +473,24 @@ function level_escalate(s::FactorialSum, segs, k::Int, ::Type{T}, ztab::LevelZer
         v === nothing || return T(v)
     end
     is_cancellation_zero(s, segs, k, ztab) === true && return zero(T)
+    target = _target_digits(T)
     if T === Float64                             # K-word tiers: κ up to ~1e30 (K = 3) and ~1e46 (K = 4)
         for tier in (Val(3), Val(4))
-            v, _, B, _ = _sum_at_level(s, segs, k, mw_tables(tier, k))
-            (isfinite(B) && !iszero(v) && B <= RTOL_CERTIFIED * abs(v)) && return T(Float64(v))
+            v, B = _sum_at_level(s, segs, k, mw_tables(tier, k))
+            _certifies(v, B, RTOL_CERTIFIED) && return T(Float64(v))
         end
     end
-    target = _target_digits(T)
-    _, loss = _sum_at_level(s, segs, k, qint_tables(Float64, k))
-    loss = max(loss, 16.0)                       # reaching here means Float64 compensation was not enough
-    bits = 64 * cld(ceil(Int, (target + min(loss, 1e6) + 10) * log2(10)), 64)
+    # Reaching here, every fixed-precision pass has lost all of its digits, so none of them can say how much
+    # cancellation there is: start from the minimum and let the doubling find it. Growing geometrically from
+    # below costs at most twice the pass that finally succeeds; starting from a guess that is neither
+    # informed nor minimal costs more, which is exactly what a bound-derived "loss" does here.
+    pess = _bound_pessimism(s, segs, qint_tables(Float64, k))
+    bits = 64 * cld(ceil(Int, (target + 26) * log2(10)), 64)
     while true
-        w, lossw = setprecision(BigFloat, bits) do
+        w, B = setprecision(BigFloat, bits) do
             _sum_at_level(s, segs, k, BigFloat)
         end
-        bits * log10(2.0) - lossw >= target + 2 && return T(w)
+        _surviving_digits(w, B, pess) >= target + 2 && return T(w)
         bits *= 2
     end
 end

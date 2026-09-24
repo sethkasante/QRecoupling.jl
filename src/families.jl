@@ -291,18 +291,18 @@ _entry_value(::ClassicalQ, X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int)
 #  One hard symbol from the nearer end of its column
 #
 #  A symbol whose Racah sum has lost its digits (κ beyond the compensated range) is one entry of a column,
-#  and the column recurrence has no κ at all. Computing the *whole* column would be O(n); we only need the
-#  stretch between a seed and the target, so the cost is O(distance to the seed) with no dependence on κ.
+#  and a column recurrence can avoid that cancellation. It has its own directional stability constraints.
+#  We compute only the stretch between a seed and the target: O(distance) arithmetic, O(n) workspace.
 #
 #  Two seeds are needed for a three-term recurrence, and at a column end the boundary condition supplies the
 #  second for free: E vanishes there, so the recurrence degenerates to f(edge+1) = −di(edge) f(edge)/up(edge).
-#  One certified value at the end is therefore enough — and at the end the Racah sum usually has a single
-#  term, so that value is exact and cheap (and is taken in split form, mantissa and binary exponent, because
+#  One accurate value at the end is therefore enough — and at the end the Racah sum usually has a single
+#  term, so that value avoids sum cancellation (and is taken in split form, mantissa and binary exponent, because
 #  at large spin an end value can be far below the smallest Float64 while the target is of order one).
 #
-#  The number of Racah terms, and with it κ, grows as x moves inward from the end. So the seed does not have
-#  to be the end: `_seed_index` walks inward while the certified single-symbol kernel still succeeds, and the
-#  recurrence then runs only the remaining distance (two certified seeds, no boundary condition needed).
+#  The number of Racah terms suggests candidate interior seeds. Their actual compensated error bounds
+#  must pass a separate check and are transported through the remaining recurrence. Term count alone
+#  does not determine conditioning. Two interior seeds need no boundary condition.
 # ---------------------------------------------------------------------------------
 
 """
@@ -316,11 +316,10 @@ const _TO_FIRST = ((1, 2, 3, 4, 5, 6), (2, 1, 3, 5, 4, 6), (3, 2, 1, 6, 5, 4),
 const SAMPLE = 8
 
 """
-Racah terms an entry may have and still be certified by the single-symbol kernel. Along a column the term
-count grows with the distance from either end, and the certified region ends where the compensated pass runs
-out (κ ≈ 10¹⁵); measured, that boundary sits at 60–82 terms over k = 1000–2000 and spins 100–250
-(`dev/prototypes/check_turning_points.jl`), so a conservative threshold places the seed analytically instead
-of probing for it.
+Empirical term-count threshold for proposing an interior seed. Measurements found
+the compensated boundary at 60–82 terms over k = 1000–2000 and spins 100–250
+(`dev/prototypes/check_turning_points.jl`). This is a placement heuristic;
+the actual seed error bound must still pass and be propagated to the target.
 """
 const SEED_TERMS = 48
 
@@ -335,6 +334,21 @@ const MAX_RISE_LOG2 = 20
 "Steps saved must be worth the two certified seed evaluations."
 const SEED_MIN_SAVING = 16
 
+"""
+Steps an interior-seeded run may take. A boundary seed is a product of split table entries, accurate to a
+double word, so its uncertainty is negligible and the run's length is limited only by the rise. An interior
+seed is a *compensated sum*, and its certified bound is ~2e-16 relative — measured, and irreducible here:
+half of it is the final rounding to `Float64`, the other half the compensated pass's own bound, so carrying
+the double word through would gain a factor of two, not the factors of 10¹⁴ that transporting the error over
+a long run costs. With `rtol = 1e-14` the seed's error may be amplified by about 50, i.e. the run may rise
+about 5 bits, which at the 0.2–0.5 bits per step observed in a forbidden stretch is a few dozen steps.
+
+Past that the transport fails *after* the run has been paid for, and the fall back to the boundary seed pays
+for a second one. Measured over eight escalated symbols, the interior seed won (1.7–1.8×) at 3 and 13 steps
+and lost (1.1–2.0×) at 33, 53, 153, 253 and 853; this threshold keeps exactly the cases that win.
+"""
+const SEED_MAX_STEPS = 24
+
 "Number of Racah terms of one entry of a column (doubled labels), in closed form."
 @inline function _nterms(X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int)
     α, β = racah_sums(X2, J2, J3, L1, L2, L3)
@@ -344,7 +358,7 @@ end
 """
     _seed_index(X, i, from_left, J...) -> index or 0
 
-The entry closest to the target from which the certified kernel can still start: the farthest index from the
+An interior-seed candidate closest to the target: the farthest index from the
 chosen end whose Racah sum stays under `SEED_TERMS`. The term count is unimodal along a column, so a binary
 search over the prefix (or suffix) finds it in a handful of O(1) evaluations. Returns 0 when the whole run
 from the end is short anyway, in which case the end seed is used.
@@ -373,20 +387,24 @@ function _seed_index(X, i::Int, from_left::Bool, J2::Int, J3::Int, L1::Int, L2::
     end
 end
 
-"A certified value of one entry, only if the kernel certifies it without escalating (`nothing` otherwise)."
-function _certified_entry(Q::LevelQ, X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int)
+"Compensated seed and its absolute error bound; no modular zero decision or precision escalation."
+function _entry_seed(Q::LevelQ, X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int)
     s = sixj_sum(X2, J2, J3, L1, L2, L3)
     is_empty_sum(s) && return nothing
-    v, st, _ = level_pass1(s, Q.k, Q.tab)
-    return st === :done ? v : nothing
+    # For an admissible 6j, terms beyond k have a vanishing numerator;
+    # prefactor and denominator arguments in the remaining interval are < h.
+    v,B = _sum_compensated(s,(s.zlo:min(s.zhi,Q.k),),Q.k,Q.tab)
+    return _entry_seed_result(v,B)
 end
-function _certified_entry(Q::ClassicalQ, X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int)
+function _entry_seed(Q::ClassicalQ, X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int)
     s = sixj_sum(X2, J2, J3, L1, L2, L3)
     is_empty_sum(s) && return nothing
     N = max_argument(s)
-    v, st = _certified_value(s, (s.zlo:s.zhi,), 0, classical_tables(Float64, N))
-    return st === :done ? v : nothing
+    v,B = _sum_compensated(s, (s.zlo:s.zhi,), 0, classical_tables(Float64, N))
+    return _entry_seed_result(v,B)
 end
+_entry_seed_result(v,B) = isfinite(v) && abs(v)>=floatmin(Float64) && isfinite(B) ?
+    (value=v,bound=max(B,eps(abs(v)))) : nothing
 
 "A value in split form: mantissa (double word) times 2^exp, so tiny end values do not underflow."
 struct SplitValue
@@ -399,39 +417,55 @@ _value(v::SplitValue) = ldexp(v.m[1] + v.m[2], v.e)
 """
     _edge_split(Q, X2, J2, J3, L1, L2, L3) -> SplitValue or nothing
 
-The symbol at one end of a column, in split form. A one-term Racah sum is a product of split-table entries,
-so it is exact to a few ulp at any size; otherwise the certified kernel is used, and `nothing` is returned
-when its value has underflowed (then the caller cannot use this seed).
+The symbol at one end of a column, in split form. A one-term Racah sum is a product
+of split-table entries, retaining tiny seeds without Float64 underflow. Otherwise
+the single-symbol kernel is used; nonfinite and subnormal results are rejected.
 """
 function _edge_split(Q::LevelQ, X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int)
     s = sixj_sum(X2, J2, J3, L1, L2, L3)
     is_empty_sum(s) && return nothing
     tab = Q.tab
     if s.zlo == s.zhi && _valuation_free(s, Q.k + 2)          # single term: exact product of table entries
-        mh = 1.0; ml = 0.0; ep = 0
-        for (n, c) in s.pre
-            mh, ml, ep = _split_mul_dw(mh, ml, ep, tab, Int(n), c)
-        end
-        mh, ml, ep = _renorm_dw(mh, ml, ep)
-        if s.sqrt_pre
-            isodd(ep) && (mh *= 2; ml *= 2; ep -= 1)
-            mh, ml = _dw_sqrt(mh, ml); ep = ep ÷ 2
-        end
-        mt = 1.0; mtl = 0.0; et = 0
-        for f in s.fac
-            mt, mtl, et = _split_mul_dw(mt, mtl, et, tab, _arg(f, s.zlo), f.c)
-        end
-        m = _dwm((mh, ml), (mt, mtl))
-        sg = s.sign0 * ((s.alternating && isodd(s.zlo)) ? -1 : 1)
-        return SplitValue((sg * m[1], sg * m[2]), ep + et)
+        return _one_term_split(s,tab)
     end
     v = _entry_value(Q, X2, J2, J3, L1, L2, L3)
-    return (iszero(v) || !isfinite(v)) ? nothing : SplitValue((v, 0.0), 0)
+    return (!isfinite(v) || abs(v)<floatmin(Float64)) ? nothing : SplitValue((v, 0.0), 0)
+end
+
+"One-term seed retained as double-word mantissa and binary exponent, even below Float64 range."
+function _one_term_split(s,tab)
+    mh = 1.0; ml = 0.0; ep = 0
+    for (n, c) in s.pre
+        mh, ml, ep = _split_mul_dw(mh, ml, ep, tab, Int(n), c)
+    end
+    mh, ml, ep = _renorm_dw(mh, ml, ep)
+    if s.sqrt_pre
+        isodd(ep) && (mh *= 2; ml *= 2; ep -= 1)
+        mh, ml = _dw_sqrt(mh, ml); ep = ep ÷ 2
+    end
+    mt = 1.0; mtl = 0.0; et = 0
+    for f in s.fac
+        mt, mtl, et = _split_mul_dw(mt, mtl, et, tab, _arg(f, s.zlo), f.c)
+    end
+    m = _dwm((mh, ml), (mt, mtl))
+    sg = s.sign0 * ((s.alternating && isodd(s.zlo)) ? -1 : 1)
+    return SplitValue((sg * m[1], sg * m[2]), ep + et)
 end
 
 function _edge_split(Q::ClassicalQ, X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int)
+    s=sixj_sum(X2,J2,J3,L1,L2,L3)
+    is_empty_sum(s) && return nothing
+    s.zlo==s.zhi && return _one_term_split(s,classical_tables(Float64,max_argument(s)))
     v = _entry_value(Q, X2, J2, J3, L1, L2, L3)
-    return (iszero(v) || !isfinite(v)) ? nothing : SplitValue((v, 0.0), 0)
+    return (!isfinite(v) || abs(v)<floatmin(Float64)) ? nothing : SplitValue((v, 0.0), 0)
+end
+
+"Respect the relative-error budget when a split result reaches the Float64 output range."
+function _entry_output(m::DWord,e::Int,estimate::Float64,rtol::Float64)
+    v=ldexp(m[1]+m[2],e)
+    (!isfinite(v) || iszero(v)) && return nothing
+    # Include final rounding explicitly; dividing first avoids underflow in rtol*|v|.
+    estimate + eps(abs(v))/abs(v) <= rtol ? v : nothing
 end
 
 "Coefficients di and e of the recurrence for column indices `lo:hi` (1-based), into `work`."
@@ -464,10 +498,12 @@ end
 """
     sixj_entry(J, k, work; rtol) -> value or nothing
 
-One level-k 6j symbol (doubled labels, x in the first position) by recursion along its column from the nearer
-seed: cost O(distance), independent of the Racah condition number, and accurate to a few ulp unless the target
-sits very close to a node of its column. Returns `nothing` when no usable seed exists or when the estimated
-relative error exceeds `rtol`, so the caller can fall back to the precision tiers.
+One level-k 6j symbol (doubled labels) by recursion along a short column path.
+The arithmetic cost is O(distance), with O(column length) workspace. This avoids
+Racah-sum cancellation but has its own directional stability and node sensitivity.
+Seed uncertainty and output rounding are checked; coefficient and recurrence
+roundoff use a heuristic estimate, not a rigorous accuracy certificate. Returns
+`nothing` on unsafe paths or insufficient estimated accuracy, allowing sum fallback.
 """
 sixj_entry(J::NTuple{6,Int}, k::Int, work::ColumnWork = ColumnWork(); rtol::Float64 = 1e-14) =
     sixj_entry(J, LevelQ(qint_tables(Float64, k), k), work; rtol = rtol)
@@ -498,7 +534,15 @@ end
 
 function sixj_entry(J0::NTuple{6,Int}, Q::Union{LevelQ,ClassicalQ}, work::ColumnWork = ColumnWork();
                     rtol::Float64 = 1e-14)
+    isfinite(rtol) && rtol>=0 || throw(ArgumentError("rtol must be finite and nonnegative"))
     J, _ = _best_column(J0, Q)                                # the shortest run among the six columns
+    return _sixj_entry_path(J,Q,work;rtol=rtol)
+end
+
+"Internal path kernel. Explicit direction/seed switches are for stability experiments."
+function _sixj_entry_path(J::NTuple{6,Int},Q,work::ColumnWork=ColumnWork();
+                         rtol::Float64=1e-14,from_left::Union{Nothing,Bool}=nothing,
+                         interior_seeds::Bool=true)
     X2, J2, J3, L1, L2, L3 = J
     X = _column_range(Q, J2, J3, L1, L2, L3)
     n = length(X)
@@ -508,22 +552,29 @@ function sixj_entry(J0::NTuple{6,Int}, Q::Union{LevelQ,ClassicalQ}, work::Column
     i = d ÷ 2 + 1
     n == 1 && return nothing                                  # the symbol *is* its own edge
     _resize!(work, n)
-    from_left = i - 1 <= n - i
+    from_left = isnothing(from_left) ? i - 1 <= n - i : from_left
     # Where to start. Two certified entries near the end of the certified region start the recursion directly
     # and shorten the run; failing that, one value at the column end does, because the boundary condition
     # supplies the second. `s == 0` means "use the end".
-    s = _seed_index(X, i, from_left, J2, J3, L1, L2, L3)
+    s = interior_seeds ? _seed_index(X, i, from_left, J2, J3, L1, L2, L3) : 0
     steps_end = from_left ? i - 1 : n - i
-    s == 0 || (steps_end - (from_left ? i - s : s - i) >= SEED_MIN_SAVING) || (s = 0)
+    if s != 0
+        steps_seed = from_left ? i - s : s - i
+        # Worth the two seed evaluations, and short enough that the seeds' own 2e-16 uncertainty survives
+        # being transported to the target. A long interior run fails that test only after paying for itself.
+        (steps_end - steps_seed >= SEED_MIN_SAVING && steps_seed <= SEED_MAX_STEPS) || (s = 0)
+    end
     seedm = seedc = (0.0, 0.0)                                # f at the two seed entries
+    errm = errc = 0.0
     if s != 0
         s2 = from_left ? s - 1 : s + 1
-        v1 = _certified_entry(Q, X[s], J2, J3, L1, L2, L3)
-        v2 = v1 === nothing ? nothing : _certified_entry(Q, X[s2], J2, J3, L1, L2, L3)
-        if v1 === nothing || v2 === nothing || iszero(v1) || iszero(v2)
+        v1 = _entry_seed(Q, X[s], J2, J3, L1, L2, L3)
+        v2 = v1 === nothing ? nothing : _entry_seed(Q, X[s2], J2, J3, L1, L2, L3)
+        if v1 === nothing || v2 === nothing || v1.bound>rtol/8*abs(v1.value) || v2.bound>rtol/8*abs(v2.value)
             s = 0                                             # not usable: fall back to the end
         else
-            seedc = (v1, 0.0); seedm = (v2, 0.0)
+            seedc = (v1.value, 0.0); seedm = (v2.value, 0.0)
+            errc=v1.bound; errm=v2.bound
         end
     end
     seed = s == 0 ? _edge_split(Q, from_left ? first(X) : last(X), J2, J3, L1, L2, L3) : nothing
@@ -543,12 +594,35 @@ function sixj_entry(J0::NTuple{6,Int}, Q::Union{LevelQ,ClassicalQ}, work::Column
         up2[1] > 0 || return nothing
         up = _dwsqrt(up2)
         hm = seedm; hc = _dwm(seedc, up); P2 = up2
+        errc=nextfloat(errc*nextfloat(abs(up[1])+abs(up[2])))
         fv = seedc
         fmax_log = max(exponent(abs(seedm[1])), exponent(abs(seedc[1])))
     end
     steps = from_left ? ((s == 0 ? 1 : s):i-1) : ((s == 0 ? n : s):-1:i+1)
-    isempty(steps) && return s == 0 ? nothing : ldexp(seedc[1] + seedc[2], 0)
+    isempty(steps) && return s == 0 ? nothing : _entry_output(seedc,0,4eps(Float64),rtol)
+    oscillatory=false
     @inbounds for j in steps
+        if 1<j<n
+            # Local characteristic discriminant of the symmetric recurrence:
+            # d² - 4*up(x-1)*up(x). Past an oscillatory interval, entering a
+            # forbidden interval can amplify the unwanted dominant solution.
+            # Reject this direction instead of trusting its final magnitude.
+            discriminant_scale=4sqrt(max(0.0,e[j][1]*e[j+1][1]))
+            if di[j][1]^2<=discriminant_scale
+                oscillatory=true
+            elseif oscillatory
+                return nothing
+            end
+        end
+        if s != 0
+            # Propagate seed uncertainty through the actual recurrence. Outward
+            # rounding protects this nonnegative envelope from Float64 rounding.
+            ix=from_left ? j : j+1
+            a=nextfloat(abs(di[j][1])+abs(di[j][2]))
+            b=nextfloat(abs(e[ix][1])+abs(e[ix][2]))
+            errn=nextfloat(nextfloat(a*errc)+nextfloat(b*errm))
+            errm=errc; errc=errn
+        end
         hn = _dwn(_dwm(di[j], hc))
         if from_left
             j > 1 && (hn = _dwa(hn, _dwn(_dwm(e[j], hm))))
@@ -565,6 +639,9 @@ function sixj_entry(J0::NTuple{6,Int}, Q::Union{LevelQ,ClassicalQ}, work::Column
         end
         if abs(hc[1]) > 2.0^500
             hm = _dws(hm, 2.0^-500); hc = _dws(hc, 2.0^-500); eH += 500
+            if s != 0
+                errm=nextfloat(ldexp(errm,-500)); errc=nextfloat(ldexp(errc,-500))
+            end
         end
         # Only the last entry is wanted, so the gauge is left every SAMPLE steps (and at the end), just to
         # track how far the path rises above the target — the factor in the error estimate.
@@ -581,13 +658,18 @@ function sixj_entry(J0::NTuple{6,Int}, Q::Union{LevelQ,ClassicalQ}, work::Column
     rise_log > MAX_RISE_LOG2 && return nothing
     # the double-word error of the run, relative to the target entry
     est = length(steps) * 2.0^-104 * exp2(rise_log)
-    # a certified seed carries its own rounding, which the run then propagates
-    s == 0 || (est += 4 * 2.0^-53)
-    est > rtol && return nothing
+    # Interior seed uncertainty propagated through the rounded coefficients.
+    s == 0 || (est += errc/abs(hc[1]+hc[2]))
+    if !isfinite(est) || est > rtol
+        # Interior seeds may be too uncertain even when the split boundary seed
+        # supports an accurate run. Retry it once before escalating the sum.
+        return s==0 ? nothing : _sixj_entry_path(J,Q,work;rtol=rtol,
+            from_left=from_left,interior_seeds=false)
+    end
     if s != 0
-        return ldexp(fv[1] + fv[2], fexp)                     # the seeds are already normalised values
+        return _entry_output(fv,fexp,est,rtol)               # the seeds are already normalised values
     end
     val = _dwm(fv, seed.m)
     iszero(val[1]) && return nothing
-    return ldexp(val[1] + val[2], seed.e + fexp)
+    return _entry_output(val,seed.e+fexp,est,rtol)
 end

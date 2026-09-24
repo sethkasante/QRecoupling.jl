@@ -106,7 +106,7 @@ level_zero_table(k::Int) = get_level!(() -> LevelZeroTable(k), LEVEL_ZERO_TABLES
 """
     is_cancellation_zero(s, segs, k) -> Bool or nothing
 
-Whether the contributing sum vanishes exactly, from two Galois conjugates modulo one prime (false
+Determine whether the contributing sum vanishes exactly, from two Galois conjugates modulo one prime (false
 positives with probability about p⁻² ≈ 2⁻¹²⁴). `nothing` if a factorial falls outside the level tables.
 """
 is_cancellation_zero(s::FactorialSum, segs, k::Int) = is_cancellation_zero(s, segs, k, level_zero_table(k))
@@ -200,13 +200,13 @@ function _qint_tables_from(::Type{T}, qgen::F; classical::Bool = false) where {T
         qhi, BigFloat[inv(x) for x in qhi], ms, fe, gs, ge
     end
     hi(x) = T(x)
-    lo(x) = T(x - T(x))                          # the wide value minus its rounding, then rounded
+    lo(x) = T(x - T(x))     # the wide value minus its rounding, then rounded
     return QIntTables{T}(hi.(qw), hi.(qiw), lo.(qw), lo.(qiw),
                          hi.(ms), fe, lo.(ms), hi.(gs), ge, lo.(gs), classical)
 end
 
 "[1], …, [N] at q = e^{iπ/h} in the current BigFloat precision, by the Chebyshev recurrence
-[n+1] = 2cos(π/h)[n] − [n−1] (errors grow linearly, absorbed by the 64 guard bits)."
+[n+1] = 2cos(π/h)[n] - [n-1] (errors grow linearly, absorbed by the 64 guard bits)."
 function _qints_wide(h::Int, N::Int)
     x = Vector{BigFloat}(undef, N)
     N >= 1 && (x[1] = one(BigFloat))

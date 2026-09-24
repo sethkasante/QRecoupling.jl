@@ -7,7 +7,7 @@
 #
 #  Worker tasks take the tables as arguments, so the common path touches no cache lock. Precision
 #  scopes are task-local on Julia 1.12+. Older runtimes use serial batches because BigFloat precision
-#  is shared there. Exact and generic-q batches also stay serial.
+#  is shared there. Generic-q workers own their fixed-q tables; exact batches stay serial.
 # --------------------------------------------
 
 "Batches at least this long are threaded when more than one thread is available."
@@ -491,6 +491,21 @@ function _batched(rule::R, fallback::F, symbol::S, labels, nlab, fname;
     L = _as_vector(labels)
     if k isa AbstractVector
         return [symbol(l...; k = kk, q = q, exact = exact, T = T) for l in L, kk in k]
+    end
+    if isnothing(k) && !exact && !_is_classical(q)
+        qq=_analytic_q(q)
+        rules=map(rule,L)
+        out=Vector{typeof(qq)}(undef,length(L))
+        _run(length(L),threads) do rng
+            work=EvaluationWorkspace()
+            # A fixed-q worker reuses tables across all its labels and tiers.
+            N=maximum(i->is_empty_sum(rules[i]) ? 0 : max_argument(rules[i]),rng;init=0)
+            _analytic_table(_dwnum(qq),N,work)
+            for i in rng
+                out[i]=analytic_value(rules[i],q;workspace=work)
+            end
+        end
+        return out
     end
     return [symbol(l...; k = k, q = q, exact = exact, T = T) for l in L]
 end

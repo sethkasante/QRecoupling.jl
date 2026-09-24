@@ -27,7 +27,7 @@ function _add_factor_step!(b::CycloBuffer,f::AffineFactorial,z::Int)
     return
 end
 
-"Explicit DCR view used for exact/analytic projections and root-of-unity cancellations."
+"Explicit DCR view used for symbolic output, exact level projection, and root-of-unity cancellations."
 function _factorial_dcr(s::FactorialSum)
     is_empty_sum(s) && return ZERO_DCR
     buf = CycloBuffer(max_argument(s))
@@ -48,8 +48,9 @@ end
 
 Evaluate a finite factorial rule, classically when no target is supplied.
 Use `qeval(Symbolic(), rule)` to construct its DCR. Classical and in-table level evaluations use ratio
-kernels; exact classical evaluation uses integer arithmetic directly. Exact level,
-analytic and out-of-table evaluations use its explicit DCR view.
+kernels; exact classical evaluation uses integer arithmetic directly. Real and complex
+q use scaled direct ratios with adaptive precision; `workspace` reuses fixed-q tables.
+Exact level and out-of-table level evaluations use the explicit DCR view.
 Factorial arguments must be nonnegative; individually polar terms are rejected even
 if the complete sum might have a removable singularity. `k` and `q` are exclusive.
 For general functions, use the existing callback `qseries`/DCR interface instead.
@@ -69,7 +70,7 @@ function qeval(s::FactorialSum; k=nothing,q=nothing,exact::Bool=false,
                              fallback=()->project_discrete(_factorial_dcr(s),kk,T))
     elseif !isnothing(q)
         exact && !_is_classical(q) && throw(ArgumentError("exact rule evaluation requires k or q=1"))
-        return qeval(_factorial_dcr(s);q=q,exact=exact,T=T)
+        return analytic_value(s,q;workspace=workspace)
     end
     throw(ArgumentError("specify k or q to evaluate a factorial rule"))
 end
