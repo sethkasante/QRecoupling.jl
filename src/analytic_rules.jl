@@ -325,10 +325,20 @@ function _analytic_prefactor(s,tab)
         v=_amul(v,_apow(_ascaled(q),pd))
         return _amul(r,_asqrt(v))
     end
-    if abs(imag(v.m)) <= sqrt(eps(one(real(q))))*abs(v.m)
-        v=AnalyticScaled(oftype(q,real(v.m)),v.e)
+    # Complex q: the square root of the radical must be taken *factor by factor*, never of the
+    # assembled product. √ is not multiplicative across its branch cut, so the principal root of
+    # ∏ Ψ_d differs from ∏ √Ψ_d by a sign that depends on how the individual phases add up. With a
+    # root of the product, the two sides of a coherence identity assemble different products and
+    # their radicals no longer cancel; with one root per Ψ_d the choice depends only on the *set* of
+    # factors, which both sides share, so the cancellation is exact. Measured over 40 label sets:
+    # Biedenharn–Elliott 40/40 on and off the unit circle, against 9–36/40 for a root of the product
+    # (`dev/results/user_facing_exact.md` §2, `dev/prototypes/branch_consistent_prefactor.jl`).
+    # `rad` is square-free, so every exponent here is ±1.
+    sv=_asqrt(_ascaled(oftype(q,rad.sign)))
+    for (d,e) in rad.phi_exps
+        sv=_amul_power(sv,_asqrt(psi[d]),e)
     end
-    return _amul(_amul(r,_asqrt(v)),_aexp_pow(q,pr+pd//2))
+    return _amul(_amul(r,sv),_aexp_pow(q,pr+pd//2))
 end
 
 "Mantissas that carry guard digits of their own, so the sum needs no compensation."
