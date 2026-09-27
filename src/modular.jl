@@ -96,15 +96,20 @@ end
 smatrix(k::Integer; T::Type = Float64) = _smatrix(k, T)
 
 """
-    twist(j; k, exact = false, T = ComplexF64)
+    twist(j; k = nothing, q = nothing, exact = false, T = ComplexF64)
 
 The topological spin `θ_j = q^{J(J+2)/2} = exp(2πi j(j+1)/(k+2))`, `J = 2j`.
 
 This is the convention the package's `rmatrix` already uses: `rmatrix(j, j, 0) = (−1)^{2j} θ_j⁻¹`, the
 self-braiding of a self-dual object through the vacuum. With `exact = true` the answer is the [`QPhase`]
 (@ref) `q^{J(J+2)/2}`, exact at any level; the classical limit is 1.
+
+`q` evaluates the same monomial away from a root of unity, which is what the rest of the package means by
+a generic parameter. It is the one place the modular layer has a generic-q value at all — `smatrix`,
+`tmatrix` and the rest are statements about a modular category and need the level.
 """
-function twist(j::Spin; k = nothing, exact::Bool = false, T::Type = ComplexF64)
+function twist(j::Spin; k = nothing, q = nothing, exact::Bool = false, T::Type = ComplexF64)
+    q = _evaluation_q(k, q, exact)
     J = doubled(j)
     J >= 0 || throw(DomainError(j, "spin must be nonnegative"))
     if k !== nothing
@@ -113,7 +118,9 @@ function twist(j::Spin; k = nothing, exact::Bool = false, T::Type = ComplexF64)
     end
     p = (J * (J + 2)) // 2
     exact && return QPhase(Int8(1), p)
-    k === nothing && return T(1)                      # q → 1
+    _is_classical(q) && return T(1)                   # q → 1
+    k === nothing && q === nothing && return T(1)
+    k === nothing && return T(qhalfpow(q, J * (J + 2)))
     return T(cispi(float(p) / (Int(k) + 2)))
 end
 

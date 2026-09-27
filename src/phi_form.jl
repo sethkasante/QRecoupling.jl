@@ -78,25 +78,18 @@ struct PhiForm
 end
 
 """
-    phi_form(dcr::DCR; maxdeg = 400) -> PhiForm
+    _dcr_ratio(dcr) -> (N, Dexp, qmin) or nothing
 
-The exact closed form of a DCR in q, as Φ factors times at most one irreducible remainder. Works entirely
-from the DCR, so it is available for any symbolic value the package builds, and it is independent of the
-level.
+The deferred sum, carried out: the numerator `N ∈ ℤ[q]` over the common Φ denominator `Dexp`, with `qmin`
+the q-shift that made every term a polynomial. `nothing` for a structural zero.
 
-`maxdeg` caps the degree at which the numerator is factored; above it the numerator is reported by size
-rather than expanded, because a degree-800 polynomial is not a closed form anyone reads.
-
-`basis = :x` renders the irreducible remainder in `x = q + q⁻¹`, which halves its degree. Everything else
-is unchanged, since the Φ factors are written in `q` either way; the display says what `x` is. The default
-`:q` needs no such explanation, so it is the default.
+This is the part of the closed form that costs only the sum — no factoring — and both views below are
+built on it. Separating it is what makes the cheap view cheap: at j = 8 the whole of `phi_form` is 33.7 ms
+and essentially all of that is `factor(N)`.
 """
-function phi_form(dcr::DCR; maxdeg::Int = 400, basis::Symbol = :q)
-    basis in (:q, :x) || throw(ArgumentError("basis must be :q or :x, got :$basis"))
+function _dcr_ratio(dcr::DCR)
     Rq, q = _qring()
-    if dcr.base.sign == 0 || dcr.radical.sign == 0
-        return PhiForm(basis, 0, 0, 1, 0, Int[], big(0), big(1), Int[], Int[], Tuple{Any,Int}[], false, "")
-    end
+    (dcr.base.sign == 0 || dcr.radical.sign == 0) && return nothing
 
     # --- the monomials of the sum: root·base, then fused with each ratio ---
     monos = CyclotomicMonomial[]
@@ -129,6 +122,44 @@ function phi_form(dcr::DCR; maxdeg::Int = 400, basis::Symbol = :q)
         end
         N += t
     end
+    return N, Dexp, qmin
+end
+
+"""
+    phi_form(dcr::DCR; maxdeg = 400, basis = :q) -> PhiForm
+
+The exact closed form of a DCR in q, as Φ factors times at most one irreducible remainder. Works entirely
+from the DCR, so it is available for any symbolic value the package builds, and it is independent of the
+level.
+
+**This is the expensive expansion**, and [`xvalue`](@ref) is the cheap one. Both carry out the same
+deferred sum; `phi_form` then *factors* the numerator over ℤ[q], and that factorisation is essentially the
+whole cost — measured on `{6 6 6; 6 6 6}`, 10.1 ms in total of which the sum is 0.07 ms. Against
+`xvalue`'s 0.26 ms on the same symbol that is **38×**, and the two reasons are the two differences: `q`
+has twice the degree of `x` (the numerator here is degree 228 where the x-form is 82), and `xvalue` never
+factors anything.
+
+`maxdeg` caps the degree at which the numerator is factored; above it the numerator is reported by size
+rather than expanded, because a degree-800 polynomial is not a closed form anyone reads. **A truncated
+call is not a cheaper closed form, it is a different answer**, and it is why `phi_form` can look faster
+than `xvalue` on large symbols: at `{9 9 9; 9 9 9}` the numerator reaches degree 504, the default
+`maxdeg = 400` skips the factorisation, and the call returns in 0.40 ms against `xvalue`'s 3.0 ms. Ask for
+the factors it declined (`maxdeg = 3000`) and the same call takes 52.8 ms. `truncated` records which
+happened.
+
+`basis = :x` renders the irreducible remainder in `x = q + q⁻¹`, which halves *its* degree. This is not
+what `xvalue` returns: the Φ factors stay in `q` either way and only the remainder moves, whereas `xvalue`
+puts the whole value in `x` over a ψ radical. Everything else is unchanged and the display says what `x`
+is; the default `:q` needs no such explanation, so it is the default.
+"""
+function phi_form(dcr::DCR; maxdeg::Int = 400, basis::Symbol = :q)
+    basis in (:q, :x) || throw(ArgumentError("basis must be :q or :x, got :$basis"))
+    Rq, q = _qring()
+    parts0 = _dcr_ratio(dcr)
+    if parts0 === nothing
+        return PhiForm(basis, 0, 0, 1, 0, Int[], big(0), big(1), Int[], Int[], Tuple{Any,Int}[], false, "")
+    end
+    N, Dexp, qmin = parts0
 
     # --- net Φ exponents: numerator from N's own factors, denominator from Dexp ---
     net = Dict{Int,Int}()
@@ -314,34 +345,8 @@ end
 "Does the value split completely into cyclotomic factors, with no irreducible remainder?"
 splits_completely(f::PhiForm) = !f.truncated && isempty(f.remainder)
 
-"""
-    show(io, MIME"text/plain"(), dcr)
-
-A DCR printed as the closed form it represents, with the structural fields underneath. `repr` and nested
-printing keep the structural view (the two-argument `show`), so nothing that inspects a DCR as data
-changes.
-"""
-function Base.show(io::IO, ::MIME"text/plain", dcr::DCR)
-    f = try
-        phi_form(dcr)
-    catch
-        nothing
-    end
-    if f === nothing
-        show(io, dcr)
-        return
-    end
-    println(io, "Exact value for generic q, as cyclotomic factors:")
-    print(io, "  ")
-    show(io, f)
-    println(io)
-    splits_completely(f) && println(io, "  (splits completely: a unit times a product of Φ's)")
-    println(io, "  Φₑ(q) is the e-th cyclotomic polynomial; the expression is exact for every q,")
-    println(io, "  and at a level substitute q = exp(iπ/(k+2)).")
-    f.basis === :x && println(io, "  x = q + q⁻¹.")
-    print(io, "  ")
-    show(io, dcr)
-end
+# Displaying a DCR never expands, sums or factors it.
+Base.show(io::IO, ::MIME"text/plain", dcr::DCR) = show(io, dcr)
 
 """
     evaluate_phi_form(f::PhiForm, q) -> number

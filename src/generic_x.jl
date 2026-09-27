@@ -171,24 +171,12 @@ function psi_exponents(pairs)
     isempty(pairs) && return Dict{Int,Int}()
     N = maximum(Int(p.first) for p in pairs)
     N <= 0 && return Dict{Int,Int}()
-    mult = zeros(Int, N)                       # mult[m] = exponent of [m]
-    for p in pairs
-        n = Int(p.first); c = Int(p.second)
-        (c == 0 || n < 1) && continue
-        for m in 1:n
-            mult[m] += c
-        end
-    end
     E = Dict{Int,Int}()
-    for m in 1:N
-        iszero(mult[m]) && continue
-        for e in 3:(2m)
-            (2m) % e == 0 || continue
-            E[e] = get(E, e, 0) + mult[m]
-        end
-    end
-    for (e, v) in collect(E)
-        iszero(v) && delete!(E, e)
+    # ψ_e divides [m] exactly when e divides 2m. Count those multiples in n! directly.
+    for e in 3:2N
+        step = iseven(e) ? e ÷ 2 : e
+        v = sum(Int(c) * (Int(n) ÷ step) for (n,c) in pairs; init=0)
+        iszero(v) || (E[e] = v)
     end
     return E
 end
@@ -557,8 +545,9 @@ function generic_value(s::FactorialSum; modulus = nothing, level = nothing)
                 B = _rx(B * _powmod_x(blk, -c, modulus), modulus)
             end
         end
-        P = _rx(B * Q + rsign * A * P, modulus)
-        Q = _rx(B * Q, modulus)
+        BQ = _rx(B * Q, modulus)
+        P = _rx(BQ + rsign * A * P, modulus)
+        Q = BQ
     end
 
     sgn = Int(s.sign0) * ((s.alternating && isodd(s.zlo)) ? -1 : 1)
