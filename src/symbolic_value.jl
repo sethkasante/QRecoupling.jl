@@ -197,27 +197,19 @@ A one-term sum is written without the `Σ`, since `Σ[z=0:0]` in front of a sing
 """
 function _deferred_x_str(s::FactorialSum)
     is_empty_sum(s) && return "0"
-    pre = if s.sqrt_pre
-        half,rad=_halve_exponents(psi_exponents(s.pre))
-        num=String[]; den=String[]
-        for e in sort!(collect(keys(half)))
-            c=half[e]; t="ψ"*to_subscript(e)*(abs(c)==1 ? "" : to_superscript(abs(c)))
-            push!(c>0 ? num : den,t)
-        end
-        r=isempty(rad) ? "" : "√("*join(("ψ"*to_subscript(e) for e in rad)," · ")*")"
-        isempty(r) || pushfirst!(num,r)
-        p=isempty(num) ? "1" : join(num," · ")
-        isempty(den) ? p : p*" / ("*join(den," · ")*")"
-    else
-        _xfactor_product((string(n),Int(c)) for (n,c) in s.pre)
-    end
+    # The prefactor is written as the rule writes it — a product of `F(n)` under a root — not resolved
+    # into ψ factors. Resolving it means running `psi_exponents` and halving the exponents, which is
+    # arithmetic, and `Symbolic()` promises to do none. `phi_form(v)` and `xvalue(v)` are where the ψ
+    # basis appears, because that is where the sum is carried out anyway.
+    pre = _xfactor_product((string(n),Int(c)) for (n,c) in s.pre)
+    s.sqrt_pre && pre != "1" && (pre = "√(" * pre * ")")
     single = s.zlo == s.zhi
     term = single ? _xfactor_product((string(_arg(f,s.zlo)),Int(f.c)) for f in s.fac) :
                     _xfactor_product((_affine_xarg(f),Int(f.c)) for f in s.fac)
     length(pre)+length(term)>240 && return "$(s.zhi-s.zlo+1)-term factorial sum in x (see `v.rule`)"
     neg = s.sign0<0
     single && s.alternating && isodd(s.zlo) && (neg = !neg)
-    sign = neg ? "−" : ""
+    sign = neg ? "-" : ""
     body = if single
         term
     else
@@ -226,7 +218,8 @@ function _deferred_x_str(s::FactorialSum)
     # nothing left but the prefactor: write it bare rather than wrapping it for a product it is not in
     body=="1" && return sign*(pre=="1" ? "1" : pre)
     pre=="1" && return sign*body
-    return sign*(occursin(" / ",pre) ? "("*pre*")" : pre)*" · "*body
+    wrap = occursin(" / ",pre) && !startswith(pre,"√(")
+    return sign*(wrap ? "("*pre*")" : pre)*" · "*body
 end
 
 function Base.show(io::IO, v::SymbolicValue)
@@ -242,10 +235,21 @@ function Base.show(io::IO, ::MIME"text/plain", v::SymbolicValue)
     end
     println(io)
     println(io,"  F(n) = ∏[r=1:n] U_{r-1}(x/2), with F(0) = 1")
-    v.rule.sqrt_pre && println(io,"  ψ_e(x) is the minimal polynomial of 2cos(2π/e)")
     n = v.rule.zhi-v.rule.zlo+1
     println(io,"  ",n,n == 1 ? " term" : " terms","; the sum has not been expanded")
     print(io,"  `xvalue(v)` carries out the sum in x; `phi_form(v)` carries it out in q and factors it")
+end
+
+"Numerator, denominator and radical of the x-form, rendered — or described when too large to read."
+function _xvalue_str(xv::XValue)
+    iszero(xv.num) && return "0"
+    n = _xpoly_show(_toqq(xv.num); maxdeg = GENERIC_MAX_DEGREE, maxchars = GENERIC_MAX_CHARS)
+    d = _xpoly_show(_toqq(xv.den); maxdeg = GENERIC_MAX_DEGREE, maxchars = GENERIC_MAX_CHARS)
+    body = d == "1" ? n : (occursin(" ", n) && !startswith(n, "(") ? "(" * n * ")" : n) * " / " *
+                          (occursin(" ", d) && !startswith(d, "(") ? "(" * d * ")" : d)
+    isempty(xv.rad) && return body
+    rad = join(["ψ" * to_subscript(e) for e in xv.rad], " · ")
+    return "√(" * rad * ") · " * body
 end
 
 Base.show(io::IO,v::XValue) = print(io,"XValue(",_xvalue_str(v),")")

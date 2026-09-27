@@ -13,7 +13,7 @@
 Returns the algebraic quantum dimension [J+1]_q.
 Inputs use twice spins (J = 2j).
 """
-@inline qdim_mono(J::Int) = qint(J + 1)
+@inline qdim_mono(J::Int) = qint_mono(J + 1)
 
 
 #qfact_mono

@@ -174,7 +174,7 @@ the display:
 | | |
 |---|---|
 | `v.rad` | the value in nested square roots, at any length, or `nothing` if none exists |
-| `v.x_poly` | `P`, the polynomial in `x = 2cos(π/(k+2))` |
+| `v.x_value` | `P`, the value as a polynomial in `x = 2cos(π/(k+2))` |
 
 [`radical_form`](@ref) is the same as `v.rad` with a length budget, [`xpolynomial`](@ref) and
 [`radicand`](@ref) give `P` and `R` as coefficient vectors, and [`has_radical_form`](@ref) answers the
@@ -221,16 +221,17 @@ Properties beyond the stored fields.
 the display points at when it is too long to print. It is `nothing` exactly when no real radical form
 exists, which `has_radical_form(v)` answers without computing anything.
 
-`v.x_poly` is `P`, the polynomial in `x = 2cos(π/(k+2))`; the value is `v.x_poly · √(radicand(v))`, and
+`v.x_value` is `P`, the value as a polynomial in `x = 2cos(π/(k+2))`; the whole value is
+`v.x_value · √(radicand(v))`, and
 `radicand(v)` is `1` unless `v.sqclass` is non-empty.
 """
 function Base.getproperty(v::ExactX, s::Symbol)
     s === :rad && return radical_form(v; maxlen = 0)
-    s === :x_poly && return getfield(v, :p)
+    s === :x_value && return getfield(v, :p)
     return getfield(v, s)
 end
 Base.propertynames(::ExactX, private::Bool = false) =
-    private ? (:k, :p, :sqclass, :r, :rad, :x_poly) : (:k, :rad, :x_poly)
+    private ? (:k, :p, :sqclass, :r, :rad, :x_value) : (:k, :rad, :x_value)
 
 level(v::ExactX) = v.k
 Base.iszero(v::ExactX) = iszero(v.p)
@@ -1087,11 +1088,11 @@ function Base.show(io::IO, ::MIME"text/plain", v::ExactX)
         println(io, "  = ", _rad_str(e))
     elseif kind === :long
         println(io, "  = nested square roots, too long to print")
-        println(io, "    `v.rad` returns the expression, `v.x_poly` the polynomial in x")
+        println(io, "    `v.rad` returns the expression, `v.x_value` the polynomial in x")
     elseif kind === :none
         println(io, "  no radical form: v² has degree ", vd,
                     " over ℚ, and only a power of two is a tower of square roots")
-        println(io, "    `v.x_poly` is the polynomial in x, which is then the only closed form")
+        println(io, "    `v.x_value` is the polynomial in x, which is then the only closed form")
     else
         println(io, "  radical form not attempted at degree ", d)
         println(io, "    `has_radical_form(v)` decides whether one exists, `v.rad` computes it")

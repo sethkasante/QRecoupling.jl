@@ -80,11 +80,11 @@ end
 
 
 """
-    qint(n::Int, p::Int=1)
+    qint_mono(n::Int, p::Int=1)
 
 Returns the algebraic representation of `([n]_q)^p` as a `CyclotomicMonomial`.
 """
-function qint(n::Int, p::Int=1)
+function qint_mono(n::Int, p::Int=1)
     n < 0 && return ZERO_MONOMIAL
     n <= 1 && return ONE_MONOMIAL
     buf = CycloBuffer(n)
@@ -93,11 +93,11 @@ function qint(n::Int, p::Int=1)
 end
 
 """
-    qfact(n::Int, p::Int=1)
+    qfact_mono(n::Int, p::Int=1)
 
 Returns the algebraic representation of `([n]_q!)^p` as a `CyclotomicMonomial`.
 """
-function qfact(n::Int, p::Int=1)
+function qfact_mono(n::Int, p::Int=1)
     n < 0 && return ZERO_MONOMIAL
     n <= 1 && return ONE_MONOMIAL
     buf = CycloBuffer(n)
@@ -106,10 +106,10 @@ function qfact(n::Int, p::Int=1)
 end
 
 """
-    qbinomial(n::Int, k::Int)
+    qbinomial_mono(n::Int, k::Int)
 Returns the cyclotomic monomial for the quantum binomial coefficient `[n]_q! / ([k]_q! [n-k]_q!)`.
 """
-function qbinomial(n::Int, k::Int)
+function qbinomial_mono(n::Int, k::Int)
     (k < 0 || k > n) && return ZERO_MONOMIAL
     (k == 0 || k == n) && return ONE_MONOMIAL
     buf = CycloBuffer(n)
@@ -315,7 +315,7 @@ into a Deferred Cyclotomic Representation (DCR).
 # Example
 ```julia
 my_series = qseries(3:10) do z
-    return (-1)^z * (qfact(z) / qfact(z - 3))
+    return (-1)^z * (qfact_mono(z) / qfact_mono(z - 3))
 end
 ```
 """

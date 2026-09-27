@@ -92,7 +92,8 @@ Base.show(io::IO, t::Exact) = print(io, "Exact(", t.k, t.form === :x ? "" : "; f
 Base.show(io::IO, t::At) = print(io, "At(", t.q, ")")
 Base.show(io::IO, t::Classical) = print(io, "Classical(", t.exact ? "; exact = true" : "", ")")
 
-for f in (:q6j, :q3j, :fsymbol, :gsymbol, :rmatrix, :tetrahedron, :theta_value, :qdim, :qeval, :twist)
+for f in (:q6j, :q3j, :fsymbol, :gsymbol, :rmatrix, :tetrahedron, :theta_value, :qdim, :qeval,
+          :twist, :qint, :qfact, :qbinomial)
     @eval function $f(t::EvalTarget, args...; kw...)
         t isa Symbolic && throw(ArgumentError("Symbolic() does not accept evaluation keywords"))
         if t isa Exact && t.form === :x
@@ -148,6 +149,9 @@ function rmatrix(::Symbolic,js::Vararg{Spin,3})
     Js = doubled(js...)
     return _δ(Js...) ? rmatrix_mono(Js...) : zero(QPhase)
 end
+qint(::Symbolic,n::Integer,p::Integer=1) = _product_symbolic(_qint_pairs(Int(n),Int(p)))
+qfact(::Symbolic,n::Integer,p::Integer=1) = _product_symbolic(_qfact_pairs(Int(n),Int(p)))
+qbinomial(::Symbolic,n::Integer,m::Integer) = _product_symbolic(_qbinomial_pairs(Int(n),Int(m)))
 qeval(::Symbolic,s::FactorialSum) = SymbolicValue(_validate_rule(s))
 qeval(::Symbolic,s::Union{SymbolicValue,DCR,CyclotomicMonomial,QPhase}) = s
 
@@ -183,6 +187,13 @@ function _canonical_target(f,k,args...)
     k isa Integer || throw(ArgumentError("exact level must be an integer"))
     kk=Int(k); kk>=0 || throw(DomainError(kk,"level must be nonnegative"))
     f === rmatrix && return rmatrix(args...;k=kk,exact=true)
+    f === twist && return twist(only(args);k=kk,exact=true)
+    if f === qint || f === qfact || f === qbinomial
+        # the deprecated carrier keeps its monomial route; the real basis is what `Exact(k)` uses
+        mono = f === qint ? qint_mono(Int.(args)...) :
+               f === qfact ? qfact_mono(Int.(args)...) : qbinomial_mono(Int.(args)...)
+        return qeval(mono;k=kk,exact=true)
+    end
     if f === qdim || f === theta_value
         mono = f === qdim ? qdim_mono(doubled(only(args))) :
                (Js = doubled(args...); _qδ(Js...,kk) ? theta_mono(Js...) : ZERO_MONOMIAL)
@@ -225,6 +236,11 @@ function _exact_x_target(f,k,args...)
     f === tetrahedron && return (_qδtet(doubled(args...)...,kk) ?
         exact_x(tetrahedron_sum(doubled(args...)...),kk) : zero(ExactX,kk))
     f === rmatrix && return rmatrix(args...;k=kk,exact=true)   # a phase: a `QPhase`, not a field value
+    f === twist && return twist(only(args);k=kk,exact=true)
+    # the bare products: they carry a rule but no labels, so they answer for themselves
+    f === qint && return qint(args...;k=kk,exact=true)
+    f === qfact && return qfact(args...;k=kk,exact=true)
+    f === qbinomial && return qbinomial(args...;k=kk,exact=true)
     if f === qeval
         length(args)==1 || throw(ArgumentError("qeval requires one expression"))
         s=only(args)

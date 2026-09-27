@@ -41,6 +41,7 @@ include("exact_x.jl")       # exact level values in x = 2cos(π/h), and the radi
 include("symbolic_value.jl") # what Symbolic() returns: the rule and its DCR, shown in x
 
 include("modular.jl")      # modular data: twists, S and T, the total dimension
+include("qproducts.jl")   # [n], [n]!, [n choose m] through the same rule evaluator
 include("recoupling_api.jl")
 include("batch.jl")
 include("symbols.jl")   # the symbol interface: one table, dispatched
