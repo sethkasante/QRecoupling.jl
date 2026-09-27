@@ -191,11 +191,11 @@ end
 "Shortest run of labels worth a recurrence (below it the column setup costs more than it saves)."
 const FAMILY_MIN_RUN = 4
 
-"Symbol families that the recurrence serves: the value is the 6j times a per-entry factor."
-_family(::typeof(q6j)) = Val(:sixj)
-_family(::typeof(fsymbol)) = Val(:f)
-_family(::typeof(gsymbol)) = Val(:g)
-_family(_) = nothing
+"""
+Symbol families that the recurrence serves: the value is the 6j times a per-entry factor. Dispatches
+through the symbol interface (`symbols.jl`); `nothing` for anything with no recurrence.
+"""
+_family(f) = (sym = symbol_of(f); sym === nothing ? nothing : symbol_family(sym))
 
 "The one position in which b steps up from a by one spin (2 in doubled labels), or 0."
 @inline function _step_position(a::NTuple{6,Int}, b::NTuple{6,Int})
@@ -434,10 +434,12 @@ _rule_3j(l) = (p = _pad3j(l); threej_sum(doubled(p...)...))
 _rule_f(l) = fsymbol_sum(doubled(l...)...)
 _rule_g(l) = gsymbol_sum(doubled(l...)...)        # symmetric by construction
 
-_rule_family(::typeof(_rule_6j)) = Val(:sixj)
-_rule_family(::typeof(_rule_3j)) = Val(:threej)
-_rule_family(::typeof(_rule_f)) = Val(:f)
-_rule_family(::typeof(_rule_g)) = Val(:g)
+# The batch layer keys on its own rule-builders rather than on the public functions, so it names the
+# symbol and then asks the interface — again one source of truth.
+_rule_family(::typeof(_rule_6j)) = symbol_family(SixJ())
+_rule_family(::typeof(_rule_3j)) = symbol_family(ThreeJ())
+_rule_family(::typeof(_rule_f)) = symbol_family(FSymbol())
+_rule_family(::typeof(_rule_g)) = symbol_family(GSymbol())
 """
     _rule_admissible(rule, s, l, k) -> Bool
 
@@ -495,14 +497,15 @@ function _batched(rule::R, fallback::F, symbol::S, labels, nlab, fname;
     if isnothing(k) && !exact && !_is_classical(q)
         qq=_analytic_q(q)
         rules=map(rule,L)
-        out=Vector{typeof(qq)}(undef,length(L))
+        # `T` is the same floor here as in the scalar method, so a batch and a loop over it agree in type.
+        out=Vector{promote_type(T,typeof(qq))}(undef,length(L))
         _run(length(L),threads) do rng
             work=EvaluationWorkspace()
             # A fixed-q worker reuses tables across all its labels and tiers.
             N=maximum(i->is_empty_sum(rules[i]) ? 0 : max_argument(rules[i]),rng;init=0)
             _analytic_table(_dwnum(qq),N,work)
             for i in rng
-                out[i]=analytic_value(rules[i],q;workspace=work)
+                out[i]=analytic_value(rules[i],q,T;workspace=work)
             end
         end
         return out
