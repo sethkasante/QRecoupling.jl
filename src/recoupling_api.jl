@@ -11,17 +11,16 @@ end
 
 """
 Level-k evaluation of a recoupling symbol from its factorial rule `s`. Inadmissible labels give zero.
-Numeric values use the factorial rule directly; exact values short-circuit exact zeros (decided by
-valuations and a modular test) and otherwise project the DCR built by `dcr()`.
+Numeric values use the factorial rule directly; exact values project the DCR built by `dcr()`.
+A modular zero candidate is not sufficient to short-circuit an exact result.
 """
 function _level_value(s::FactorialSum, admissible::Bool, dcr, k::Int, exact::Bool, ::Type{T};
                      labels = nothing, family=nothing, workspace=nothing) where {T}
     k >= 0 || throw(DomainError(k, "level must be nonnegative"))
-    admissible || return exact ? _exact_zero(k) : zero(T)
-    if exact
-        is_zero_at_level(s, k) && return _exact_zero(k)
-        return project_exact(dcr(), k)
-    end
+    admissible || return exact ? zero(ExactX, k) : zero(T)
+    # `exact = true` is the real basis, ℚ[x]/Ψ_h — the same value `Exact(k)` returns. The cyclotomic
+    # carrier is reachable as `Exact(k; form = :canonical)` and is deprecated.
+    exact && return exact_x(s, k)
     return value_at_level(s, k, T; fallback = () -> project_discrete(dcr(), k, T), labels=labels, family=family, workspace=workspace)
 end
 
@@ -39,7 +38,7 @@ _deprecated_eager() = @warn("`eager=true` is deprecated and now uses the standar
         return exact ? classical_exact(s) :
                        classical_value(s,T; labels=labels,workspace=workspace)
     end
-    return analytic_value(s,q;workspace=workspace)
+    return analytic_value(s,q,T;workspace=workspace,labels=labels)
 end
 
 """
@@ -164,8 +163,22 @@ Theta-graph value, classical by default. Use `Symbolic()` for the monomial repre
 function theta_value(j1::Spin,j2::Spin,j3::Spin; k=nothing,q=nothing,exact::Bool=false,T::Type=Float64)
     q = _evaluation_q(k,q,exact)
     Js = doubled(j1,j2,j3)
+    if exact && !isnothing(k)
+        kk = Int(k)
+        _qδ(Js...,kk) || return zero(ExactX,kk)
+        return _qfact_exactx(_theta_qfacts(Js...),kk)
+    end
     mono = !isnothing(k) && !_qδ(Js...,Int(k)) ? ZERO_MONOMIAL : theta_mono(Js...)
     return qeval(mono;k=k,q=q,exact=exact,T=T)
+end
+
+"""
+The q-factorial content of [`theta_mono`](@ref), as `n => c` pairs, so that the exact route builds the
+same value the monomial route does rather than a second opinion about it.
+"""
+function _theta_qfacts(A::Int,B::Int,C::Int)
+    m1 = (A+B-C)÷2; m2 = (A-B+C)÷2; m3 = (-A+B+C)÷2; t = (A+B+C)÷2+1
+    return [t => 1, m1 => 1, m2 => 1, m3 => 1, A => -1, B => -1, C => -1]
 end
 
 """
@@ -175,7 +188,10 @@ Quantum dimension [2j+1], classical by default. Use `qdim(Symbolic(), j)` for a 
 """
 function qdim(j::Spin; k=nothing,q=nothing,exact::Bool=false,T::Type=Float64)
     q = _evaluation_q(k,q,exact)
-    return qeval(qdim_mono(doubled(j));k=k,q=q,exact=exact,T=T)
+    J = doubled(j)
+    # [J+1] = [J+1]!/[J]! — no sum, so the real basis reaches it through the ψ exponents directly.
+    exact && !isnothing(k) && return _qfact_exactx([(J+1) => 1, J => -1],Int(k))
+    return qeval(qdim_mono(J);k=k,q=q,exact=exact,T=T)
 end
 
 #---- clear caches ---
@@ -211,6 +227,7 @@ sieve is kept, because it is read without a lock.
 """
 function empty_caches!()
     clear_numeric_caches!()
+    clear_analytic_caches!()
     clear_exact_caches!()
     clear_sieve_caches!()
     return nothing

@@ -137,7 +137,7 @@ end
     project_exact(dcr::DCR, k::Int)
 Evaluates a DCR series exactly for discrete level `k`. Returns a CompositeExactResult.
 """
-function project_exact(dcr::DCR, k::Int)
+function project_exact(dcr::DCR, k::Int; rule = nothing)
     h = k + 2   
 
     e_rad = _phi_exponent(dcr.radical, h)
@@ -148,6 +148,13 @@ function project_exact(dcr::DCR, k::Int)
     end
     
     V_exact, V_inv = get_phi_exact_table(dcr.max_d, k, ζ)
+
+    # The cleared-form kernel replaces the ratio walk by integer arithmetic when the rule's ratios are
+    # balanced and no denominator q-integer vanishes (`src/exact_cleared.jl`); otherwise fall through.
+    if rule !== nothing
+        fast = _cleared_exact_sum(rule, dcr, k, V_exact, V_inv, ζ, h)
+        fast === nothing || return CompositeExactResult(k, dcr.radical, fast)
+    end
     
     # bufffer to multiply monomials
     buf = CycloBuffer(dcr.max_d)

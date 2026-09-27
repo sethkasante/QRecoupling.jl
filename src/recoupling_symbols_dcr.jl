@@ -62,18 +62,33 @@ gsymbol_dcr(J1::Int,J2::Int,J3::Int,J4::Int,J5::Int,J6::Int) =
 
 """
     theta_mono(A, B, C)
-Evaluates the value of the 'Theta' graph (two vertices connected by 3 edges).
-Equivalent to a quantum dimension calculation for the triad.
+
+The theta net — two vertices joined by three edges coloured `A`, `B`, `C` (doubled labels) — as a
+cyclotomic monomial:
+
+    θ(A,B,C) = [T+1]! [m₁]! [m₂]! [m₃]! / ([A]! [B]! [C]!),
+    m₁ = (A+B−C)/2,  m₂ = (A−B+C)/2,  m₃ = (−A+B+C)/2,  T = m₁+m₂+m₃ = (A+B+C)/2.
+
+**Correction, replacing a value of 1.** Until this was fixed the "norm factor" below the triangle
+coefficient divided by `[m₁]![m₂]![m₃]!` instead of by `[A]![B]![C]!`, which is exactly what
+`qtriangle!` had just multiplied in: the two cancelled and `theta_value` returned `1.0` for every
+admissible triad, on every evaluation path. Nothing in the package consumed the value, which is why the
+suite never saw it.
+
+No convention is being chosen here. Closing a theta net on a single edge gives the quantum dimension,
+`θ(A, A, 0) = [A+1]`, and that pins the formula completely once the package's unsigned `qdim` is taken as
+the convention — the only remaining freedom is the overall `(−1)^T` of Kauffman–Lins, which is the same
+sign their `Δ_a = (−1)^a[a+1]` carries and which `qdim` already drops. The signed variant is `(−1)^T`
+times this.
 """
 function theta_mono(A::Int, B::Int, C::Int)
     !_δ(A, B, C) && return ZERO_MONOMIAL
-    buf = CycloBuffer((A + B + C) ÷ 2 + 1)
-    qtriangle!(buf, A, B, C)
-    # Norm factor for Theta graph in SU(2)k
-    add_qfact!(buf, (A + B + C) ÷ 2 + 1)
-    add_qfact!(buf, (A + B - C) ÷ 2, -1)
-    add_qfact!(buf, (A - B + C) ÷ 2, -1)
-    add_qfact!(buf, (-A + B + C) ÷ 2, -1)
+    m1 = (A + B - C) ÷ 2; m2 = (A - B + C) ÷ 2; m3 = (-A + B + C) ÷ 2
+    t = (A + B + C) ÷ 2 + 1                      # the largest argument, so the buffer needs no more
+    buf = CycloBuffer(t)
+    add_qfact!(buf, t)
+    add_qfact!(buf, m1); add_qfact!(buf, m2); add_qfact!(buf, m3)
+    add_qfact!(buf, A, -1); add_qfact!(buf, B, -1); add_qfact!(buf, C, -1)
     return snapshot(buf)
 end
 

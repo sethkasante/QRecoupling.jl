@@ -65,12 +65,12 @@ function qeval(s::FactorialSum; k=nothing,q=nothing,exact::Bool=false,
         k isa Integer || throw(ArgumentError("k must be an integer level"))
         kk=Int(k)
         kk>=0 || throw(DomainError(k,"level must be nonnegative"))
-        exact && return project_exact(_factorial_dcr(s),kk)
+        exact && return exact_x(s,kk)          # the real basis; see `_level_value`
         return value_at_level(s,kk,T;workspace=workspace,
                              fallback=()->project_discrete(_factorial_dcr(s),kk,T))
     elseif !isnothing(q)
         exact && !_is_classical(q) && throw(ArgumentError("exact rule evaluation requires k or q=1"))
-        return analytic_value(s,q;workspace=workspace)
+        return analytic_value(s,q,T;workspace=workspace)
     end
     throw(ArgumentError("specify k or q to evaluate a factorial rule"))
 end

@@ -6,17 +6,18 @@
 #  either way, which is what makes sweeping whole families practical.
 # --------------------------------------------
 
-_rule_for(::typeof(q6j), args...) = sixj_sum(doubled(args...)...)
-_rule_for(::typeof(fsymbol), args...) = fsymbol_sum(doubled(args...)...)
-_rule_for(::typeof(gsymbol), args...) = gsymbol_sum(doubled(args...)...)
-_rule_for(::typeof(q3j), j1, j2, j3, m1, m2, m3 = -m1 - m2) = threej_sum(doubled(j1, j2, j3, m1, m2, m3)...)
+# Both of these now dispatch through the symbol interface of `symbols.jl`, so a new symbol needs a
+# `symbol_of` method and nothing here. Labels outside the level's admissible set carry no representation,
+# so the symbol is zero by convention rather than singular, and the queries follow that convention.
+_rule_for(f::Function, args...) = symbol_rule(_symbol_or_throw(f), args...)
+_admissible_at(f::Function, k::Int, args...) = level_admissible(_symbol_or_throw(f), k, args...)
 
-# Labels outside the level's admissible set carry no representation, so the symbol is zero by convention
-# rather than singular. The queries follow the same convention as the symbol functions.
-_admissible_at(::typeof(q6j), k::Int, js...) = _qδtet(doubled(js...)..., k)
-_admissible_at(::typeof(gsymbol), k::Int, js...) = _qδtet(doubled(js...)..., k)
-_admissible_at(::typeof(fsymbol), k::Int, js...) = _qδtet(doubled(js...)..., k)
-_admissible_at(::typeof(q3j), k::Int, j1, j2, j3, m1, m2, m3 = -m1 - m2) = _qδ(doubled(j1, j2, j3)..., k)
+function _symbol_or_throw(f::Function)
+    sym = symbol_of(f)
+    sym === nothing && throw(ArgumentError(
+        "$f is not a recoupling symbol; define `QRecoupling.symbol_of(::typeof($f))` to attach one"))
+    return sym
+end
 
 """
     iszero_at(k, j1, j2, j3, j4, j5, j6) -> Bool

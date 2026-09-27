@@ -104,6 +104,9 @@ escape and no coefficient bound has to be proved in advance.
 """
 function _divmod_psi(num, den, h::Int)
     Ψ = _psiq(h)
+    iszero(den) && return nothing
+    # Rational denominators need no modular images, CRT or reconstruction.
+    degree(den) == 0 && return _redq(num / coeff(den, 0), Ψ)
     S, _ = _qqx()
     d = Int(degree(Ψ))
     d <= 0 && return nothing
@@ -158,19 +161,76 @@ An exact value at level `k`, written in the real variable `x = q + q⁻¹ = 2cos
 
     v = P(x) · √(R(x)),     P, R ∈ ℚ[x] reduced modulo Ψ_h.
 
-`rad` lists the ψ indices under the root — an 𝔽₂ square class over the ψ basis of `generic_x.jl`, empty
-when the value needs no root at all, in which case `v = P(x)` outright. Degrees are below `φ(2h)/2`, half
-the degree of the cyclotomic field the same value occupies in `Exact(k)`'s default form.
+`sqclass` lists the ψ indices under the root — an 𝔽₂ square class over the ψ basis of `generic_x.jl`,
+empty when the value needs no root at all, in which case `v = P(x)` outright. It is normalised at
+construction: a class whose product collapses to a rational square at this level is folded into `P` and
+cleared. Degrees are below `φ(2h)/2`, half the degree of the cyclotomic field the same value occupies in
+`Exact(k; form = :canonical)`.
 
-Printing runs the display ladder; [`radical_form`](@ref) asks for the closed form in radicals on its own,
-and [`xpolynomial`](@ref) for the coefficients of `P`.
+**Printing shows the radical form and nothing else** when one exists, because that is the form a reader
+wants; when none does it shows `P(x)·√(R(x))` and says why there is no radical. Two properties reach past
+the display:
+
+| | |
+|---|---|
+| `v.rad` | the value in nested square roots, at any length, or `nothing` if none exists |
+| `v.x_poly` | `P`, the polynomial in `x = 2cos(π/(k+2))` |
+
+[`radical_form`](@ref) is the same as `v.rad` with a length budget, [`xpolynomial`](@ref) and
+[`radicand`](@ref) give `P` and `R` as coefficient vectors, and [`has_radical_form`](@ref) answers the
+existence question without computing the expression.
 """
 struct ExactX
     k::Int
     p::QQPolyRingElem          # P, reduced mod Ψ_h
-    rad::Vector{Int}           # ψ indices under the root
-    r::QQPolyRingElem          # R = ∏_{e ∈ rad} ψ_e, reduced mod Ψ_h
+    sqclass::Vector{Int}       # ψ indices under the root
+    r::QQPolyRingElem          # R = ∏_{e ∈ sqclass} ψ_e, reduced mod Ψ_h
+
+    function ExactX(k::Integer, p::QQPolyRingElem, cls::Vector{Int}, r::QQPolyRingElem)
+        kk = Int(k)
+        S, _ = _qqx()
+        # A square class is symbolic over the ψ basis of ℚ(x); *at a level* the product can collapse to a
+        # rational square, and then there is no root left to carry. Measured on 885 exact 6j values to
+        # k = 16, **63** had a non-empty class whose radicand reduced to a constant — every one of them
+        # printed `· √(1)`, compared unequal to the same number with an empty class, and propagated the
+        # phantom class through every product it entered. Normalising here is the only place that cannot
+        # be bypassed.
+        iszero(p) && return new(kk, p, Int[], S(1))
+        if !isempty(cls) && degree(r) <= 0
+            s = _rat_sqrt(Rational{BigInt}(coeff(r, 0)))
+            s === nothing || return new(kk, p * QQ(numerator(s), denominator(s)), Int[], S(1))
+        end
+        return new(kk, p, cls, r)
+    end
 end
+
+"The exact rational square root of `c`, or `nothing` when `c` is negative or not a square."
+function _rat_sqrt(c::Rational{BigInt})
+    c < 0 && return nothing
+    iszero(c) && return c
+    n, d = numerator(c), denominator(c)
+    sn, sd = isqrt(n), isqrt(d)
+    (sn * sn == n && sd * sd == d) || return nothing
+    return Rational{BigInt}(sn, sd)
+end
+
+"""
+Properties beyond the stored fields.
+
+`v.rad` is the value in **nested square roots**, computed on demand and with no length limit — the form
+the display points at when it is too long to print. It is `nothing` exactly when no real radical form
+exists, which `has_radical_form(v)` answers without computing anything.
+
+`v.x_poly` is `P`, the polynomial in `x = 2cos(π/(k+2))`; the value is `v.x_poly · √(radicand(v))`, and
+`radicand(v)` is `1` unless `v.sqclass` is non-empty.
+"""
+function Base.getproperty(v::ExactX, s::Symbol)
+    s === :rad && return radical_form(v; maxlen = 0)
+    s === :x_poly && return getfield(v, :p)
+    return getfield(v, s)
+end
+Base.propertynames(::ExactX, private::Bool = false) =
+    private ? (:k, :p, :sqclass, :r, :rad, :x_poly) : (:k, :rad, :x_poly)
 
 level(v::ExactX) = v.k
 Base.iszero(v::ExactX) = iszero(v.p)
@@ -236,7 +296,7 @@ function exact_x(s::FactorialSum, k::Integer)
     p === nothing && (p = _redq(nred * _invmodq(den, Ψ), Ψ))
     iszero(p) && return ExactX(kk, S(0), Int[], S(1))
     rp = S(1)
-    for e in v.rad
+    for e in v.rad                                   # `v` is an `XValue` here: its class field is `rad`
         rp = _redq(rp * _toqq(psi_x(e)), Ψ)
     end
     iszero(rp) && throw(DomainError(kk, "the radical of the rule vanishes at level $kk"))
@@ -318,9 +378,10 @@ polynomial in `x = 2cos(π/422) = 1.99989…`, where 256 bits print **−64.011*
 **0.16666**. The expression was exact; only the number under it was not. An exact value that cannot say
 what its number is should say nothing, not something.
 """
-function _eval_at_x(f, h::Int; rtol::Float64 = 1e-16, maxbits::Int = EVAL_MAX_BITS)
+function _eval_at_x(f, h::Int; rtol::Real = 1e-16, maxbits::Int = EVAL_MAX_BITS,
+                    minbits::Int = 256)
     degree(f) < 0 && return BigFloat(0)
-    bits = 256
+    bits = min(maxbits, max(32, minbits))
     while true
         acc, need = setprecision(BigFloat, bits) do
             a, m = _horner_mass(f, _x0(h, BigFloat))
@@ -347,7 +408,7 @@ when no reachable precision certifies it — see [`numeric_value`](@ref) for the
 instead, which is what the display uses.
 """
 function Base.float(v::ExactX, ::Type{T} = Float64) where {T<:AbstractFloat}
-    r = numeric_value(v)
+    r = numeric_value(v; bits=precision(T))
     r === nothing && throw(DomainError(v.k,
         "the exact value at level $(v.k) cancels beyond $(EVAL_MAX_BITS) bits when evaluated at " *
         "x = 2cos(π/$(v.k + 2)); the expression is still exact. For a number use the certified numeric " *
@@ -358,22 +419,36 @@ Base.Float64(v::ExactX) = float(v, Float64)
 Base.BigFloat(v::ExactX) = float(v, BigFloat)
 
 """
-    numeric_value(v::ExactX) -> BigFloat or nothing
+    evaluate_exact(v, T = ComplexF64)
 
-The number `v` denotes, certified, or `nothing` when no precision below `EVAL_MAX_BITS` certifies it. The
-display uses this and simply omits the `≈` line in that case: the package has certified numeric paths of
-its own, and a wrong number beside an exact expression is worse than no number at all.
+The number an exact value denotes, in `T`. Named for the cyclotomic carrier this replaces so that code
+asking an exact value for its number does not have to know which carrier produced it — the real basis
+answers to the same call, and `real(evaluate_exact(v))` keeps meaning what it meant.
 """
-function numeric_value(v::ExactX)
-    iszero(v.p) && return BigFloat(0)
+evaluate_exact(v::ExactX, ::Type{T} = ComplexF64) where {T} =
+    T(float(v, typeof(real(zero(T)))))
+
+"""
+    numeric_value(v::ExactX; bits=precision(BigFloat)) -> BigFloat or nothing
+
+Evaluate the selected real embedding with adaptive guard precision, then round to `bits` bits.
+Returns `nothing` if the working-precision budget is exhausted. The Horner mass is an error estimate,
+not an outward-rounded interval certificate. Negative radicands are rejected rather than clamped to zero.
+"""
+function numeric_value(v::ExactX; bits::Integer=precision(BigFloat))
+    0 < bits <= EVAL_MAX_BITS || throw(ArgumentError("bits must be between 1 and $EVAL_MAX_BITS"))
+    target=Int(bits)
+    iszero(v.p) && return setprecision(()->BigFloat(0),BigFloat,target)
     h = v.k + 2
-    p = _eval_at_x(v.p, h)
+    tol=setprecision(()->ldexp(BigFloat(1),-target-8),BigFloat,target+16)
+    p = _eval_at_x(v.p, h;rtol=tol,minbits=max(256,target+32))
     p === nothing && return nothing
-    isempty(v.rad) && return p
-    r = _eval_at_x(v.r, h)
+    isempty(v.sqclass) && return setprecision(()->BigFloat(p),BigFloat,target)
+    r = _eval_at_x(v.r, h;rtol=tol,minbits=max(256,target+32))
     r === nothing && return nothing
-    r < 0 && (r = zero(r))          # a real value forces R ≥ 0; guard the last bit of rounding
-    return setprecision(() -> p * sqrt(r), BigFloat, max(precision(p), precision(r)))
+    r < 0 && throw(DomainError(v.k,"the x-form radicand is negative at this real embedding"))
+    result=setprecision(() -> p * sqrt(r), BigFloat, max(precision(p), precision(r)))
+    return setprecision(()->BigFloat(result),BigFloat,target)
 end
 
 # ---------------------------------------------------------------------------------
@@ -705,7 +780,7 @@ function radical_levels(f, labels...; kmax::Integer = 64, refine::Bool = true,
         v = exact_x(symbol_rule(sym, labels...), k)
         # A rational value is a radical form and costs nothing to recognise; measured, it is also the
         # *only* way a value has ever beaten the level's criterion, so this shortcut is the usual path.
-        if iszero(v.p) || (degree(v.p) <= 0 && isempty(v.rad)) || has_radical_form(v)
+        if iszero(v.p) || (degree(v.p) <= 0 && isempty(v.sqclass)) || has_radical_form(v)
             push!(out, k)
         end
     end
@@ -799,6 +874,14 @@ radical_form(q6j(Exact(3; form = :x), 1, 1, 1, 1, 1, 1))   # −(3 − √5)/2, 
 """
 function radical_form(v::ExactX; maxlen::Int = 80)
     iszero(v.p) && return RadExpr(0)
+    if degree(v.p) <= 0 && (isempty(v.sqclass) || degree(v.r) <= 0)
+        c = Rational{BigInt}(coeff(v.p, 0))
+        isempty(v.sqclass) && return RadExpr(c)
+        r = Rational{BigInt}(coeff(v.r, 0))
+        r < 0 && return nothing
+        e = simplify(RadExpr(big(0)//big(1), [(c, RadExpr(r))]))
+        return maxlen > 0 && length(_rad_str(e)) > maxlen ? nothing : e
+    end
     # The *value*, not the level: a symbol can be rational — or quadratic — at a level whose field has an
     # odd prime in its degree, and refusing on the level alone hid exactly those. Measured, 12 of 1632
     # sampled values were rational at k = 5, 7, 9 and were being told no radical form existed.
@@ -811,7 +894,7 @@ function radical_form(v::ExactX; maxlen::Int = 80)
     maxlen > 0 && _value_degree(_square(v), h) > RADICAL_MAX_DEGREE && return nothing
     reps = _conj_reps(h)
     e = nothing
-    if isempty(v.rad)
+    if isempty(v.sqclass)
         e = _descend(v.p, h, Ψ, reps)                    # no root: descend on the value itself
     end
     if e === nothing
@@ -926,26 +1009,65 @@ function _xpoly_summary(f)
 end
 
 "`_xpoly_str`, or a description of it when writing it out would be worse than useless."
-function _xpoly_show(f)
-    degree(f) > XPOLY_MAX_DEGREE && return _xpoly_summary(f)
+function _xpoly_show(f; maxdeg::Int = XPOLY_MAX_DEGREE, maxchars::Int = XPOLY_MAX_CHARS)
+    degree(f) > maxdeg && return _xpoly_summary(f)
     str = _xpoly_str(f)
-    return length(str) > XPOLY_MAX_CHARS ? _xpoly_summary(f) : str
+    return length(str) > maxchars ? _xpoly_summary(f) : str
 end
 
-"The `P(x)·√(R(x))` line, always available."
+"""
+The `P(x)·√(R(x))` line, always available and never computing anything.
+
+Shown only when there is no radical form to show instead — then it is the value's only closed form. A
+radicand that reduced to a bare constant keeps its class (it is not a rational square, or the constructor
+would have folded it) and is written `√2` rather than `√(2)`.
+"""
 function _xform_str(v::ExactX)
     iszero(v.p) && return "0"
     ps = _xpoly_show(v.p)
-    isempty(v.rad) && return ps
+    isempty(v.sqclass) && return ps
     rs = _xpoly_show(v.r)
-    ps == "1" && return "√(" * rs * ")"
-    ps == "-1" && return "−√(" * rs * ")"
+    root = occursin(" ", rs) || occursin("x", rs) ? "√(" * rs * ")" : "√" * rs
+    ps == "1" && return root
+    ps == "-1" && return "−" * root
     need = occursin(" ", ps) && !startswith(ps, "(")
-    return (need ? "(" * ps * ")" : ps) * " · √(" * rs * ")"
+    return (need ? "(" * ps * ")" : ps) * " · " * root
 end
 
 function Base.show(io::IO, v::ExactX)
     print(io, "ExactX(k = ", v.k, ", ", _xform_str(v), ")")
+end
+
+"""
+    _radical_view(v; maxlen, degree_limit, allowed) -> (kind, expr, degree)
+
+Which of the four things the display has to say about this value, decided once so that the answer and the
+sentence explaining it cannot disagree.
+
+* `:ok` — the radical expression, short enough to print.
+* `:long` — one exists but is past the budget; `v.rad` returns it whatever its size.
+* `:none` — none exists. `v²` lies in an abelian field, and an abelian field is a tower of quadratic
+  extensions exactly when its degree is a power of two, so this is decided and not merely unattempted.
+* `:untried` — the field degree is past `degree_limit` and the minimal polynomial that would settle it was
+  not computed. Distinguished from `:none` on purpose: "no radical form" and "did not look" are different
+  statements and the display used to make both with the same sentence.
+"""
+function _radical_view(v::ExactX; maxlen::Int = 80, degree_limit::Int = 32, allowed::Bool = true)
+    iszero(v.p) && return (:zero, nothing, 0)
+    h = v.k + 2
+    d = euler_phi(2h) ÷ 2
+    allowed || return (:untried, nothing, d)
+    vd = d
+    if !has_radical_form(v.k)
+        # a short printed result must not trigger unbounded minimal-polynomial work
+        simple = degree(v.p) <= 0 && (isempty(v.sqclass) || degree(v.r) <= 0)
+        simple || d <= degree_limit || return (:untried, nothing, d)
+        vd = _value_degree(_square(v), h)
+        count_ones(vd) == 1 || return (:none, nothing, vd)
+    end
+    e = radical_form(v; maxlen = maxlen)
+    e === nothing && return (:long, nothing, vd)
+    return (:ok, e, vd)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", v::ExactX)
@@ -956,22 +1078,26 @@ function Base.show(io::IO, ::MIME"text/plain", v::ExactX)
         println(io, "  = 0")
         return
     end
-    rf = radical_form(v)
-    xs = _xform_str(v)
-    rs = rf === nothing ? nothing : _rad_str(rf)
-    rs === nothing || println(io, "  = ", rs)
-    rs == xs || println(io, "  = ", xs)
-    if rf === nothing
-        if !has_radical_form(v)
-            println(io, "  no radical form: this value generates a subfield of ℚ(2cos(π/", h,
-                        ")) whose degree is not")
-            println(io, "  a power of two, so no real nested-square-root expression exists ",
-                        "(casus irreducibilis)")
-        else
-            println(io, "  a radical form exists but is too long to be useful; ",
-                        "`radical_form(v; maxlen = 0)` forces it")
-        end
+    kind, e, vd = _radical_view(v; maxlen = get(io, :radical_maxlen, 80),
+                                degree_limit = get(io, :radical_degree_limit, 32),
+                                allowed = get(io, :radicals, true))
+    # The radical *is* the answer when there is one; the polynomial in x is shown only when there is not,
+    # because then it is the only closed form the value has.
+    if kind === :ok
+        println(io, "  = ", _rad_str(e))
+    elseif kind === :long
+        println(io, "  = nested square roots, too long to print")
+        println(io, " `v.rad` returns the expression; `v.x_poly` the polynomial in x")
+    elseif kind === :none
+        # println(io, "  = ", _xform_str(v))
+        println(io, "  no radical form: v² has degree ", vd,
+                    " over ℚ, and only a power of two is a tower of square roots")
+    else
+        # println(io, "  = ", _xform_str(v))
+        println(io, "  radical form not attempted at degree ", d,
+                    ";\n `has_radical_form(v)` decides whether one exists, `v.rad` computes it.", )
     end
+    get(io, :approximate, d <= 64) || return nothing
     nv = numeric_value(v)
     if nv === nothing
         print(io, "  (the value cancels beyond ", EVAL_MAX_BITS,
@@ -1061,12 +1187,37 @@ function _psi_sign(e::Int, h::Int)
     end
 end
 
-Base.:-(v::ExactX) = ExactX(v.k, -v.p, v.rad, v.r)
+Base.:-(v::ExactX) = ExactX(v.k, -v.p, v.sqclass, v.r)
 function _one_exactx(k::Integer)
     S, _ = _qqx()
     return ExactX(Int(k), S(1), Int[], S(1))
 end
 Base.one(::Type{ExactX}, k::Integer) = _one_exactx(k)
+
+"""
+    _qfact_exactx(pairs, k; sgn = 1) -> ExactX
+
+`sgn · ∏ₙ [n]!^{cₙ}` at level `k`, from a collection of `n => c`. This is the whole content of every
+value in the package that has no sum — a quantum dimension, a theta net, any `CyclotomicMonomial` whose
+q-power cancels — so those reach the real basis by the same route the prefactor of a Racah sum does,
+through the ψ exponents, with no cyclotomic field anywhere.
+"""
+function _qfact_exactx(pairs, k::Integer; sgn::Int = 1)
+    kk = Int(k)
+    kk >= 0 || throw(DomainError(k, "level must be nonnegative"))
+    h = kk + 2
+    Ψ = _psiq(h)
+    S, _ = _qqx()
+    iszero(sgn) && return zero(ExactX, kk)
+    num, den = _psi_monomial(psi_exponents(pairs); modulus = psi_level(h), level = h)
+    d = _redq(_toqq(den), Ψ)
+    iszero(d) && throw(DomainError(kk, "the value is singular at level $kk: a q-integer vanishes"))
+    n = _redq(_toqq(num) * QQ(sgn), Ψ)
+    iszero(n) && return zero(ExactX, kk)
+    p = _divmod_psi(n, d, h)
+    p === nothing && (p = _redq(n * _invmodq(d, Ψ), Ψ))
+    return ExactX(kk, p, Int[], S(1))
+end
 
 """
     _qint_exactx(k, n) -> ExactX
@@ -1096,8 +1247,8 @@ function Base.:*(a::ExactX, b::ExactX)
     (iszero(a.p) || iszero(b.p)) && return zero(ExactX, a.k)
     h = a.k + 2
     Ψ = _psiq(h)
-    inter = intersect(a.rad, b.rad)
-    diff = sort!(symdiff(a.rad, b.rad))
+    inter = intersect(a.sqclass, b.sqclass)
+    diff = sort!(symdiff(a.sqclass, b.sqclass))
     G = _psi_prod(inter, h)
     iszero(G) && return zero(ExactX, a.k)          # a radical that vanishes at this level
     sg = prod(e -> _psi_sign(e, h), inter; init = 1)
@@ -1107,7 +1258,7 @@ function Base.:*(a::ExactX, b::ExactX)
 end
 
 Base.:*(c::Union{Integer,Rational}, v::ExactX) =
-    iszero(c) ? zero(ExactX, v.k) : ExactX(v.k, v.p * QQ(c), v.rad, v.r)
+    iszero(c) ? zero(ExactX, v.k) : ExactX(v.k, v.p * QQ(c), v.sqclass, v.r)
 Base.:*(v::ExactX, c::Union{Integer,Rational}) = c * v
 function Base.:/(v::ExactX, c::Union{Integer,Rational})
     iszero(c) && throw(DivideError())
@@ -1129,9 +1280,20 @@ function Base.inv(v::ExactX)
     S, _ = _qqx()
     q = _divmod_psi(S(1), d, h)
     q === nothing && (q = _invmodq(d, Ψ))
-    return ExactX(v.k, q, copy(v.rad), v.r)
+    return ExactX(v.k, q, copy(v.sqclass), v.r)
 end
 Base.:/(a::ExactX, b::ExactX) = a * inv(b)
+Base.:/(c::Union{Integer,Rational}, v::ExactX) = c * inv(v)
+
+"""
+    is_provably_nonzero(v::ExactX) -> Bool
+
+Whether the value is nonzero by an exact argument. A single value carries one square class, so its
+coefficient decides — there is nothing here for the norm of [`is_provably_nonzero(::ExactXSum)`](@ref)
+to do, and that is the whole difference between a value and a sum of them.
+"""
+is_provably_nonzero(v::ExactX) =
+    !iszero(v.p) && (isempty(v.sqclass) || !iszero(v.r))
 
 function Base.:^(v::ExactX, n::Integer)
     n < 0 && return inv(v)^(-n)
@@ -1165,7 +1327,7 @@ end
 ExactXSum(k::Integer) = ExactXSum(Int(k), Dict{Vector{Int},QQPolyRingElem}())
 function ExactXSum(v::ExactX)
     iszero(v.p) && return ExactXSum(v.k)
-    return ExactXSum(v.k, Dict(copy(v.rad) => v.p))
+    return ExactXSum(v.k, Dict(copy(v.sqclass) => v.p))
 end
 Base.zero(::Type{ExactXSum}, k::Integer) = ExactXSum(k)
 Base.zero(s::ExactXSum) = ExactXSum(s.k)
@@ -1313,6 +1475,7 @@ function Base.float(s::ExactXSum, ::Type{T} = Float64) where {T<:AbstractFloat}
     return T(v)
 end
 Base.Float64(s::ExactXSum) = float(s, Float64)
+evaluate_exact(s::ExactXSum, ::Type{T} = ComplexF64) where {T} = T(float(s, Float64))
 
 function Base.show(io::IO, s::ExactXSum)
     isempty(s.terms) && return print(io, "ExactXSum(k = ", s.k, ", 0)")
@@ -1332,4 +1495,31 @@ function Base.show(io::IO, ::MIME"text/plain", s::ExactXSum)
     end
     v = numeric_value(s)
     print(io, v === nothing ? "  (the value could not be certified numerically)" : "  ≈ " * string(Float64(v)))
+end
+
+"""
+    _verify_be_x(k, L) -> ExactXSum
+
+Biedenharn–Elliott at level `k` in the real basis, as the difference of its two sides. `L` is the nine
+doubled labels `(A,B,C,D,E,F,P,Q,R)` and the statement is
+
+    Σ_X (−1)^{(ΣL+X)/2} [X+1] {A B X; C D P}{C D X; E F Q}{E F X; B A R} = {P Q R; E A D}{P Q R; F B C}
+
+the same form `exact_identities.jl` verifies over ℚ(ζ₂ₕ), at half the degree. The result is a sum keyed
+by square class, so `isempty` is already a proof and `iszero` only has to work when it is not.
+"""
+function _verify_be_x(k::Int, L::NTuple{9,Int})
+    A, B, C, D, E, F, P, Q, R = L
+    (_qδtet(P, Q, R, E, A, D, k) && _qδtet(P, Q, R, F, B, C, k)) ||
+        throw(ArgumentError("right-hand symbols must be level-admissible"))
+    lhs = ExactXSum(k)
+    for X in max(abs(A - B), abs(C - D), abs(E - F)):min(A + B, C + D, E + F, k)
+        js = ((A, B, X, C, D, P), (C, D, X, E, F, Q), (E, F, X, B, A, R))
+        all(j -> _qδtet(j..., k), js) || continue
+        t = exact_x(sixj_sum(js[1]...), k) * exact_x(sixj_sum(js[2]...), k) *
+            exact_x(sixj_sum(js[3]...), k) * _qint_exactx(k, X + 1)
+        lhs = lhs + (isodd((sum(L) + X) ÷ 2) ? -t : t)
+    end
+    rhs = exact_x(sixj_sum(P, Q, R, E, A, D), k) * exact_x(sixj_sum(P, Q, R, F, B, C), k)
+    return lhs - ExactXSum(rhs)
 end
