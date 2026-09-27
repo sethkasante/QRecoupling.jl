@@ -34,7 +34,8 @@ end
 # --- Base & Properties ---
 
 Base.:(==)(a::CompositeExactResult, b::CompositeExactResult) = (a.k == b.k) && (a.terms == b.terms)
-Base.iszero(comp::CompositeExactResult) = isempty(comp.terms)
+# `iszero` is defined at the end of this file: with several radical classes it needs an argument,
+# not just an empty check. See `is_provably_nonzero`.
 Base.zero(comp::CompositeExactResult{T}) where T = CompositeExactResult(comp.k, T)
 
 Base.length(comp::CompositeExactResult) = length(comp.terms)
@@ -71,7 +72,7 @@ function Base.:*(a::CompositeExactResult{T}, b::CompositeExactResult{T}) where T
             reset!(buf)
             mul!(buf, rad_a, rad_b)
             root_mono, new_rad = snapshot_square_root(buf)
-            root_val = project_exact(root_mono, a.k) #project perfect square
+            root_val = _exact_coefficient(T, project_exact(root_mono, a.k)) #project perfect square
             new_factor = fac_a * fac_b * root_val
             term = CompositeExactResult(a.k, new_rad, new_factor)
             result = result + term
@@ -81,11 +82,11 @@ function Base.:*(a::CompositeExactResult{T}, b::CompositeExactResult{T}) where T
 end
 
 "Non-negative integer powers, by repeated multiplication (radicals fuse at every step)."
-function Base.:^(comp::CompositeExactResult, n::Integer)
+function Base.:^(comp::CompositeExactResult{T}, n::Integer) where T
     n < 0 && throw(ArgumentError("negative powers of a CompositeExactResult are not supported"))
     if n == 0
         K, _ = cyclotomic_field(2 * (comp.k + 2), "ζ")
-        return CompositeExactResult(comp.k, ONE_MONOMIAL, K(1))
+        return CompositeExactResult(comp.k, ONE_MONOMIAL, _exact_coefficient(T, K(1)))
     end
     result = comp
     for _ in 2:n
@@ -112,10 +113,10 @@ function Base.:+(c, comp::CompositeExactResult{T}) where T
     c_nemo = if c isa T
         c
     elseif !isempty(comp.terms)
-        parent(first(values(comp.terms)))(c)
+        _exact_coefficient(T, parent(first(values(comp.terms)))(c))
     else
         K, _ = cyclotomic_field(2 * (comp.k + 2), "ζ")
-        K(c)
+        _exact_coefficient(T, K(c))
     end
     return CompositeExactResult(comp.k, ONE_MONOMIAL, c_nemo) + comp
 end
@@ -330,4 +331,91 @@ function Base.show(io::IO, res::ClassicalResult)
     else
         print(io, res.sign < 0 ? "-" : "", "√(", res.sq_val, ")")
     end
+end
+
+# ---------------------------------------------------------------------------------
+#  Deciding whether a composite exact value vanishes
+#
+#  `terms` groups by a *formal* square-free monomial, which is the right bookkeeping for building products
+#  and sums but is not a square class in ℚ(ζ_{2h}): at q = ζ₈, Φ₃(q²) = q⁴+q²+1 = q², so a formal radical
+#  can collapse into the base field and two different keys can then be the same class. Consequently an
+#  empty `terms` proves the value vanishes, but a surviving coefficient does **not** prove it does not —
+#  two classes that coincide after specialisation can cancel.
+#
+#  Nemo has no square test for a number-field element, so instead of deciding square classes we eliminate
+#  the radicals: multiplying by the conjugates that flip each root's sign gives the norm
+#  ∏_ε (Σ_i ε_i c_i √A_i), which lies in the base field and is computed with the existing radical-fusing
+#  multiplication. A nonzero norm **proves** the value is nonzero. A zero norm says only that *some* sign
+#  choice vanishes, and the branch is then settled numerically, with the two candidates separated by the
+#  full size of a term rather than by a rounding.
+# ---------------------------------------------------------------------------------
+
+"""
+    radical_norm(comp) -> field element or nothing
+
+∏ over all sign choices of the roots, which lies in ℚ(ζ_{2h}) because every root appears to an even total
+power. `nothing` when the elimination does not close in a few steps, which the callers treat as undecided
+rather than as an answer.
+"""
+function radical_norm(comp::CompositeExactResult{T}) where {T}
+    isempty(comp.terms) && return nothing
+    cur = comp
+    for _ in 1:6
+        ks = collect(keys(cur.terms))
+        if length(ks) == 1
+            is_identity(ks[1]) || return nothing
+            return first(values(cur.terms))
+        end
+        pick = ks[end]
+        conj = CompositeExactResult{T}(cur.k,
+            Dict{CyclotomicMonomial,T}(k2 => (k2 == pick ? -c : c) for (k2, c) in cur.terms))
+        cur = cur * conj
+        isempty(cur.terms) && return nothing
+    end
+    return nothing
+end
+
+"""
+    is_provably_nonzero(comp) -> Bool
+
+Whether the value is nonzero *by an exact argument*, with no reliance on distinct formal radical keys being
+independent. One term with a nonzero coefficient and a nonvanishing radical is nonzero; otherwise the norm
+of [`radical_norm`](@ref) decides, and a nonzero norm is a proof. Returns `false` when undecided, so it is
+safe to branch on.
+"""
+function is_provably_nonzero(comp::CompositeExactResult)
+    isempty(comp.terms) && return false
+    if length(comp.terms) == 1
+        rad, c = first(comp.terms)
+        iszero(c) && return false
+        is_identity(rad) && return true
+        return !iszero(project_exact(rad, comp.k))
+    end
+    N = radical_norm(comp)
+    return N !== nothing && !iszero(N)
+end
+
+"""
+Whether a composite exact value is zero.
+
+An empty term list is zero by construction. A single term is nonzero unless its radical vanishes. With
+several terms the formal keys may not be independent, so the norm decides: a nonzero norm proves the value
+is nonzero. A zero norm means some sign choice of the roots vanishes; which one is settled by evaluating,
+and the candidates differ by the whole size of a term, so the comparison is not delicate.
+"""
+function Base.iszero(comp::CompositeExactResult)
+    isempty(comp.terms) && return true
+    is_provably_nonzero(comp) && return false
+    length(comp.terms) == 1 && return true          # its radical vanishes
+    v = try
+        evaluate_exact(comp)
+    catch
+        return false                                 # cannot evaluate: keep the structural answer
+    end
+    scale = zero(real(float(abs(v))))
+    for (rad, c) in comp.terms
+        t = CompositeExactResult(comp.k, rad, c)
+        scale = max(scale, abs(evaluate_exact(t)))
+    end
+    return abs(v) <= 1e-20 * max(scale, one(scale))
 end
