@@ -93,8 +93,8 @@ close(a, b; tol = 1e-11) = isapprox(a, b; atol = tol, rtol = tol)
     @testset "Quantum dimensions and monomials" begin
         @test qdim(1/2, k=2) ≈ sqrt(2.0) atol=1e-14
         m = qdim(Symbolic(), 1/2)
-        @test m.q_pow == -1
-        @test m.phi_exps == [2 => 1]
+        @test m isa SymbolicValue
+        @test xvalue(m).num == QR.qint_x(2)
         @test rmatrix(0.5, 0.5, 0.0, k=1) ≈ -cispi(-1/2)
         # [2j+1] keeps its sign above the level: [n] = sin(nπ/h)/sin(π/h)
         for k in (1, 4, 7), J in 0:3(k+2)
@@ -105,7 +105,7 @@ close(a, b; tol = 1e-11) = isapprox(a, b; atol = tol, rtol = tol)
     @testset "Admissibility and input validation" begin
         @test q6j(1, 1, 3, 1, 1, 1, k=10) == 0.0
         @test q6j(1, 1, 1, 1, 1, 1, k=2) == 0.0
-        @test q6j(Symbolic(), 1, 1, 3, 1, 1, 1).base.sign == 0
+        @test iszero(q6j(Symbolic(), 1, 1, 3, 1, 1, 1))
         @test iszero(q6j(1, 1, 1, 1, 1, 1, k=2, exact=true))
         @test_throws ArgumentError q6j(0.3, 0.3, 0.6, 0.3, 0.3, 0.6, k=10)
         @test_throws ArgumentError qdim(1//3, k=5)
@@ -126,6 +126,9 @@ close(a, b; tol = 1e-11) = isapprox(a, b; atol = tol, rtol = tol)
             ref = sixj_ref_level(J, k)
             @test q6j(js..., k=k) ≈ ref atol=1e-12
             @test q6j(js..., k=k, eager=true) ≈ ref atol=1e-12
+            # the analytic route at an *exact* root of unity: correct for the Float64 q that was
+            # passed, but that q is a rounded root of unity, so the tolerance is loose and the call
+            # warns (maxlog'd) — the level target is what this cross-check exists to validate
             @test real(q6j(js..., q=cispi(1 / (k + 2)))) ≈ ref atol=1e-9
             if trial % 5 == 0
                 ex = QR.evaluate_exact(q6j(js..., k=k, exact=true))
@@ -200,14 +203,17 @@ close(a, b; tol = 1e-11) = isapprox(a, b; atol = tol, rtol = tol)
     end
 
     @testset "Exact arithmetic and phases" begin
-        r = q6j(1, 1, 1, 1, 1, 1, k=5, exact=true)
+        # A `QPhase` is a root of unity and an `ExactX` is real, so their product leaves ℚ(x): phases
+        # multiply the cyclotomic carrier, which is what `form = :canonical` still hands back.
+        r = q6j(Exact(5; form = :canonical), 1, 1, 1, 1, 1, 1)
         v = QR.evaluate_exact(r)
         @test QR.evaluate_exact(QPhase(Int8(-1), 3//1) * r) ≈ -cispi(3/7) * v atol=1e-14
         @test_throws ArgumentError QPhase(Int8(1), 1//2) * r
+        @test isapprox(real(v), Float64(q6j(Exact(5), 1, 1, 1, 1, 1, 1)); rtol = 1e-12)
         @test QR.rmatrix_mono(2, 2, 2) isa QPhase
         @test QR.rmatrix_mono(2, 2, 2) == rmatrix(Symbolic(), 1, 1, 1)
         d = q6j(Symbolic(), 1, 1, 1, 1, 1, 1)
-        @test qeval(QR.fuse_root(d, qint(3)), k=10) ≈ qeval(d, k=10) * qeval(qint(3), k=10)
+        @test qeval(QR.fuse_root(d.dcr, qint(3)), k=10) ≈ qeval(d, k=10) * qeval(qint(3), k=10)
 
         # exact orthogonality in ℚ(ζ): Σ_x [2x+1] {1 1 x; 1 1 1}^2 = 1/[3]
         k = 5
@@ -557,7 +563,12 @@ close(a, b; tol = 1e-11) = isapprox(a, b; atol = tol, rtol = tol)
         # targets are the keywords
         @test q6j(Level(7), 1, 1, 1, 1, 1, 1) == q6j(1, 1, 1, 1, 1, 1; k = 7)
         @test q6j(Level(7; T = BigFloat), 1, 1, 1, 1, 1, 1) == q6j(1, 1, 1, 1, 1, 1; k = 7, T = BigFloat)
-        @test q6j(Exact(7), 1, 1, 1, 1, 1, 1) == q6j(1, 1, 1, 1, 1, 1; k = 7, exact = true)
+        # the two carriers are different types now and agree as numbers
+        @test isapprox(real(QR.evaluate_exact(q6j(Exact(7; form = :canonical), 1, 1, 1, 1, 1, 1))),
+                       Float64(q6j(1, 1, 1, 1, 1, 1; k = 7, exact = true)); rtol = 1e-12)
+        # `exact = true` and `Exact(k)` are the same thing: the real basis
+        @test q6j(1, 1, 1, 1, 1, 1; k = 7, exact = true) == q6j(Exact(7), 1, 1, 1, 1, 1, 1)
+        @test q6j(Exact(7), 1, 1, 1, 1, 1, 1) isa ExactX
         @test q6j(At(0.7), 1, 1, 1, 1, 1, 1) == q6j(1, 1, 1, 1, 1, 1; q = 0.7)
         @test q6j(Classical(), 1, 1, 1, 1, 1, 1) == q6j(1, 1, 1, 1, 1, 1; q = 1)
         @test q6j(Classical(exact = true), 1, 1, 1, 1, 1, 1) == q6j(1, 1, 1, 1, 1, 1; q = 1, exact = true)
@@ -791,9 +802,24 @@ close(a, b; tol = 1e-11) = isapprox(a, b; atol = tol, rtol = tol)
         end
     end
 
+    # include("exact_cleared.jl")
+    # include("exact_deferred.jl")
+    # include("generic_x.jl")
+    # include("exact_x.jl")
+    # include("exact_interface.jl")
+    # include("symbolic_clean.jl")
+    # include("phi_form.jl")
+    # include("coherence.jl")
+    # include("real_q_columns.jl")
+    # include("symbols.jl")
+    # include("fmatrix.jl")
+    # include("modular.jl")
+    # include("radical_classes.jl")
+
     # include("near_edge.jl")
     # include("analytic.jl")
     # include("analytic_rules.jl")
+    # include("generic_q.jl")
     # include("factorial_rules.jl")
     # include("classical_exact.jl")
     # include("api_v04.jl")
