@@ -213,7 +213,7 @@ close(a, b; tol = 1e-11) = isapprox(a, b; atol = tol, rtol = tol)
         @test QR.rmatrix_mono(2, 2, 2) isa QPhase
         @test QR.rmatrix_mono(2, 2, 2) == rmatrix(Symbolic(), 1, 1, 1)
         d = q6j(Symbolic(), 1, 1, 1, 1, 1, 1)
-        @test qeval(QR.fuse_root(d.dcr, qint(3)), k=10) ≈ qeval(d, k=10) * qeval(qint(3), k=10)
+        @test qeval(QR.fuse_root(d.dcr, QR.qint_mono(3)), k=10) ≈ qeval(d, k=10) * qint(3; k=10)
 
         # exact orthogonality in ℚ(ζ): Σ_x [2x+1] {1 1 x; 1 1 1}^2 = 1/[3]
         k = 5
@@ -222,12 +222,12 @@ close(a, b; tol = 1e-11) = isapprox(a, b; atol = tol, rtol = tol)
     end
 
     @testset "Series construction" begin
-        interior(z) = z == 1 ? QR.ZERO_MONOMIAL : qint(z + 2)
+        interior(z) = z == 1 ? QR.ZERO_MONOMIAL : QR.qint_mono(z + 2)
         @test_throws ArgumentError qseries(interior, 0:3)
-        tail = qseries(z -> z >= 2 ? QR.ZERO_MONOMIAL : qint(z + 2), 0:3)
-        @test qeval(tail, q=0.7) ≈ qeval(qint(2), q=0.7) + qeval(qint(3), q=0.7)
-        lead = qseries(z -> z == 0 ? QR.ZERO_MONOMIAL : qint(z + 2), 0:3)
-        @test qeval(lead, q=0.7) ≈ sum(qeval(qint(n), q=0.7) for n in 3:5)
+        tail = qseries(z -> z >= 2 ? QR.ZERO_MONOMIAL : QR.qint_mono(z + 2), 0:3)
+        @test qeval(tail, q=0.7) ≈ qint(2; q=0.7) + qint(3; q=0.7)
+        lead = qseries(z -> z == 0 ? QR.ZERO_MONOMIAL : QR.qint_mono(z + 2), 0:3)
+        @test qeval(lead, q=0.7) ≈ sum(qint(n; q=0.7) for n in 3:5)
         buf = QR.CycloBuffer(8)
         buf.sign = 0
         dcr = build_dcr!(buf, b -> nothing, (b, z) -> add_qfact!(b, z), (b, z) -> add_qint!(b, z + 1), 1, 3)
@@ -803,13 +803,13 @@ close(a, b; tol = 1e-11) = isapprox(a, b; atol = tol, rtol = tol)
     end
 
     # include("exact_cleared.jl")
-    # include("exact_deferred.jl")
     # include("generic_x.jl")
     # include("exact_x.jl")
     # include("exact_interface.jl")
     # include("symbolic_clean.jl")
     # include("phi_form.jl")
     # include("coherence.jl")
+    # include("coherence_exact.jl")
     # include("real_q_columns.jl")
     # include("symbols.jl")
     # include("fmatrix.jl")
