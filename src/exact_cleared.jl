@@ -271,7 +271,7 @@ The exact Racah sum Σ_z project(root·base·∏ratios) with the ratio walk repl
 first monomial is projected once, and the nesting comes from two integer polynomials. `nothing` when the
 preconditions of `_cleared_nesting` do not hold, so the caller keeps its term-by-term projector.
 """
-function _cleared_exact_sum(s::FactorialSum, dcr::DCR, k::Int, V_exact, V_inv, ζ, h::Int; deferred::Bool=false)
+function _cleared_exact_sum(s::FactorialSum, dcr::DCR, k::Int, V_exact, V_inv, ζ, h::Int)
     nest = _cleared_nesting(s, k)
     nest === nothing && return nothing
     P, Q, sigma = nest
@@ -292,7 +292,7 @@ function _cleared_exact_sum(s::FactorialSum, dcr::DCR, k::Int, V_exact, V_inv, �
     v2 < 0 && throw(DomainError(k, "Topological pole at level k=$k."))
     # With no vanishing denominator the valuations only increase along the sum, so a finite first term
     # guarantees the rest: the nesting cannot introduce a pole.
-    v2 > 0 && return deferred ? ExactLevelFraction(zero(ζ)) : zero(ζ)
+    v2 > 0 && return zero(ζ)
     first_val = _project_monomial_nemo_internal(first_mono, V_exact, V_inv, ζ, h)
-    return deferred ? ExactLevelFraction(first_val * pv, qv) : first_val * (pv // qv)
+    return first_val * (pv // qv)
 end

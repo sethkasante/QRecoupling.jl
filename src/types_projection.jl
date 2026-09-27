@@ -18,6 +18,13 @@ struct CompositeExactResult{T}
 end
 
 #empty 
+"""
+Coefficient of a `CompositeExactResult` in whatever carrier it is parameterised by. The identity is all
+that is left now that the deferred fraction carrier is gone; the hook stays because the canonical route
+is still generic in its coefficient type until the cyclotomic layer goes in v0.5.
+"""
+_exact_coefficient(::Type{T}, x) where {T} = x
+
 function CompositeExactResult(k::Int, ::Type{T}) where T
     return CompositeExactResult{T}(k, Dict{CyclotomicMonomial, T}())
 end

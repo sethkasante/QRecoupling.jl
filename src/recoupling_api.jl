@@ -196,11 +196,8 @@ end
 
 #---- clear caches ---
 
-clear_numeric_caches!() = (@lock _NUMERIC_MODEL_LOCK empty!(_NUMERIC_MODEL_CACHE); nothing)
-
 function clear_exact_caches!()
     @lock EXACT_PHI_LOCK empty!(EXACT_PHI_CACHE)
-    @lock EXACT_MODEL_LOCK empty!(EXACT_MODEL_CACHE)
     return nothing
 end
 
@@ -226,7 +223,6 @@ Useful for freeing memory in long sessions or before benchmarking. The small cla
 sieve is kept, because it is read without a lock.
 """
 function empty_caches!()
-    clear_numeric_caches!()
     clear_analytic_caches!()
     clear_exact_caches!()
     clear_sieve_caches!()

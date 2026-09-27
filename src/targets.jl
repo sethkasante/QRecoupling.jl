@@ -41,15 +41,11 @@ Exact level values.
   ladder — rational, a surd, nested radicals, or a polynomial in `x`, whichever is exact and short. It
   is closed under `*`, `inv` and `^`, and sums of it are [`ExactXSum`](@ref).
 * `form=:canonical` returns canonical cyclotomic coefficients in ℚ(ζ₂ₕ). This was the default before the
-  real basis existed; it is what the `exact = true` keyword still returns, and it carries
-  `ExactLevelFraction`, the deferred form and the braiding phases.
-* `form=:deferred` retains numerator/denominator pairs where the cleared kernel applies, avoiding field
-  division until `canonicalize_exact` or numerical conversion.
+  real basis existed, and it is deprecated: it will be removed with the rest of the cyclotomic layer in
+  v0.5.
 
-All three use deterministic arithmetic; modular screening alone never establishes an exact zero.
-
-`form=:deferred` supports scalar/collection recoupling symbols, level sweeps, and `qeval` of factorial
-rules, DCRs and cyclotomic monomials. Exact braiding phases retain their existing `QPhase` form.
+Both use deterministic arithmetic; modular screening alone never establishes an exact zero. Exact
+braiding phases retain their `QPhase` form in either.
 
 ```julia
 q6j(Exact(3), 1, 1, 1, 1, 1, 1)                    # (√5 − 3)/2, the Fibonacci level
@@ -60,8 +56,8 @@ struct Exact{K} <: EvalTarget
     k::K
     form::Symbol
     function Exact(k::K; form::Symbol=:x) where K
-        form in (:canonical,:deferred,:x) ||
-            throw(ArgumentError("exact form must be :x, :canonical or :deferred"))
+        form in (:canonical,:x) ||
+            throw(ArgumentError("exact form must be :x or :canonical"))
         new{K}(k,form)
     end
 end
@@ -99,11 +95,6 @@ Base.show(io::IO, t::Classical) = print(io, "Classical(", t.exact ? "; exact = t
 for f in (:q6j, :q3j, :fsymbol, :gsymbol, :rmatrix, :tetrahedron, :theta_value, :qdim, :qeval, :twist)
     @eval function $f(t::EvalTarget, args...; kw...)
         t isa Symbolic && throw(ArgumentError("Symbolic() does not accept evaluation keywords"))
-        if t isa Exact && t.form === :deferred
-            isempty(kw) || throw(ArgumentError("deferred exact targets do not accept evaluation keywords"))
-            _deprecated_cyclotomic()
-            return _deferred_target($f,t.k,args...)
-        end
         if t isa Exact && t.form === :x
             isempty(kw) || throw(ArgumentError("`form = :x` targets do not accept evaluation keywords"))
             return _exact_x_target($f,t.k,args...)
@@ -168,85 +159,19 @@ for (f,nlab) in ((:q6j,:((6,))),(:q3j,:((5,6))),(:fsymbol,:((6,))),(:gsymbol,:((
 end
 
 
-# Deferred targets share rule/admissibility definitions with the structural queries.
-function _deferred_target(f,k::AbstractVector,args...)
-    return [_deferred_target(f,kk,args...) for kk in k]
-end
-function _deferred_target(f,k,args...)
-    k isa Integer || throw(ArgumentError("exact level must be an integer"))
-    kk=Int(k); kk>=0 || throw(DomainError(kk,"level must be nonnegative"))
-    if f === rmatrix
-        return rmatrix(args...;k=kk,exact=true)
-    elseif f === twist
-        return twist(args...;k=kk,exact=true)          # a phase, exact at any level
-    elseif f === qeval
-        length(args)==1 || throw(ArgumentError("qeval requires one expression"))
-        s=only(args)
-        s isa SymbolicValue && return _project_deferred(s.dcr,kk;rule=s.rule)
-        if s isa FactorialSum
-            _validate_rule(s)
-            return _project_deferred(_factorial_dcr(s),kk;rule=s)
-        elseif s isa DCR
-            return _project_deferred(s,kk)
-        elseif s isa CyclotomicMonomial
-            return ExactLevelFraction(project_exact(s,kk))
-        end
-        throw(ArgumentError("unsupported deferred exact expression"))
-    elseif f === qdim || f === theta_value
-        # the deferred form is a cyclotomic fraction, so it takes the monomial route rather than
-        # `exact = true`, which now means the real basis
-        mono = f === qdim ? qdim_mono(doubled(only(args))) :
-               (Js = doubled(args...); _qδ(Js...,kk) ? theta_mono(Js...) : ZERO_MONOMIAL)
-        return ExactLevelFraction(qeval(mono;k=kk,exact=true))
-    end
-    # Match the existing collection convention, without sharing mutable arithmetic between calls.
-    if length(args)==1
-        L=_normalize_labels(only(args),f === q3j ? (5,6) : (6,),string(f))
-        return [_deferred_target(f,kk,l...) for l in L]
-    end
-    s=f === tetrahedron ? tetrahedron_sum(doubled(args...)...) : _rule_for(f,args...)
-    admissible=f === tetrahedron ? _qδtet(doubled(args...)...,kk) : _admissible_at(f,kk,args...)
-    if !admissible
-        _,z=cyclotomic_field(2(kk+2),"ζ")
-        return CompositeExactResult(kk,typeof(ExactLevelFraction(zero(z))))
-    end
-    return _project_deferred(_factorial_dcr(s),kk;rule=s)
-end
 
 
-"""
-    verify_biedenharn_elliott(Exact(k), labels; workspace = nothing)
-
-Whether the Biedenharn–Elliott identity holds exactly at level `k` for nine spin labels.
-
-Verified in the **real basis** ℚ[x]/Ψ_h, at half the degree of the cyclotomic field this used to run in;
-the difference of the two sides comes back as an `ExactXSum` keyed by square class, and cancels to an
-empty term list, which is a proof that needs neither a norm nor a numeric fallback.
-
-`workspace` is accepted for compatibility and its level is still checked, but the real-basis route owns
-no per-level scratch and ignores it. It will be removed with the rest of the cyclotomic layer in v0.5.
-"""
-function verify_biedenharn_elliott(t::Exact,labels;workspace=nothing)
-    t.k isa Integer || throw(ArgumentError("identity verification requires a scalar integer level"))
-    k=Int(t.k);k>=0 || throw(DomainError(k,"level must be nonnegative"))
-    length(labels)==9 || throw(ArgumentError("expected nine spin labels"))
-    if workspace !== nothing
-        workspace isa ExactLevelWorkspace || throw(ArgumentError("expected ExactLevelWorkspace"))
-        workspace.k == k || throw(ArgumentError("exact workspace level mismatch"))
-    end
-    return iszero(_verify_be_x(k,doubled(labels...)))
-end
 
 
 """
 Warn once. The cyclotomic carrier ℚ(ζ₂ₕ) is no longer what the package means by an exact level value —
 `Exact(k)` and `exact = true` both give the real basis ℚ[x]/Ψ_h now. `form = :canonical` and
-`form = :deferred` still work, and still return exactly what they did, so that anything reading
-`CompositeExactResult` or `ExactLevelFraction` keeps working while it migrates; they are scheduled for
+still works, and still returns exactly what it did, so that anything reading
+`CompositeExactResult` keeps working while it migrates; it is scheduled for
 removal in v0.5, on the same footing as `eager = true`.
 """
 _deprecated_cyclotomic() = @warn(
-    "the cyclotomic exact forms (`Exact(k; form = :canonical)` and `form = :deferred`) are deprecated; " *
+    "the cyclotomic exact form `Exact(k; form = :canonical)` is deprecated; " *
     "`Exact(k)` and `exact = true` return the real basis ℚ[x]/Ψ_h. They will be removed in v0.5.",
     maxlog = 1)
 
@@ -288,7 +213,7 @@ function _cyclotomic_zero(k::Int)
 end
 
 # The real-basis target. It reuses the symbol interface for the rule and its admissibility, so a symbol
-# added to `symbols.jl` reaches this form with no work here, and it mirrors `_deferred_target`'s handling
+# added to `symbols.jl` reaches this form with no work here, and it mirrors the canonical route's handling
 # of level sweeps and label collections.
 _exact_x_target(f,k::AbstractVector,args...) = [_exact_x_target(f,kk,args...) for kk in k]
 

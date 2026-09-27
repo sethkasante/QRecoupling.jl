@@ -1087,15 +1087,14 @@ function Base.show(io::IO, ::MIME"text/plain", v::ExactX)
         println(io, "  = ", _rad_str(e))
     elseif kind === :long
         println(io, "  = nested square roots, too long to print")
-        println(io, " `v.rad` returns the expression; `v.x_poly` the polynomial in x")
+        println(io, "    `v.rad` returns the expression, `v.x_poly` the polynomial in x")
     elseif kind === :none
-        # println(io, "  = ", _xform_str(v))
         println(io, "  no radical form: v² has degree ", vd,
                     " over ℚ, and only a power of two is a tower of square roots")
+        println(io, "    `v.x_poly` is the polynomial in x, which is then the only closed form")
     else
-        # println(io, "  = ", _xform_str(v))
-        println(io, "  radical form not attempted at degree ", d,
-                    ";\n `has_radical_form(v)` decides whether one exists, `v.rad` computes it.", )
+        println(io, "  radical form not attempted at degree ", d)
+        println(io, "    `has_radical_form(v)` decides whether one exists, `v.rad` computes it")
     end
     get(io, :approximate, d <= 64) || return nothing
     nv = numeric_value(v)
@@ -1497,29 +1496,3 @@ function Base.show(io::IO, ::MIME"text/plain", s::ExactXSum)
     print(io, v === nothing ? "  (the value could not be certified numerically)" : "  ≈ " * string(Float64(v)))
 end
 
-"""
-    _verify_be_x(k, L) -> ExactXSum
-
-Biedenharn–Elliott at level `k` in the real basis, as the difference of its two sides. `L` is the nine
-doubled labels `(A,B,C,D,E,F,P,Q,R)` and the statement is
-
-    Σ_X (−1)^{(ΣL+X)/2} [X+1] {A B X; C D P}{C D X; E F Q}{E F X; B A R} = {P Q R; E A D}{P Q R; F B C}
-
-the same form `exact_identities.jl` verifies over ℚ(ζ₂ₕ), at half the degree. The result is a sum keyed
-by square class, so `isempty` is already a proof and `iszero` only has to work when it is not.
-"""
-function _verify_be_x(k::Int, L::NTuple{9,Int})
-    A, B, C, D, E, F, P, Q, R = L
-    (_qδtet(P, Q, R, E, A, D, k) && _qδtet(P, Q, R, F, B, C, k)) ||
-        throw(ArgumentError("right-hand symbols must be level-admissible"))
-    lhs = ExactXSum(k)
-    for X in max(abs(A - B), abs(C - D), abs(E - F)):min(A + B, C + D, E + F, k)
-        js = ((A, B, X, C, D, P), (C, D, X, E, F, Q), (E, F, X, B, A, R))
-        all(j -> _qδtet(j..., k), js) || continue
-        t = exact_x(sixj_sum(js[1]...), k) * exact_x(sixj_sum(js[2]...), k) *
-            exact_x(sixj_sum(js[3]...), k) * _qint_exactx(k, X + 1)
-        lhs = lhs + (isodd((sum(L) + X) ÷ 2) ? -t : t)
-    end
-    rhs = exact_x(sixj_sum(P, Q, R, E, A, D), k) * exact_x(sixj_sum(P, Q, R, F, B, C), k)
-    return lhs - ExactXSum(rhs)
-end

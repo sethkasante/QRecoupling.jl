@@ -744,76 +744,11 @@ end
 
 
 # ---------------------------------------------------------------------------------
-#  The coherence identities, generically
-#
-#  `verify_biedenharn_elliott` in `exact_identities.jl` settles these at one scalar level, in the
-#  cyclotomic field, by the same radical cancellation. The functions here settle them for **every** level
-#  at once, because a polynomial identity in x specialises to x = 2cos(π/h) for every h. The two are
-#  complementary: the level version answers about a level, this one answers about the labels.
+#  Triangle admissibility without a level — used by the generic machinery above and by the coherence
+#  examples, which live in the tutorials and the test suite rather than here.
 # ---------------------------------------------------------------------------------
 
 "Triangle admissibility for doubled labels, without a level."
 @inline _tri_x(a::Int, b::Int, c::Int) = a + b >= c && b + c >= a && c + a >= b && iseven(a + b + c)
 @inline _tet_x(a::Int, b::Int, c::Int, d::Int, e::Int, f::Int) =
     _tri_x(a, b, c) && _tri_x(a, e, f) && _tri_x(d, b, f) && _tri_x(d, e, c)
-
-"""
-    prove_biedenharn_elliott(labels) -> NamedTuple
-
-Prove the Biedenharn--Elliott (pentagon) identity for nine doubled spins `(a,b,c,d,e,f,p,q,r)` over ℤ[x],
-hence **at every level and at generic q simultaneously**:
-
-    Σ_x (-1)^{(Σ labels + x)/2} [x+1] {a b x; c d p}{c d x; e f q}{e f x; b a r}
-      = {p q r; e a d}{p q r; f b c} .
-
-Both sides are built from [`generic_sixj`](@ref), so the radicals are handled by the square-class
-arithmetic of [`XValue`](@ref) rather than by hand: the six external triangle classes are common to the two
-sides and cancel in the comparison. The returned `exceptional` field lists the levels at which a
-denominator vanishes, where the generic statement is silent rather than false.
-
-For a single level in the cyclotomic field, use [`verify_biedenharn_elliott`](@ref) instead.
-"""
-function prove_biedenharn_elliott(L::NTuple{9,Int}; kmax::Int = 4096)
-    A, B, C, D, E, F, P, Q, Rr = L
-    (_tet_x(P, Q, Rr, E, A, D) && _tet_x(P, Q, Rr, F, B, C)) ||
-        throw(ArgumentError("both right-hand symbols must be triangle-admissible"))
-    lhs = XSum()
-    for X in max(abs(A - B), abs(C - D), abs(E - F)):min(A + B, C + D, E + F)
-        (_tet_x(A, B, X, C, D, P) && _tet_x(C, D, X, E, F, Q) && _tet_x(E, F, X, B, A, Rr)) || continue
-        iseven(sum(L) + X) || continue
-        t = generic_sixj(A, B, X, C, D, P) * generic_sixj(C, D, X, E, F, Q) *
-            generic_sixj(E, F, X, B, A, Rr)
-        iszero(t) && continue
-        term = xvalue(Int[], qint_x(X + 1)) * t
-        lhs = lhs + XSum(isodd((sum(L) + X) ÷ 2) ? -term : term)
-    end
-    rhs = XSum(generic_sixj(P, Q, Rr, E, A, D) * generic_sixj(P, Q, Rr, F, B, C))
-    return prove_identity(lhs, rhs; kmax = kmax)
-end
-
-prove_biedenharn_elliott(L::AbstractVector{<:Integer}; kw...) =
-    prove_biedenharn_elliott(NTuple{9,Int}(Int.(L)); kw...)
-
-"""
-    prove_orthogonality(a, b, c, d, p, p′) -> NamedTuple
-
-Prove, over ℤ[x] and therefore at every level at once,
-
-    Σ_x [x+1][p+1] {a b x; c d p}{a b x; c d p′} = δ_{p p′} ,
-
-for doubled labels. With `p = p′` every triangle class pairs up, so the statement is radical-free without
-any normalisation; with `p ≠ p′` the two classes generally differ and the sum is proved to vanish termwise
-in the square-class decomposition, which is a decision procedure over ℚ(x) (see [`XSum`](@ref)).
-"""
-function prove_orthogonality(A::Int, B::Int, C::Int, D::Int, P1::Int, P2::Int; kmax::Int = 4096)
-    tot = XSum()
-    for X in max(abs(A - B), abs(C - D)):min(A + B, C + D)
-        (_tet_x(A, B, X, C, D, P1) && _tet_x(A, B, X, C, D, P2)) || continue
-        t = xvalue(Int[], qint_x(X + 1) * qint_x(P1 + 1)) *
-            generic_sixj(A, B, X, C, D, P1) * generic_sixj(A, B, X, C, D, P2)
-        iszero(t) && continue
-        tot = tot + XSum(t)
-    end
-    target = P1 == P2 ? XSum(one(XValue)) : XSum()
-    return prove_identity(tot, target; kmax = kmax)
-end
