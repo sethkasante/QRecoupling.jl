@@ -1,9 +1,10 @@
+
 # ---------------------------------------------------------------------------------
 #  Per-level tables: exact zero tests, q-integer and split-factorial tables, ratio helpers 
 #
 #  Everything a level needs before any symbol is evaluated. Tables are built once per level and read
-#  without a lock (`LevelCache`), which is what makes batches at one level cheap: the tables are the
-#  expensive part and every symbol at the level shares them.
+#  without a lock (`LevelCache`), which is what makes batches at one level cheap. 
+#  the tables are the expensive part and every symbol at the level shares them.
 # ---------------------------------------------------------------------------------
 
 # ---- exact zero test: two Galois conjugates modulo one prime ----
@@ -169,7 +170,7 @@ QIntTables{T}(q, qi, ql, qil, fm, fe, fml, gm, ge, gml, classical::Bool) where {
 
 Split-exponent factorials from q-integers given in a wider `BigFloat` precision: the running product is
 kept exactly as `BigFloat` and each [n]! is rounded to `T` once. Products of ~20 such entries keep ~20 ε of
-relative accuracy at any size, where log tables lose |log [n]!| · ε.
+relative accuracy at any size (cf. log tables lose |log [n]!| · ε).
 """
 function split_factorials(::Type{T}, qhi::Vector{BigFloat}) where {T}
     N = length(qhi)
@@ -314,7 +315,7 @@ end
     _ratio_plan(s, N) -> (ok, plan)
 
 The ratio t_{z+1}/t_z as one load per factor. For [a z + b]!^{±1} with a = ±1 the factor is [n+1]^{±1}
-(a = 1) or [n]^{∓1} (a = −1), n = a z + b, i.e. entry `qq[a z + o]` of the combined table `[q; qi]` (length
+(a = 1) or [n]^{∓1} (a = -1), n = a z + b, i.e. entry `qq[a z + o]` of the combined table `[q; qi]` (length
 2N) for a fixed offset o. `plan` holds the pairs (a, o); `ok` is false when some factor has another slope
 or exponent, and the kernels then use the general branchy loop. Same entries in the same order, so the
 result is bitwise the same — the gain is that the loop has no data-dependent branches (1.3 ns instead of
@@ -366,7 +367,7 @@ end
 "Unit roundoff of T."
 _unit(::Type{T}) where {T} = eps(T) / 2
 
-"γ_m = m·u/(1 − m·u), the standard bound on m relative roundings (Inf when m·u ≥ 1/2)."
+"γ_m = m·u/(1 - m·u), the standard bound on m relative roundings (Inf when m·u ≥ 1/2)."
 @inline function _gamma(::Type{T}, m::Integer) where {T}
     mu = m * _unit(T)
     return mu < 0.5 ? T(mu / (1 - mu)) : T(Inf)
