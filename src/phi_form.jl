@@ -132,23 +132,23 @@ The exact closed form of a DCR in q, as Φ factors times at most one irreducible
 from the DCR, so it is available for any symbolic value the package builds, and it is independent of the
 level.
 
-**This is the expensive expansion**, and [`xvalue`](@ref) is the cheap one. Both carry out the same
+**This is the expensive expansion**, and [`x_form`](@ref) is the cheap one. Both carry out the same
 deferred sum; `phi_form` then *factors* the numerator over ℤ[q], and that factorisation is essentially the
 whole cost — measured on `{6 6 6; 6 6 6}`, 10.1 ms in total of which the sum is 0.07 ms. Against
-`xvalue`'s 0.26 ms on the same symbol that is **38×**, and the two reasons are the two differences: `q`
-has twice the degree of `x` (the numerator here is degree 228 where the x-form is 82), and `xvalue` never
+`x_form`'s 0.26 ms on the same symbol that is **38×**, and the two reasons are the two differences: `q`
+has twice the degree of `x` (the numerator here is degree 228 where the x-form is 82), and `x_form` never
 factors anything.
 
 `maxdeg` caps the degree at which the numerator is factored; above it the numerator is reported by size
 rather than expanded, because a degree-800 polynomial is not a closed form anyone reads. **A truncated
 call is not a cheaper closed form, it is a different answer**, and it is why `phi_form` can look faster
-than `xvalue` on large symbols: at `{9 9 9; 9 9 9}` the numerator reaches degree 504, the default
-`maxdeg = 400` skips the factorisation, and the call returns in 0.40 ms against `xvalue`'s 3.0 ms. Ask for
+than `x_form` on large symbols: at `{9 9 9; 9 9 9}` the numerator reaches degree 504, the default
+`maxdeg = 400` skips the factorisation, and the call returns in 0.40 ms against `x_form`'s 3.0 ms. Ask for
 the factors it declined (`maxdeg = 3000`) and the same call takes 52.8 ms. `truncated` records which
 happened.
 
 `basis = :x` renders the irreducible remainder in `x = q + q⁻¹`, which halves *its* degree. This is not
-what `xvalue` returns: the Φ factors stay in `q` either way and only the remainder moves, whereas `xvalue`
+what `x_form` returns: the Φ factors stay in `q` either way and only the remainder moves, whereas `x_form`
 puts the whole value in `x` over a ψ radical. Everything else is unchanged and the display says what `x`
 is; the default `:q` needs no such explanation, so it is the default.
 """

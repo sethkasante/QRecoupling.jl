@@ -120,7 +120,7 @@ end
 Request a parameter-independent representation instead of evaluation. Recoupling symbols return
 a [`SymbolicValue`](@ref) retaining the factorial rule without constructing a DCR or carrying out the
 sum. Display shows the deferred factorial rule in x for every label size; it never carries out the sum.
-Use `xvalue(value)` to request full expansion, or `value.dcr` for a lazily constructed compatibility DCR.
+Use `x_form(value)` to request full expansion, or `value.dcr` for a lazily constructed compatibility DCR.
 `qdim` and `theta_value` use the same x-form interface. `rmatrix` and `twist` retain `QPhase`
 objects, displayed as algebraic phases over x with their q branch. No evaluation keywords are accepted.
 Use `qeval(Symbolic(), rule)` to lower a `FactorialSum` the same way.

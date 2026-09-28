@@ -288,6 +288,27 @@ function Base.Rational{T}(res::ClassicalResult) where {T <: Integer}
     end
 end
 
+"""
+A classical exact value compares with the number it is.
+
+`q6j(1,1,1,1,1,1; exact = true) == 1//6` used to be a `promote` error: the type is `√(sq_val)` with a
+sign, so equality against a rational is an exact question (is the rational's square the stored one?) and
+`Rational(res)` is the value when the root is rational. Without these a documented result could only be
+checked by converting to `Float64` first, which is the opposite of the point.
+"""
+Base.Rational(res::ClassicalResult) = Rational{BigInt}(res)
+
+function Base.:(==)(a::ClassicalResult, b::Union{Integer,Rational})
+    iszero(a) && return iszero(b)
+    Int(sign(b)) == a.sign || return false
+    return Rational{BigInt}(b)^2 == a.sq_val
+end
+Base.:(==)(b::Union{Integer,Rational}, a::ClassicalResult) = a == b
+Base.:(==)(a::ClassicalResult, b::AbstractFloat) = Float64(a) == b
+Base.:(==)(b::AbstractFloat, a::ClassicalResult) = Float64(a) == b
+Base.isapprox(a::ClassicalResult, b::Real; kwargs...) = isapprox(Float64(a), Float64(b); kwargs...)
+Base.isapprox(a::Real, b::ClassicalResult; kwargs...) = isapprox(Float64(a), Float64(b); kwargs...)
+
 # ---- REPL print ----
 
 function _truncate_nemo_str(x, max_chunks=20)

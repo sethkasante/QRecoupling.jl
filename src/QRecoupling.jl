@@ -67,7 +67,7 @@ export symbol_rule, level_admissible, symbol_family, symbol_of, nlabels
 
 # exact values in x = q + 1/q: generic q, and identities proved for every level at once
 export generic_sixj, prove_identity
-export xvalue, XValue
+export x_form, xvalue, XValue
 export phi_form, splits_completely
 export ExactX, RadExpr, NoRadical, exact_x, radical, radical_form, has_radical_form, radical_levels
 export xpolynomial, radicand, numeric_value, ExactXSum
@@ -80,5 +80,6 @@ export empty_caches!
 export CyclotomicMonomial, DCR, QPhase, SymbolicValue, symbolic_terms
 export AffineFactorial, FactorialSum, EvaluationWorkspace
 export add_qint!, add_qfact!, build_dcr!, build_series
+export qint_mono, qfact_mono, qbinomial_mono
 
 end

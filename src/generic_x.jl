@@ -316,7 +316,7 @@ end
 """
     XValue
 
-The exact value `√(∏_{e ∈ rad} ψ_e(x)) · num/den` with `num, den ∈ ℤ[x]`. Build one with [`xvalue`](@ref),
+The exact value `√(∏_{e ∈ rad} ψ_e(x)) · num/den` with `num, den ∈ ℤ[x]`. Build one with `xvalue(rad, num, den)`,
 which normalises: `rad` is a sorted list of distinct `e ≥ 3` — an 𝔽₂ exponent vector over the ψ basis, and
 therefore a genuine square class in ℚ(x), not a formal key — `gcd(num, den) = 1`, `den` has positive
 leading coefficient, and the pair is primitive. Normalised values are equal as numbers exactly when they are
@@ -333,6 +333,9 @@ end
 
 """
     xvalue(rad, num, den = 1) -> XValue
+
+The `XValue` constructor — not to be confused with [`x_form`](@ref), which expands a symbolic value
+into one. This spelling stays; the one-argument `xvalue(v)` is the deprecated name of `x_form`.
 
 Normalising constructor: cancels `gcd(num, den)`, makes `den` primitive with positive leading coefficient,
 and sorts the radical indices. A zero numerator gives the canonical zero.

@@ -8,7 +8,7 @@
 #  the labels, so what you see for j = 1 and for j = 30 is the same kind of object.
 #
 #  Expanding is a separate, explicit request, and there are two of them because there are two bases:
-#  `xvalue(v)` carries out the sum in x = q + q⁻¹, and `phi_form(v)` carries it out in q and factors the
+#  `x_form(v)` carries out the sum in x = q + q⁻¹, and `phi_form(v)` carries it out in q and factors the
 #  result over the cyclotomics. The second is the expensive one — see its docstring.
 # ---------------------------------------------------------------------------------
 
@@ -28,11 +28,11 @@ Expanding is a separate request, and which of the two you want depends on the ba
 | | | cost at j = 6 |
 |---|---|---|
 | `symbolic_terms(v)` | the summands as `CyclotomicMonomial`s, unsummed | 1 µs, exponent arithmetic |
-| `xvalue(v)` | the sum carried out in `x`: `√(∏ψ)·P(x)/Q(x)` | 0.3 ms |
+| `x_form(v)` | the sum carried out in `x`: `√(∏ψ)·P(x)/Q(x)` | 0.3 ms |
 | `phi_form(v)` | the sum carried out in `q` and **factored** over the cyclotomics | 10 ms |
 
-`phi_form` is thirty to fifty times the cost of `xvalue` on the same symbol, and essentially all of the
-difference is one call to `factor` over ℤ[q]; see its docstring. `xvalue` is cached on the value,
+`phi_form` is thirty to fifty times the cost of `x_form` on the same symbol, and essentially all of the
+difference is one call to `factor` over ℤ[q]; see its docstring. `x_form` is cached on the value,
 `phi_form` is not.
 
 `Exact(k)` specialises the same expression to a level.
@@ -61,27 +61,38 @@ Base.propertynames(v::SymbolicValue, private::Bool=false) =
     private ? (:rule,:dcr,:_dcache,:_xcache,:_xlock) : (:rule,:dcr)
 
 """
-    xvalue(v::SymbolicValue) -> XValue
+    x_form(v::SymbolicValue) -> XValue
 
 The exact value for generic `q` as `√(∏_{e ∈ rad} ψ_e(x)) · num(x)/den(x)`, `x = q + q⁻¹`.
 
-This is the **cheaper of the two expansions** — `phi_form(v)` carries out the same sum in `q` and then
-factors it, which costs 30–50× as much (0.26 ms against 10.1 ms on `{6 6 6; 6 6 6}`). Use `xvalue` unless
-the cyclotomic factors are what you are after.
+Named for its pair: `x_form(v)` carries the sum out in `x`, [`phi_form`](@ref) carries it out in `q` and
+factors it, which costs 30–50× as much (0.26 ms against 10.1 ms on `{6 6 6; 6 6 6}`). Use `x_form`
+unless the cyclotomic factors are what you are after.
+
+It was called `xvalue`, one letter from `ExactX`'s `v.x_value` and meaning something else — that one is
+the stored `(P, R)` of a value at a level, this one is an expansion of a generic-`q` rule. The old name
+still works and warns; it goes in v0.5.
 
 Expansion is explicit and may still be expensive at large labels; nothing about displaying `v` triggers
 it. The result is cached on the symbolic value, so asking twice is free; callers receive an owned copy, so
 mutating its polynomial coefficients cannot corrupt later requests or display. Square roots describe the
 formal algebraic expression; numerical evaluation uses the rule's branch convention.
 """
-function _cached_xvalue(v::SymbolicValue)
+function _cached_x_form(v::SymbolicValue)
     lock(v._xlock) do
         v._xcache[] === nothing && (v._xcache[] = generic_value(v.rule))
         return v._xcache[]::XValue
     end
 end
-xvalue(v::SymbolicValue) = deepcopy(_cached_xvalue(v))
-xvalue(s::FactorialSum) = generic_value(_validate_rule(s))
+x_form(v::SymbolicValue) = deepcopy(_cached_x_form(v))
+x_form(s::FactorialSum) = generic_value(_validate_rule(s))
+
+"Warn once: the expansion is `x_form`, and `xvalue` is the `XValue` constructor it was confused with."
+_deprecated_xvalue() = @warn("`xvalue(v)` is deprecated; the expansion in x is `x_form(v)` " *
+                             "(`v.x_value` is a different thing: the stored (P, R) of an `Exact(k)` " *
+                             "value). It will be removed in v0.5.", maxlog = 1)
+xvalue(v::SymbolicValue) = (_deprecated_xvalue(); x_form(v))
+xvalue(s::FactorialSum) = (_deprecated_xvalue(); x_form(s))
 
 phi_form(v::SymbolicValue; kwargs...) = phi_form(v.dcr; kwargs...)
 splits_completely(v::SymbolicValue) = splits_completely(phi_form(v))
@@ -189,7 +200,7 @@ The rule as it stands, in `x`: a prefactor over the ψ basis times `Σ_z (−1)^
 
 Nothing is summed, so this costs the same for two terms and for two hundred, and it is what `Symbolic()`
 shows for *every* symbol. It used to expand small rules automatically, which made `{1 1 1; 1 1 1}` and
-`{8 8 8; 8 8 8}` print different kinds of object and hid where the cost of expansion begins; `xvalue(v)`
+`{8 8 8; 8 8 8}` print different kinds of object and hid where the cost of expansion begins; `x_form(v)`
 asks for that explicitly now.
 
 A one-term sum is written without the `Σ`, since `Σ[z=0:0]` in front of a single product is noise —
@@ -245,13 +256,13 @@ function Base.show(io::IO, ::MIME"text/plain", v::SymbolicValue)
     v.rule.sqrt_pre && println(io,"  ψ_e(x) is the minimal polynomial of 2cos(2π/e)")
     n = v.rule.zhi-v.rule.zlo+1
     println(io,"  ",n,n == 1 ? " term" : " terms","; the sum has not been expanded")
-    print(io,"  `xvalue(v)` carries out the sum in x; `phi_form(v)` carries it out in q and factors it")
+    print(io,"  `x_form(v)` carries out the sum in x; `phi_form(v)` carries it out in q and factors it")
 end
 
 """
 Numerator, denominator and radical of the x-form, rendered — or described when too large to read.
 
-Lives here because `show(::XValue)` is the only thing that needs it; losing it is what made `xvalue(v)`
+Lives here because `show(::XValue)` is the only thing that needs it; losing it is what made `x_form(v)`
 throw `UndefVarError: _xvalue_str` rather than print.
 """
 function _xvalue_str(xv::XValue)
