@@ -191,11 +191,18 @@ end
 
 Quantum dimension [2j+1], classical by default. Use `qdim(Symbolic(), j)` for a rule-backed x-form.
 """
-function qdim(j::Spin; k=nothing,q=nothing,exact::Bool=false,T::Type=Float64)
+# Constant propagation of the default `exact = false` lets inference drop the exact branch, so a numeric
+# call returns a concrete Float64 instead of a boxed Union with `ExactX` — the last allocation on this path.
+Base.@constprop :aggressive function qdim(j::Spin; k=nothing,q=nothing,exact::Bool=false,
+                                          T::Type{TT}=Float64) where {TT}
     q = _evaluation_q(k,q,exact)
     J = doubled(j)
     # [J+1] = [J+1]!/[J]! — no sum, so the real basis reaches it through the ψ exponents directly.
     exact && !isnothing(k) && return _qfact_exactx([(J+1) => 1, J => -1],Int(k))
+    if !exact && T === Float64 && !(k isa AbstractVector)        # [J+1] from the tables, no monomial
+        v = _qnumber_float(:int, J + 1, 1, k, q)
+        v === nothing || return v
+    end
     return qeval(qdim_mono(J);k=k,q=q,exact=exact,T=T)
 end
 
@@ -213,6 +220,7 @@ function clear_sieve_caches!()
     empty!(LEVEL_ZERO_TABLES)
     empty!(CLASSICAL_F64_TABLES)
     empty!(CLASSICAL_MOD_TABLES)
+    empty!(GENERIC_MOD_TABLES)
     empty!(CLASSICAL_EXACT_PRIMES)
     empty!(MW3_TABLES)
     empty!(MW4_TABLES)

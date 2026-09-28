@@ -425,10 +425,28 @@ function _certified_value(s::FactorialSum, segs, k::Int, tab::QIntTables{T}, wor
     nsteps = sum(seg -> length(seg) - 1, segs; init = 0)
     # A one-step sum recomputes its ratio on fallback: cheaper than allocating a buffer on every call.
     lazy = (mode === :lazy || mode === :strict_lazy) && nsteps >= LAZY_MIN_STEPS
-    buf = lazy ? _ratio_buffer(workspace, T, 2 * nsteps) : nothing
+    slot = nothing
+    if !lazy
+        buf = nothing
+    elseif workspace === nothing
+        slot, buf = _borrow_ratio_buffer(2 * nsteps)    # no allocation on the common path
+    else
+        buf = _ratio_buffer(workspace, T, 2 * nsteps)
+    end
     v, B = _sum_at_level(s, segs, k, tab, buf)
-    _certifies(v, B, rtol) && return v, :done
+    if _certifies(v, B, rtol)
+        _return_ratio_buffer(slot)
+        return v, :done
+    end
+    # A zero never certifies, so a pairwise-cancelling sum would pay for the compensated pass and the
+    # escalation before being recognised. The test is a proof and costs a few comparisons, and it runs
+    # only here, after the plain pass has already failed — never on a value that certifies.
+    if pairwise_zero(s)
+        _return_ratio_buffer(slot)
+        return zero(v), :done
+    end
     vc, Bc = _sum_compensated(s, segs, k, tab, buf)
+    _return_ratio_buffer(slot)
     _certifies(vc, Bc, RTOL_CERTIFIED) && return vc, :done
     return vc, :escalate
 end
@@ -472,7 +490,8 @@ function level_escalate(s::FactorialSum, segs, k::Int, ::Type{T}, ztab::LevelZer
         v = sixj_entry(labels, k, _column_workspace(workspace))
         v === nothing || return T(v)
     end
-    is_cancellation_zero(s, segs, k, ztab) === true && return zero(T)
+    # the pairwise test is a proof and costs a few comparisons; the modular screen is a pass over every term
+    (pairwise_zero(s) || is_cancellation_zero(s, segs, k, ztab) === true) && return zero(T)
     target = _target_digits(T)
     if T === Float64                             # K-word tiers: κ up to ~1e30 (K = 3) and ~1e46 (K = 4)
         for tier in (Val(3), Val(4))

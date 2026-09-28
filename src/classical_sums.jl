@@ -88,7 +88,12 @@ end
 "Is the classical sum exactly zero? The prefactor is a nonzero square root, so only the sum matters."
 function is_classical_zero(s::FactorialSum)
     is_empty_sum(s) && return true
-    for tab in classical_mod_tables(max_argument(s))
+    return _sum_vanishes_mod(s, classical_mod_tables(max_argument(s)))
+end
+
+"Does the rule's sum vanish modulo every table in `tabs`? Each table holds [n]! and 1/[n]! at one point."
+function _sum_vanishes_mod(s::FactorialSum, tabs)
+    for tab in tabs
         m = tab.m
         acc = UInt64(0)
         @inbounds for z in s.zlo:s.zhi
@@ -105,6 +110,100 @@ function is_classical_zero(s::FactorialSum)
         iszero(acc) || return false
     end
     return true
+end
+
+"""
+    pairwise_zero(s) -> Bool
+
+Does the sum cancel term by term, for every q? The reflection `z ↦ zlo + zhi − z` maps the factor
+`[a z + b]!^c` to `[−a z + (a(zlo+zhi) + b)]!^c`. When it maps the rule's multiset of factors onto itself,
+the terms at `z` and at its mirror are the same product of q-factorials; when the sum alternates and
+`zlo + zhi` is odd they have opposite signs and no term is its own mirror, so every pair cancels.
+
+This is a proof, not a screen, and it holds at every q and every level (a term that vanishes at a level
+has a mirror that vanishes with it). It is the column-exchange selection rule of the 3j symbol —
+`(j j j; m₁ m₂ m₁)` with `3j` odd, `(j₁ j₂ j₃; 0 0 0)` with `j₁ + j₂ + j₃` odd — read off the rule rather
+than enumerated, so it covers every symbol whose sum has that shape. A cancellation zero whose sum is not
+pairwise has to be found by one of the modular screens instead.
+"""
+function pairwise_zero(s::FactorialSum)
+    (is_empty_sum(s) || !s.alternating) && return false
+    c = s.zlo + s.zhi
+    isodd(c) || return false
+    @inbounds for f in s.fac
+        a, b, e = Int(f.a), Int(f.b), Int(f.c)
+        ma, mb = -a, a * c + b
+        nf = 0; nm = 0
+        for g in s.fac
+            ga, gb, ge = Int(g.a), Int(g.b), Int(g.c)
+            ge == e || continue
+            (ga == a && gb == b) && (nf += 1)
+            (ga == ma && gb == mb) && (nm += 1)
+        end
+        nf == nm || return false
+    end
+    return true
+end
+
+# ---- identically zero at generic q: a Schwartz–Zippel screen ----
+#
+# At a level or at q = 1 the modular screens evaluate the sum where it is asked for. At generic q the
+# question is whether the sum is the zero *function*, and a nonzero Laurent polynomial of degree D vanishes
+# at a random point of F_p with probability at most D/p. Two 62-bit primes and two fixed points make a false
+# "zero" as unlikely as the classical screen's (~2⁻¹²⁴ for D ≲ 10⁶); a nonzero residue is a proof that the
+# sum is not identically zero. Without this, an identically vanishing sum at generic q had no bound to
+# certify and escalated until `analytic_value` gave up: `q3j(5, 5, 5, 1, -2, 1; q = 0.8)` threw.
+
+const _GENERIC_ZERO_SEEDS = (UInt64(0x1f3a9c2d7e4b5a61), UInt64(0x2b7e151628aed2a6))
+const GENERIC_MOD_TABLES = LevelCache{Tuple{ClassicalModTable,ClassicalModTable}}()
+
+"[n]! and 1/[n]! at a point r of F_p where no [n], n ≤ N, vanishes."
+function _generic_mod_table(p::UInt64, N::Int, seed::UInt64)
+    m = Montgomery(p)
+    r0 = seed % p
+    qv = Vector{UInt64}(undef, N)
+    while true
+        r = to_mont(m, r0)
+        ri = iszero(r0) ? r : mont_inv(m, r)
+        d = mont_sub(m, r, ri)
+        good = !iszero(r0) && !iszero(d)
+        fact = Vector{UInt64}(undef, N + 1)
+        if good
+            dinv = mont_inv(m, d)
+            fact[1] = m.one
+            rn = m.one; rin = m.one
+            for n in 1:N
+                rn = mont_mul(m, rn, r); rin = mont_mul(m, rin, ri)
+                qv[n] = mont_mul(m, mont_sub(m, rn, rin), dinv)   # [n] = (r^n − r^−n)/(r − r^−1)
+                iszero(qv[n]) && (good = false; break)
+                fact[n+1] = mont_mul(m, fact[n], qv[n])
+            end
+        end
+        if good
+            invf = similar(fact)
+            invf[N+1] = mont_inv(m, fact[N+1])
+            for n in N:-1:1
+                invf[n] = mont_mul(m, invf[n+1], qv[n])
+            end
+            return ClassicalModTable(m, fact, invf)
+        end
+        r0 = UInt64((UInt128(r0) * 6364136223846793005 + 1442695040888963407) % p)
+    end
+end
+
+function generic_mod_tables(N::Int)
+    b = _classical_bucket(N)
+    return get_level!(GENERIC_MOD_TABLES, b) do
+        (_generic_mod_table(CLASSICAL_PRIMES[1], 1 << b, _GENERIC_ZERO_SEEDS[1]),
+         _generic_mod_table(CLASSICAL_PRIMES[2], 1 << b, _GENERIC_ZERO_SEEDS[2]))
+    end
+end
+
+"Is the sum the zero function of q? Nonzero residues prove it is not; see the section comment above."
+function is_generic_zero(s::FactorialSum)
+    is_empty_sum(s) && return true
+    pairwise_zero(s) && return true
+    return _sum_vanishes_mod(s, generic_mod_tables(max_argument(s)))
 end
 
 # ---- exact evaluation by Horner nesting (replaces BigFloat escalation for Float64 results) ----
@@ -193,7 +292,7 @@ function classical_value(s::FactorialSum, ::Type{T}; labels = nothing, workspace
         vr = sixj_entry(labels, ClassicalQ(), _column_workspace(workspace))
         vr === nothing || return T(vr)           # a returned value is certified far from zero
     end
-    is_classical_zero(s) && return zero(T)
+    (pairwise_zero(s) || is_classical_zero(s)) && return zero(T)
     if T === Float64
         v = classical_exact_float(s)
         v === nothing || return v

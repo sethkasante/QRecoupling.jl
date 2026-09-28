@@ -134,7 +134,8 @@ rel(a, b) = abs(a - b) / max(1.0, abs(b))
     end
 
     @testset "q-numbers take the symbols' interface" begin
-        @test qint(5) == 5.0 && qint(0) == 1.0          # [0] = 1, the package's convention
+        @test qint(5) === 5.0 && qint(0) === 1.0        # [0] = 1, the package's convention
+        @test abs(qint(25; k = 10) - sinpi(25 / 12) / sinpi(1 / 12)) < 1e-14   # periodic past h
         @test qfact(4) == 24.0 && qbinomial(5, 2) == 10.0
         @test qint(5; exact = true) == 5
         @test rel(qint(5; k = 10), sin(5 * pi / 12) / sin(pi / 12)) < 1e-12
@@ -166,6 +167,8 @@ rel(a, b) = abs(a - b) / max(1.0, abs(b))
         @test_throws ArgumentError q6j(1//3, 1, 1, 1, 1, 1)
         @test_throws DomainError has_radical_form(-1)
         @test_throws DivideError inv(zero(ExactX, 10))
+        # an identically vanishing symbol at generic q is a zero, not an error
+        @test q3j(5, 5, 5, 1, -2, 1; q = 0.8) == 0.0
         @test q6j(1, 1, 1, 1, 1, 1; k = 1) == 0.0       # inadmissible at this level
     end
 

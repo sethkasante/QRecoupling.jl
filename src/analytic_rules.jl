@@ -800,6 +800,9 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
                 return T(_avalue(vp))
             end
         end
+        # A zero never certifies itself, so a pairwise-cancelling sum would otherwise pay for the double
+        # word and then for arbitrary precision. The test is a proof and a few integer comparisons.
+        pairwise_zero(s) && return zero(T)
         # Double-word tier: u² per operation, so this bound is met for every
         # well-conditioned q and the arbitrary-precision tiers below are reached
         # only near a singularity of the rule.
@@ -826,6 +829,10 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
             return T(_avalue(v))
         end
     end
+    # Every fixed-precision tier has failed. If the sum is the zero function of q there is no bound for
+    # any precision to certify, and the ladder below would only double its bits until it gave up; the
+    # generic-q screen decides that first, as the modular screens do at a level and at q = 1.
+    is_generic_zero(s) && return zero(T)
     # Rebuild from the supplied q at each precision, never from rounded table
     # entries. A tier that certifies its own bound is accepted on its own: the
     # machine-precision value is not a reliable witness, so requiring the two to
