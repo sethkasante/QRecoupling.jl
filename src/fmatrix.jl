@@ -90,13 +90,14 @@ not the identity there, and nothing says it should be: the sum is bilinear, not 
 
 The whole matrix is built from the column recurrence, at `O(1)` work per entry rather than one Racah sum
 each, and the recurrence coefficients are shared across all columns. Off the real axis the column runs in
-complex double words ([`CDWord`](@ref)), at the same `u²` per component; `q` at a root of unity is refused
+complex double words (`CDWord`), at the same `u²` per component; `q` at a root of unity is refused
 there, because that is a level and has its own tables.
 
 ```julia
+using LinearAlgebra
 F, e, f = fmatrix(1, 1, 1, 1; k = 6)
 F' * F ≈ I                      # orthogonal
-F[i, j] == fsymbol(1, 1, e[i], 1, 1, f[j])
+F[1, 1] ≈ fsymbol(1, 1, e[1], 1, 1, f[1]; k=6)
 
 G, e, f = fmatrix(1, 1, 1, 1; q = 0.8 + 0.3im)
 transpose(G) * G ≈ I            # complex orthogonal off the real axis, not unitary

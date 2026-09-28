@@ -167,18 +167,18 @@ construction: a class whose product collapses to a rational square at this level
 cleared. Degrees are below `φ(2h)/2`, half the degree of the cyclotomic field the same value occupies in
 `Exact(k; form = :canonical)`.
 
-**Printing shows the radical form and nothing else** when one exists, because that is the form a reader
-wants; when none does it shows `P(x)·√(R(x))` and says why there is no radical. Two properties reach past
-the display:
+**Printing shows `P(x)·√(R(x))`**, the form the value is stored in, which costs nothing to produce and
+is available at every level. [`radical`](@ref) rewrites it in nested square roots on request, and says
+why there is none when there is none. Two properties reach past the display:
 
 | | |
 |---|---|
-| `v.rad` | the value in nested square roots, at any length, or `nothing` if none exists |
 | `v.x_value` | `P`, the value as a polynomial in `x = 2cos(π/(k+2))` |
+| `v.rad` | shorthand for `radical(v)` |
 
-[`radical_form`](@ref) is the same as `v.rad` with a length budget, [`xpolynomial`](@ref) and
-[`radicand`](@ref) give `P` and `R` as coefficient vectors, and [`has_radical_form`](@ref) answers the
-existence question without computing the expression.
+[`radical_form`](@ref) is [`radical`](@ref) with a length budget and `nothing` in place of the
+explanation, [`xpolynomial`](@ref) and [`radicand`](@ref) give `P` and `R` as coefficient vectors, and
+[`has_radical_form`](@ref) answers the existence question without computing the expression.
 """
 struct ExactX
     k::Int
@@ -217,21 +217,19 @@ end
 """
 Properties beyond the stored fields.
 
-`v.rad` is the value in **nested square roots**, computed on demand and with no length limit — the form
-the display points at when it is too long to print. It is `nothing` exactly when no real radical form
-exists, which `has_radical_form(v)` answers without computing anything.
+`v.x_value` is `P`, the value as a polynomial in `x = 2cos(π/(k+2))` — what the display shows; the whole
+value is `v.x_value · √(radicand(v))`, and `radicand(v)` is `1` unless `v.sqclass` is non-empty.
 
-`v.x_value` is `P`, the value as a polynomial in `x = 2cos(π/(k+2))`; the whole value is
-`v.x_value · √(radicand(v))`, and
-`radicand(v)` is `1` unless `v.sqclass` is non-empty.
+`v.rad` is shorthand for [`radical(v)`](@ref radical): the value in **nested square roots**, computed on
+demand and with no length limit, or a [`NoRadical`](@ref) saying why there is none.
 """
 function Base.getproperty(v::ExactX, s::Symbol)
-    s === :rad && return radical_form(v; maxlen = 0)
+    s === :rad && return radical(v)
     s === :x_value && return getfield(v, :p)
     return getfield(v, s)
 end
 Base.propertynames(::ExactX, private::Bool = false) =
-    private ? (:k, :p, :sqclass, :r, :rad, :x_value) : (:k, :rad, :x_value)
+    private ? (:k, :p, :sqclass, :r, :rad, :x_value) : (:k, :x_value, :rad)
 
 level(v::ExactX) = v.k
 Base.iszero(v::ExactX) = iszero(v.p)
@@ -264,7 +262,7 @@ _ratvec(f) = degree(f) < 0 ? Rational{BigInt}[] :
     exact_x(s::FactorialSum, k) -> ExactX
 
 The exact value of a factorial rule at level `k`, in the real basis. The Racah sum is formed over ℤ[x] by
-the same cleared ratio recursion as [`generic_value`](@ref), reduced modulo `Ψ_h` at every step so the
+the same cleared ratio recursion as `generic_value`, reduced modulo `Ψ_h` at every step so the
 degree never exceeds `φ(2h)/2`, and the numerator and denominator are then divided in the field.
 """
 function exact_x(s::FactorialSum, k::Integer)
@@ -751,7 +749,7 @@ question as [`has_radical_form(k)`](@ref).
 
 **Cost.** The second kind of level is the expensive one, and it gets more expensive with `k`: an unbounded
 sweep took 0.56 s to `kmax = 200`, 3.3 s to 300 and 11.7 s to 400. So the refinement is only attempted
-while the field degree is at most `refine_max_degree` (default [`REFINE_MAX_DEGREE`](@ref)), and
+while the field degree is at most `refine_max_degree` (default `REFINE_MAX_DEGREE`), and
 `refine = false` turns it off entirely, leaving the sufficient condition — instant, and every level it
 lists is certain. What a bounded sweep can miss is a level where the value lies in a 2-power *subfield*
 of a field that has none; measured across k = 5, 7, 9, 11, 12, 16, 17, every such value was **rational**,
@@ -867,7 +865,8 @@ end
 The exact value as real nested square roots, or `nothing` when there is none to give: either the level
 fails [`has_radical_form`](@ref) — in which case no such expression exists, for any amount of effort — or
 the expression exists but is longer than `maxlen` characters, which happens as soon as the descent needs
-three levels.
+three levels. [`radical`](@ref) is the same thing without a budget and with a sentence in place of the
+`nothing`; this is the form to call when the caller wants to branch on it.
 
 ```julia
 radical_form(q6j(Exact(3; form = :x), 1, 1, 1, 1, 1, 1))   # −(3 − √5)/2, the Fibonacci level
@@ -910,6 +909,72 @@ function radical_form(v::ExactX; maxlen::Int = 80)
     e = simplify(e)
     maxlen > 0 && length(_rad_str(e)) > maxlen && return nothing
     return e
+end
+
+"""
+    NoRadical
+
+What [`radical`](@ref) gives back when there is no nested-radical expression to give, carrying the reason
+in `kind`, so that "there is none" and "I did not look" are different answers and not one sentence doing
+duty for both:
+
+* `:none` — none exists. `v²` lies in an abelian field, and an abelian field is a tower of quadratic
+  extensions exactly when its degree is a power of two, so this is decided, not merely unattempted.
+* `:untried` — the field degree is past `degree_limit` and the minimal polynomial that would settle it
+  was not computed.
+* `:long` — one exists but is longer than the `maxlen` asked for. Only `radical(v; maxlen = n)` with
+  `n > 0` can produce this; the default budget is unbounded.
+* `:failed` — the descent ran and could not certify a sign within `DESCENT_MAX_BITS`.
+
+Printing it prints the reason. `float` is deliberately not defined: there is no number here.
+"""
+struct NoRadical
+    k::Int
+    kind::Symbol
+    degree::Int
+end
+
+function _no_radical_str(n::NoRadical)
+    n.kind === :none &&
+        return "no radical form: v² has degree " * string(n.degree) * " over ℚ at level " *
+               string(n.k) * ", and only a power of two is a tower of square roots " *
+               "(`v.x_value` is the polynomial in x, which is then the only closed form)"
+    n.kind === :long &&
+        return "nested square roots, longer than the budget asked for " *
+               "(`radical(v)` returns the expression whatever its size)"
+    n.kind === :untried &&
+        return "radical form not attempted: the field at level " * string(n.k) * " has degree " *
+               string(n.degree) * " (`radical(v; degree_limit = " * string(n.degree) * ")` decides it)"
+    return "no radical expression could be built: the descent could not certify a sign within " *
+           string(DESCENT_MAX_BITS) * " bits"
+end
+
+Base.show(io::IO, n::NoRadical) = print(io, "NoRadical(:", n.kind, ", k = ", n.k, ")")
+Base.show(io::IO, ::MIME"text/plain", n::NoRadical) = print(io, _no_radical_str(n))
+
+"""
+    radical(v::ExactX; maxlen = 0, degree_limit = 128) -> RadExpr or NoRadical
+
+The value written in real nested square roots — `(√5 − 3)/2` rather than the polynomial in `x` that
+printing an [`ExactX`](@ref) shows. Most values have no such form: only a level whose field degree
+`φ(2h)/2` is a power of two puts every one of its values in a tower of square roots, and at the other
+levels a particular value may still land in a 2-power subfield. When there is none the answer is a
+[`NoRadical`](@ref) that says which of those it is, rather than a bare `nothing`.
+
+There is no length budget by default: asking for the radical is asking for all of it. `maxlen > 0`
+declines to return one longer than that, and `degree_limit` caps the minimal-polynomial work spent
+deciding a level that does not answer for free.
+
+```julia
+radical(q6j(Exact(3), 1, 1, 1, 1, 1, 1))    # (√5 − 3)/2, the Fibonacci level
+radical(q6j(Exact(5), 1, 1, 1, 1, 1, 1))    # no radical form: v² has degree 3 over ℚ at level 5, …
+```
+"""
+function radical(v::ExactX; maxlen::Int = 0, degree_limit::Int = 128)
+    kind, e, d = _radical_view(v; maxlen = maxlen, degree_limit = degree_limit)
+    kind === :zero && return RadExpr(0)
+    kind === :ok && return e
+    return NoRadical(v.k, kind, d)
 end
 
 # ---------------------------------------------------------------------------------
@@ -1017,11 +1082,10 @@ function _xpoly_show(f; maxdeg::Int = XPOLY_MAX_DEGREE, maxchars::Int = XPOLY_MA
 end
 
 """
-The `P(x)·√(R(x))` line, always available and never computing anything.
-
-Shown only when there is no radical form to show instead — then it is the value's only closed form. A
-radicand that reduced to a bare constant keeps its class (it is not a rational square, or the constructor
-would have folded it) and is written `√2` rather than `√(2)`.
+The `P(x)·√(R(x))` line: what printing a value shows, always available and never computing anything —
+no minimal polynomial, no Lagrange descent, nothing that can fail or take unbounded time. A radicand that
+reduced to a bare constant keeps its class (it is not a rational square, or the constructor would have
+folded it) and is written `√2` rather than `√(2)`.
 """
 function _xform_str(v::ExactX)
     iszero(v.p) && return "0"
@@ -1042,16 +1106,9 @@ end
 """
     _radical_view(v; maxlen, degree_limit, allowed) -> (kind, expr, degree)
 
-Which of the four things the display has to say about this value, decided once so that the answer and the
-sentence explaining it cannot disagree.
-
-* `:ok` — the radical expression, short enough to print.
-* `:long` — one exists but is past the budget; `v.rad` returns it whatever its size.
-* `:none` — none exists. `v²` lies in an abelian field, and an abelian field is a tower of quadratic
-  extensions exactly when its degree is a power of two, so this is decided and not merely unattempted.
-* `:untried` — the field degree is past `degree_limit` and the minimal polynomial that would settle it was
-  not computed. Distinguished from `:none` on purpose: "no radical form" and "did not look" are different
-  statements and the display used to make both with the same sentence.
+What [`radical`](@ref) can say about this value, decided in one place so that the answer and the sentence
+explaining it cannot disagree. `:zero` and `:ok` carry an expression; `:none`, `:untried`, `:long` and
+`:failed` become a [`NoRadical`](@ref) and are documented there.
 """
 function _radical_view(v::ExactX; maxlen::Int = 80, degree_limit::Int = 32, allowed::Bool = true)
     iszero(v.p) && return (:zero, nothing, 0)
@@ -1067,7 +1124,9 @@ function _radical_view(v::ExactX; maxlen::Int = 80, degree_limit::Int = 32, allo
         count_ones(vd) == 1 || return (:none, nothing, vd)
     end
     e = radical_form(v; maxlen = maxlen)
-    e === nothing && return (:long, nothing, vd)
+    # with no budget the only way back is a descent that could not certify a sign, which is not the same
+    # statement as "longer than you asked for"
+    e === nothing && return (maxlen > 0 ? :long : :failed, nothing, vd)
     return (:ok, e, vd)
 end
 
@@ -1079,23 +1138,11 @@ function Base.show(io::IO, ::MIME"text/plain", v::ExactX)
         println(io, "  = 0")
         return
     end
-    kind, e, vd = _radical_view(v; maxlen = get(io, :radical_maxlen, 80),
-                                degree_limit = get(io, :radical_degree_limit, 32),
-                                allowed = get(io, :radicals, true))
-    # The radical *is* the answer when there is one; the polynomial in x is shown only when there is not,
-    # because then it is the only closed form the value has.
-    if kind === :ok
-        println(io, "  = ", _rad_str(e))
-    elseif kind === :long
-        println(io, "  = nested square roots, too long to print")
-        println(io, "    `v.rad` returns the expression, `v.x_value` the polynomial in x")
-    elseif kind === :none
-        println(io, "  no radical form: v² has degree ", vd,
-                    " over ℚ, and only a power of two is a tower of square roots")
-        println(io, "    `v.x_value` is the polynomial in x, which is then the only closed form")
-    else
-        println(io, "  radical form not attempted at degree ", d)
-        println(io, "    `has_radical_form(v)` decides whether one exists, `v.rad` computes it")
+    # The stored form, always: it is exact, it is the same at every level, and producing it cannot fail
+    # or run long. Radicals are a question the reader asks — `radical(v)` — not a cost printing pays.
+    println(io, "  = ", _xform_str(v))
+    if get(io, :radical_hint, true) && has_radical_form(v.k)
+        println(io, "    (`radical(v)` writes this in nested square roots)")
     end
     get(io, :approximate, d <= 64) || return nothing
     nv = numeric_value(v)
@@ -1317,7 +1364,8 @@ and stay exact; sums cannot, so they are kept apart.
 
 The keys are the classes of `generic_x.jl`, squarefree over ℚ(x) — but a class that is squarefree there
 can become a **square** modulo `Ψ_h`, so two keys may denote the same root and `isempty(terms)` is the only
-free proof of vanishing. [`iszero`](@ref) asks for a real one.
+immediate proof of vanishing. `iszero` uses exact tests where available, but can fall back
+to numerical comparison for multiple specialized radical classes.
 """
 struct ExactXSum
     k::Int
