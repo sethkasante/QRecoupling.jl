@@ -173,7 +173,7 @@ why there is none when there is none. Two properties reach past the display:
 
 | | |
 |---|---|
-| `v.x_value` | `P`, the value as a polynomial in `x = 2cos(π/(k+2))` |
+| `v.x_value` | the pair `(P, R)`, the value being `P(x)·√(R(x))` |
 | `v.rad` | shorthand for `radical(v)` |
 
 [`radical_form`](@ref) is [`radical`](@ref) with a length budget and `nothing` in place of the
@@ -217,15 +217,17 @@ end
 """
 Properties beyond the stored fields.
 
-`v.x_value` is `P`, the value as a polynomial in `x = 2cos(π/(k+2))` — what the display shows; the whole
-value is `v.x_value · √(radicand(v))`, and `radicand(v)` is `1` unless `v.sqclass` is non-empty.
+`v.x_value` is the whole stored form as the pair `(P, R)`, so that `P, R = v.x_value` and
+`v.x_value.P`, `v.x_value.R` both work: the value is `P(x)·√(R(x))` at `x = 2cos(π/(k+2))`, with `R = 1`
+exactly when `v.sqclass` is empty. It used to be `P` alone, which silently dropped the root from every
+value that had one.
 
 `v.rad` is shorthand for [`radical(v)`](@ref radical): the value in **nested square roots**, computed on
 demand and with no length limit, or a [`NoRadical`](@ref) saying why there is none.
 """
 function Base.getproperty(v::ExactX, s::Symbol)
     s === :rad && return radical(v)
-    s === :x_value && return getfield(v, :p)
+    s === :x_value && return (P = getfield(v, :p), R = getfield(v, :r))
     return getfield(v, s)
 end
 Base.propertynames(::ExactX, private::Bool = false) =
@@ -364,6 +366,29 @@ Deciding a value's own degree is cheap per level and ruinous per sweep — 11.7 
 bound — and what lies past it is, in every case measured, a rational value, which is recognised for free.
 """
 const REFINE_MAX_DEGREE = 64
+
+"""
+Largest degree of the *value* that [`radical`](@ref) will run the descent on unasked.
+
+The descent is exponential in that degree — one rational leaf per degree, and the leaves grow as it
+squares its intermediates. Measured: degree 8 is microseconds, degree 32 is `0.13` s at k = 94, and
+`q6j(Exact(254), 45, 45, 45, 30, 30, 30)` — field degree 128, *value* degree 64 — exhausted memory and
+took the session down with it. A default that can do that is not a default. Past the cap `radical`
+returns a [`NoRadical`](@ref) naming the degree, and `radical(v; degree_limit = …)` is the way to say
+that the wait is wanted.
+"""
+const RADICAL_DESCENT_MAX_DEGREE = 32
+
+
+"""
+Largest field degree at which the *exact* degree of a value is computed.
+
+Deciding whether a radical exists is cheap at any size (a modular conjugation), but the degree itself is
+a minimal polynomial over ℚ: 1 ms at field degree 32, 12 ms at 64, 168 ms at 128 measured. Past this
+the question is declined rather than paid for, since a value in a field that large is past the descent
+budget anyway and the exact number would only be for the sentence.
+"""
+const RADICAL_MINPOLY_MAX_DEGREE = 64
 
 """
     _eval_at_x(f, h; rtol) -> BigFloat or nothing
@@ -652,6 +677,94 @@ end
 "σ_j applied to `f`: substitute x ↦ C_j(x), the j-th conjugate, and reduce."
 _sigma(f, j::Int, h::Int, Ψ) = j == 1 ? f : _redq(evaluate(f, _cheb_red(j, h)), Ψ)
 
+const _ODD_GENS = Dict{Int,Vector{Int}}()
+
+"`a^e` as a conjugate index, folded back into `1 ≤ · ≤ h`."
+_powrep(a::Int, e::Int, h::Int) = _rep(Int(powermod(a, e, 2h)), h)
+
+"""
+A generating set for the odd part of the Galois group `G = (ℤ/2h)*/±1`, empty when `G` is a 2-group.
+
+`G` is abelian, so `G ≅ G₂ × G_odd` and raising to the 2-part of `|G|` kills `G₂` and permutes `G_odd`:
+the image of that map *is* `G_odd`. A generating set of it is then a couple of elements, found by
+closure over the integers — no field arithmetic anywhere in here.
+"""
+function _odd_gens(h::Int)
+    lock(X_LOCK) do
+        get!(_ODD_GENS, h) do
+            reps = _conj_reps(h)
+            d = length(reps)
+            m = trailing_zeros(d)
+            (d >> m) == 1 && return Int[]
+            odd = unique!([_powrep(a, 1 << m, h) for a in reps])
+            gens = Int[]
+            cur = Set{Int}(1)
+            for g in odd
+                g in cur && continue
+                push!(gens, g)
+                cur = _close_group(gens, h)
+                length(cur) >= length(odd) && break
+            end
+            return gens
+        end
+    end
+end
+
+"""
+Is `[ℚ(u):ℚ]` a power of two — the whole radical question — without computing the degree?
+
+`[G : Stab(u)]` is a power of two exactly when `G_odd ⊆ Stab(u)`: one direction because the index then
+divides `|G/G_odd|`, the other because an odd-order group has no nontrivial image in a 2-group. So the
+answer is a couple of conjugations, against a minimal polynomial of degree `φ(2h)/2`. Measured at
+k = 420: **12 ms against 164 ms**, and the gap grows with the level.
+"""
+function _degree_is_2power(u, h::Int)
+    degree(u) <= 0 && return true
+    gens = _odd_gens(h)
+    isempty(gens) && return true                 # a 2-group has only 2-power indices
+    Ψ = _psiq(h)
+    # A difference seen modulo one word-sized prime is a difference, full stop, and that is the answer
+    # in the overwhelming majority of cases — 0.9 ms against 121 ms at k = 420 measured. Agreement
+    # modulo a prime proves nothing, so the exact conjugation is still run when no prime separates them.
+    for g in gens
+        _sigma_differs_mod(u, g, h, Ψ) && return false
+    end
+    for g in gens
+        _sigma(u, g, h, Ψ) == u || return false
+    end
+    return true
+end
+
+"""
+Do `σ_j(u)` and `u` differ? `true` is a proof; `false` means only that this prime saw no difference.
+
+Composition modulo `Ψ_h` over `𝔽_p` is machine-word arithmetic where the exact route carries the
+value's own coefficients — 144 bits at k = 420 — through 208 polynomial multiplications.
+"""
+function _sigma_differs_mod(u, j::Int, h::Int, Ψ)
+    j == 1 && return false
+    U, _ = _clear_denoms(u)                      # the common denominator cancels: σ is ℚ-linear
+    C, aC = _clear_denoms(_cheb_red(j, h))
+    Z, _ = _clear_denoms(Ψ)
+    du = Int(degree(U))
+    du < 0 && return false
+    for pp in _MM_PRIMES[1:2]
+        F = Nemo.Native.GF(pp)
+        Fx, _ = polynomial_ring(F, "X")
+        iszero(F(aC)) && continue
+        Ψp = Fx([F(coeff(Z, i)) for i in 0:Int(degree(Z))])
+        Cp = Fx([F(coeff(C, i)) for i in 0:max(Int(degree(C)), 0)]) * inv(F(aC))
+        Up = Fx([F(coeff(U, i)) for i in 0:du])
+        acc = zero(Fx)
+        for i in du:-1:0
+            acc = mulmod(acc, Cp, Ψp) + Fx(F(coeff(U, i)))
+        end
+        acc == Up || return true
+    end
+    return false
+end
+
+
 """
     has_radical_form(k) -> Bool
 
@@ -722,7 +835,7 @@ has_radical_form(q6j(Exact(5; form = :x), 1, 1, 1, 1, 1, 1))
 function has_radical_form(v::ExactX)
     iszero(v.p) && return true
     has_radical_form(v.k) && return true
-    return count_ones(_value_degree(_square(v), v.k + 2)) == 1
+    return _degree_is_2power(_square(v), v.k + 2)
 end
 
 "`v²` as an element of the field: it is real and abelian whatever the level, which is what the radical
@@ -865,14 +978,17 @@ end
 The exact value as real nested square roots, or `nothing` when there is none to give: either the level
 fails [`has_radical_form`](@ref) — in which case no such expression exists, for any amount of effort — or
 the expression exists but is longer than `maxlen` characters, which happens as soon as the descent needs
-three levels. [`radical`](@ref) is the same thing without a budget and with a sentence in place of the
-`nothing`; this is the form to call when the caller wants to branch on it.
+three levels, or the value's degree is past `degree_limit`, where the descent stops being affordable
+(`degree_limit = 0` removes that cap and accepts the cost). [`radical`](@ref) is the same thing with an
+unbounded length, a sentence in place of the `nothing`, and the number under it; this is the form to
+call when the caller wants to branch on the answer rather than read it.
 
 ```julia
 radical_form(q6j(Exact(3; form = :x), 1, 1, 1, 1, 1, 1))   # −(3 − √5)/2, the Fibonacci level
 ```
 """
-function radical_form(v::ExactX; maxlen::Int = 80)
+function radical_form(v::ExactX; maxlen::Int = 80,
+                     degree_limit::Int = RADICAL_DESCENT_MAX_DEGREE)
     iszero(v.p) && return RadExpr(0)
     if degree(v.p) <= 0 && (isempty(v.sqclass) || degree(v.r) <= 0)
         c = Rational{BigInt}(coeff(v.p, 0))
@@ -887,11 +1003,18 @@ function radical_form(v::ExactX; maxlen::Int = 80)
     # sampled values were rational at k = 5, 7, 9 and were being told no radical form existed.
     has_radical_form(v) || return nothing
     h = v.k + 2
+    # Two caps, one minimal polynomial. A degree-2ᵐ value descends to 2ᵐ rational leaves, so with a
+    # length budget anything past a handful of them is already far longer than `maxlen` and the descent
+    # would only be paying to be thrown away. Without one the cap is the cost itself: the descent is
+    # exponential in that degree, and at 64 it exhausts memory. `degree_limit = 0` says the caller has
+    # already decided the degree, or accepts whatever it costs.
+    cap = maxlen > 0 ? (degree_limit > 0 ? min(degree_limit, RADICAL_MAX_DEGREE) : RADICAL_MAX_DEGREE) :
+                       degree_limit
+    if cap > 0
+        euler_phi(2h) ÷ 2 <= RADICAL_MINPOLY_MAX_DEGREE || return nothing
+        _value_degree(_square(v), h) > cap && return nothing
+    end
     Ψ = _psiq(h)
-    # A degree-2ᵐ value descends to 2ᵐ rational leaves, so anything past a handful of them is already far
-    # longer than `maxlen` and the descent would only be paying to be thrown away. `maxlen = 0`, which
-    # asks for the expression whatever its size, skips this.
-    maxlen > 0 && _value_degree(_square(v), h) > RADICAL_MAX_DEGREE && return nothing
     reps = _conj_reps(h)
     e = nothing
     if isempty(v.sqclass)
@@ -931,29 +1054,61 @@ Printing it prints the reason. `float` is deliberately not defined: there is no 
 struct NoRadical
     k::Int
     kind::Symbol
-    degree::Int
+    degree::Int        # of the value, 0 when it was not worth computing
+    field::Int         # φ(2h)/2, always known
+    limit::Int
+    approx::Union{Nothing,Float64}
 end
 
+"""
+The sentence, and under it the number. A reader who asked for a closed form and cannot have one is owed
+the value anyway — that is the whole reason they were looking — and it is the one thing always available.
+"""
 function _no_radical_str(n::NoRadical)
-    n.kind === :none &&
-        return "no radical form: v² has degree " * string(n.degree) * " over ℚ at level " *
-               string(n.k) * ", and only a power of two is a tower of square roots " *
-               "(`v.x_value` is the polynomial in x, which is then the only closed form)"
-    n.kind === :long &&
-        return "nested square roots, longer than the budget asked for " *
-               "(`radical(v)` returns the expression whatever its size)"
-    n.kind === :untried &&
-        return "radical form not attempted: the field at level " * string(n.k) * " has degree " *
-               string(n.degree) * " (`radical(v; degree_limit = " * string(n.degree) * ")` decides it)"
-    return "no radical expression could be built: the descent could not certify a sign within " *
-           string(DESCENT_MAX_BITS) * " bits"
+    body = if n.kind === :none
+        (n.degree > 0 ?
+            "no radical form: v² has degree " * string(n.degree) * " over ℚ at level " * string(n.k) :
+            "no radical form: the degree of ℚ(v²) at level " * string(n.k) *
+            " has an odd prime factor") *
+        ", and only a power of two is a tower of square roots\n" *
+        "  (`v.x_value` gives (P, R), which is then the value's only closed form)"
+    elseif n.kind === :long
+        "nested square roots, longer than the budget asked for\n" *
+        "  (`radical(v)` returns the expression whatever its size)"
+    elseif n.kind === :untried
+        "radical form not attempted: " *
+        (n.degree > n.limit ?
+            "the value at level " * string(n.k) * " has degree " * string(n.degree) *
+            ", past degree_limit = " * string(n.limit) * "\n" *
+            "  (`radical(v; degree_limit = " * string(n.degree) *
+            ")` runs it — the descent is exponential in the degree)" :
+         n.field > RADICAL_MINPOLY_MAX_DEGREE ?
+            "the field at level " * string(n.k) * " has degree " * string(n.field) *
+            ", too large to decide the value's own\n" *
+            "  (`radical(v; degree_limit = " * string(n.field) * ")` tries anyway)" :
+            "the value at level " * string(n.k) * " has degree past degree_limit = " *
+            string(n.limit) * "\n" *
+            "  (raise `degree_limit` to descend anyway — the cost doubles with every degree)")
+    else
+        "no radical expression could be built: the descent could not certify a sign within " *
+        string(DESCENT_MAX_BITS) * " bits"
+    end
+    n.approx === nothing && return body
+    return body * "\n  ≈ " * string(n.approx)
 end
 
 Base.show(io::IO, n::NoRadical) = print(io, "NoRadical(:", n.kind, ", k = ", n.k, ")")
 Base.show(io::IO, ::MIME"text/plain", n::NoRadical) = print(io, _no_radical_str(n))
 
+"The number to print under the sentence, or `nothing` when even that cannot be certified."
+function _no_radical(v::ExactX, kind::Symbol, degree::Int, limit::Int)
+    nv = numeric_value(v)
+    return NoRadical(v.k, kind, degree, euler_phi(2 * (v.k + 2)) ÷ 2, limit,
+                     nv === nothing ? nothing : Float64(nv))
+end
+
 """
-    radical(v::ExactX; maxlen = 0, degree_limit = 128) -> RadExpr or NoRadical
+    radical(v::ExactX; maxlen = 0, degree_limit = 32) -> RadExpr or NoRadical
 
 The value written in real nested square roots — `(√5 − 3)/2` rather than the polynomial in `x` that
 printing an [`ExactX`](@ref) shows. Most values have no such form: only a level whose field degree
@@ -961,20 +1116,24 @@ printing an [`ExactX`](@ref) shows. Most values have no such form: only a level 
 levels a particular value may still land in a 2-power subfield. When there is none the answer is a
 [`NoRadical`](@ref) that says which of those it is, rather than a bare `nothing`.
 
-There is no length budget by default: asking for the radical is asking for all of it. `maxlen > 0`
-declines to return one longer than that, and `degree_limit` caps the minimal-polynomial work spent
-deciding a level that does not answer for free.
+There is no *length* budget by default: asking for the radical is asking for all of it. There is a
+**degree** budget, because the descent is exponential in the degree of the value and at degree 64 it
+exhausts memory and takes the session with it. Past `degree_limit` the answer names the degree it found
+and the call that would run it, and gives the number meanwhile. `maxlen > 0` additionally declines an
+expression longer than that many characters.
 
 ```julia
 radical(q6j(Exact(3), 1, 1, 1, 1, 1, 1))    # (√5 − 3)/2, the Fibonacci level
 radical(q6j(Exact(5), 1, 1, 1, 1, 1, 1))    # no radical form: v² has degree 3 over ℚ at level 5, …
+radical(q6j(Exact(254), 45, 45, 45, 30, 30, 30))          # degree 64: not attempted, with the number
+radical(q6j(Exact(254), 45, 45, 45, 30, 30, 30); degree_limit = 64)   # …and this is the long wait
 ```
 """
-function radical(v::ExactX; maxlen::Int = 0, degree_limit::Int = 128)
+function radical(v::ExactX; maxlen::Int = 0, degree_limit::Int = RADICAL_DESCENT_MAX_DEGREE)
     kind, e, d = _radical_view(v; maxlen = maxlen, degree_limit = degree_limit)
     kind === :zero && return RadExpr(0)
     kind === :ok && return e
-    return NoRadical(v.k, kind, d)
+    return _no_radical(v, kind, d, degree_limit)
 end
 
 # ---------------------------------------------------------------------------------
@@ -1074,11 +1233,55 @@ function _xpoly_summary(f)
     return den == 1 ? "(" * body * ")" : "(" * body * ")/" * string(den)
 end
 
+"`_xpoly_str` when it fits the budget, `nothing` when it does not."
+function _xpoly_fits(f; maxdeg::Int = XPOLY_MAX_DEGREE, maxchars::Int = XPOLY_MAX_CHARS)
+    degree(f) > maxdeg && return nothing
+    str = _xpoly_str(f)
+    return length(str) > maxchars ? nothing : str
+end
+
 "`_xpoly_str`, or a description of it when writing it out would be worse than useless."
 function _xpoly_show(f; maxdeg::Int = XPOLY_MAX_DEGREE, maxchars::Int = XPOLY_MAX_CHARS)
-    degree(f) > maxdeg && return _xpoly_summary(f)
-    str = _xpoly_str(f)
-    return length(str) > maxchars ? _xpoly_summary(f) : str
+    str = _xpoly_fits(f; maxdeg = maxdeg, maxchars = maxchars)
+    return str === nothing ? _xpoly_summary(f) : str
+end
+
+"`degree 208, 105 terms, ≤144 bits`, the shape of a polynomial without the polynomial."
+function _xpoly_dims(f)
+    d = degree(f)
+    d < 0 && return "0"
+    cs = [Rational{BigInt}(coeff(f, i)) for i in 0:d]
+    den = BigInt(1)
+    for c in cs
+        den = lcm(den, denominator(c))
+    end
+    bits = maximum(c -> ndigits(numerator(c * den); base = 2), cs; init = 0)
+    out = "degree $d, $(count(!iszero, cs)) terms, ≤$bits bits"
+    return den == 1 ? out : "(" * out * ")/" * string(den)
+end
+
+"Longest square class the sizes line writes out; past it the count says as much and fits."
+const SQCLASS_MAX_SHOWN = 6
+
+"The class under the root, as ψ indices or — past a handful of them — as how many there are."
+function _sqclass_str(cls::Vector{Int})
+    isempty(cls) && return "1"
+    length(cls) > SQCLASS_MAX_SHOWN && return string(length(cls)) * " ψ factors"
+    return join(["ψ" * to_subscript(e) for e in cls], "·")
+end
+
+"Is either half of `P(x)·√(R(x))` past what the display will write out?"
+function _xform_long(v::ExactX)
+    iszero(v.p) && return false
+    _xpoly_fits(v.p) === nothing && return true
+    return !isempty(v.sqclass) && _xpoly_fits(v.r) === nothing
+end
+
+"The sizes of `P` and `R`, one line each, for the lines under a schematic form."
+function _xform_dims(v::ExactX)
+    isempty(v.sqclass) && return ["P: " * _xpoly_dims(v.p) * ",  R = 1"]
+    return ["P: " * _xpoly_dims(v.p),
+            "R: " * _xpoly_dims(v.r) * ",  " * _sqclass_str(v.sqclass)]
 end
 
 """
@@ -1089,6 +1292,10 @@ folded it) and is written `√2` rather than `√(2)`.
 """
 function _xform_str(v::ExactX)
     iszero(v.p) && return "0"
+    # Past the budget the honest line is the *shape* of the value, `P(x)·√(R(x))`, with the sizes on the
+    # line below: a reader takes nothing from three screens of digits, and `v.x_value` gives both halves
+    # in full to anyone who wants them.
+    _xform_long(v) && return isempty(v.sqclass) ? "P(x)" : "P(x) · √(R(x))"
     ps = _xpoly_show(v.p)
     isempty(v.sqclass) && return ps
     rs = _xpoly_show(v.r)
@@ -1103,6 +1310,9 @@ function Base.show(io::IO, v::ExactX)
     print(io, "ExactX(k = ", v.k, ", ", _xform_str(v), ")")
 end
 
+"The value's degree when that is cheap to know, `0` when it is only worth a sentence."
+_cheap_degree(u, h::Int, d::Int) = d <= RADICAL_MINPOLY_MAX_DEGREE ? _value_degree(u, h) : 0
+
 """
     _radical_view(v; maxlen, degree_limit, allowed) -> (kind, expr, degree)
 
@@ -1110,48 +1320,77 @@ What [`radical`](@ref) can say about this value, decided in one place so that th
 explaining it cannot disagree. `:zero` and `:ok` carry an expression; `:none`, `:untried`, `:long` and
 `:failed` become a [`NoRadical`](@ref) and are documented there.
 """
-function _radical_view(v::ExactX; maxlen::Int = 80, degree_limit::Int = 32, allowed::Bool = true)
+function _radical_view(v::ExactX; maxlen::Int = 80,
+                      degree_limit::Int = RADICAL_DESCENT_MAX_DEGREE, allowed::Bool = true)
     iszero(v.p) && return (:zero, nothing, 0)
     h = v.k + 2
     d = euler_phi(2h) ÷ 2
-    allowed || return (:untried, nothing, d)
-    vd = d
-    if !has_radical_form(v.k)
-        # a short printed result must not trigger unbounded minimal-polynomial work
-        simple = degree(v.p) <= 0 && (isempty(v.sqclass) || degree(v.r) <= 0)
-        simple || d <= degree_limit || return (:untried, nothing, d)
-        vd = _value_degree(_square(v), h)
-        count_ones(vd) == 1 || return (:none, nothing, vd)
+    # A rational value, or a rational multiple of one surd, is its own radical: no field work, no
+    # descent, no cap. This must come first, or a degenerate value at a big level is refused for the
+    # size of a field it does not live in.
+    if degree(v.p) <= 0 && (isempty(v.sqclass) || degree(v.r) <= 0)
+        e = radical_form(v; maxlen = maxlen, degree_limit = 0)
+        e === nothing && return (maxlen > 0 ? :long : :failed, nothing, 1)
+        return (:ok, e, 1)
     end
-    e = radical_form(v; maxlen = maxlen)
-    # with no budget the only way back is a descent that could not certify a sign, which is not the same
-    # statement as "longer than you asked for"
+    allowed || return (:untried, nothing, 0)
+    vd = d
+    # Three questions, in increasing cost, and none of them asked unless the answer is needed:
+    #   1. does a radical exist?     `G_odd ⊆ Stab(v²)` — a couple of conjugations
+    #   2. is the degree affordable? the orbit, stopped as soon as it passes the limit
+    #   3. what is the degree?       the whole orbit, and only when it is small enough to be cheap
+    # The old route asked (3) always, through a minimal polynomial of the field's degree: 164 ms at
+    # k = 420 where (1) settles it in 12 ms.
+    if !has_radical_form(v.k) || d > degree_limit
+        u = _square(v)
+        # Existence first, and cheaply: it is the question, and the degree is only the sentence.
+        _degree_is_2power(u, h) || return (:none, nothing, _cheap_degree(u, h, d))
+        d <= RADICAL_MINPOLY_MAX_DEGREE || return (:untried, nothing, 0)
+        vd = _value_degree(u, h)
+        vd <= degree_limit || return (:untried, nothing, vd)
+    end
+    vd <= degree_limit || return (:untried, nothing, vd)
+    e = radical_form(v; maxlen = maxlen, degree_limit = 0)   # the degree is already decided
+    # with no length budget the only way back is a descent that could not certify a sign, which is not
+    # the same statement as "longer than you asked for"
     e === nothing && return (maxlen > 0 ? :long : :failed, nothing, vd)
     return (:ok, e, vd)
 end
 
+"""
+Printing an `ExactX` does no arithmetic of any kind.
+
+The stored `P(x)·√(R(x))` is exact at every level and free to produce; the radical form is a question
+the reader asks (`radical(v)`, which prints the number with it), and the certified `≈` is a Horner pass
+this display used to pay for at every value — `IOContext(io, :approximate => true)` asks for it back,
+and `Float64(v)` was always the direct way. Past the length budget the line becomes the *shape* of the
+value with its sizes underneath, which is what a degree-208 polynomial has to say for itself. Nothing
+else is printed: the display is the value, and the rest is what the reader calls for.
+"""
 function Base.show(io::IO, ::MIME"text/plain", v::ExactX)
     h = v.k + 2
     d = euler_phi(2h) ÷ 2
-    println(io, "Exact value at level k = ", v.k, "   (x = 2cos(π/", h, "), degree ", d, " over ℚ)")
+    lines = ["Exact value at level k = " * string(v.k) * "   (x = 2cos(π/" * string(h) *
+             "), degree " * string(d) * " over ℚ)"]
     if iszero(v.p)
-        println(io, "  = 0")
+        print(io, lines[1], "\n  = 0")
         return
     end
-    # The stored form, always: it is exact, it is the same at every level, and producing it cannot fail
-    # or run long. Radicals are a question the reader asks — `radical(v)` — not a cost printing pays.
-    println(io, "  = ", _xform_str(v))
-    if get(io, :radical_hint, true) && has_radical_form(v.k)
-        println(io, "    (`radical(v)` writes this in nested square roots)")
+    push!(lines, "  = " * _xform_str(v))
+    if _xform_long(v)
+        for l in _xform_dims(v)
+            push!(lines, "    " * l)
+        end
+        push!(lines, "    `v.x_value` gives (P, R) in full")
     end
-    get(io, :approximate, d <= 64) || return nothing
-    nv = numeric_value(v)
-    if nv === nothing
-        print(io, "  (the value cancels beyond ", EVAL_MAX_BITS,
-                  " bits at x = 2cos(π/", h, "); for a number use q6j(…; k = ", v.k, "))")
-    else
-        print(io, "  ≈ ", Float64(nv))
+    if get(io, :approximate, false)
+        nv = numeric_value(v)
+        push!(lines, nv === nothing ?
+              "  (the value cancels beyond " * string(EVAL_MAX_BITS) * " bits at x = 2cos(π/" *
+              string(h) * "); for a number use q6j(…; k = " * string(v.k) * "))" :
+              "  ≈ " * string(Float64(nv)))
     end
+    print(io, join(lines, "\n"))
 end
 
 # ---------------------------------------------------------------------------------
@@ -1427,8 +1666,68 @@ for op in (:+, :-, :*)
     @eval Base.$op(a::ExactX, b::ExactXSum) = $op(ExactXSum(a), b)
     @eval Base.$op(a::ExactXSum, b::ExactX) = $op(a, ExactXSum(b))
 end
-Base.:+(a::ExactX, b::ExactX) = ExactXSum(a) + ExactXSum(b)
-Base.:-(a::ExactX, b::ExactX) = ExactXSum(a) - ExactXSum(b)
+"""
+A sum that carries one square class **is** a value, and is handed back as one.
+
+Without this, `v * 2` returns an `ExactX` and `v + 2` an `ExactXSum` — the same number in two types,
+differing by which method the user happened to call. Adding two values whose classes genuinely differ
+still gives an [`ExactXSum`](@ref), because that is a thing the value type cannot hold; and arithmetic
+that starts in `ExactXSum` stays there, so the sum type is never taken away from code that asked for it.
+"""
+_collapse(s::ExactXSum) = isempty(s.terms) ? zero(ExactX, s.k) :
+                          length(s.terms) == 1 ? _term(s, first(keys(s.terms))) : s
+
+Base.:+(a::ExactX, b::ExactX) = _collapse(ExactXSum(a) + ExactXSum(b))
+Base.:-(a::ExactX, b::ExactX) = _collapse(ExactXSum(a) - ExactXSum(b))
+
+# ---------------------------------------------------------------------------------
+#  Scalars, on the same footing as values
+# ---------------------------------------------------------------------------------
+
+"""
+A rational as an exact value at a level: the constant polynomial, no class, no root. This is what lets
+`v + 1` mean what it says — a scalar is a value like any other, and refusing to add one was an accident
+of which methods happened to be written.
+"""
+function _const_exactx(c::Union{Integer,Rational}, k::Integer)
+    S, _ = _qqx()
+    return ExactX(Int(k), S(QQ(c)), Int[], S(1))
+end
+
+for T in (:ExactX, :ExactXSum)
+    # `v + c` goes through the value/value method for an `ExactX`, so it collapses like any other sum
+    @eval Base.:+(v::$T, c::Union{Integer,Rational}) = v + _const_exactx(c, v.k)
+    @eval Base.:+(c::Union{Integer,Rational}, v::$T) = v + _const_exactx(c, v.k)
+    @eval Base.:-(v::$T, c::Union{Integer,Rational}) = v + _const_exactx(-c, v.k)
+    @eval Base.:-(c::Union{Integer,Rational}, v::$T) = (-v) + _const_exactx(c, v.k)
+    @eval Base.:(==)(v::$T, c::Union{Integer,Rational}) = v == _const_exactx(c, v.k)
+    @eval Base.:(==)(c::Union{Integer,Rational}, v::$T) = v == _const_exactx(c, v.k)
+end
+
+"""
+Floats do not mix with exact values, and the error says what to do instead.
+
+Accepting one would be worse than refusing: `Float64` is exactly a dyadic rational, so `v + 0.1` would
+silently commit to `3602879701896397//36028797018963968` and print as though it were the value the user
+meant. Either the scalar is exact, and `1//10` says so, or the computation is numerical, and `Float64(v)`
+says that.
+"""
+function _inexact_mix(x)
+    throw(ArgumentError(
+        "an exact value does not combine with $(typeof(x)): pass an exact scalar (for example `1//10` " *
+        "rather than `0.1`), or leave the exact field first with `Float64(v)`"))
+end
+for op in (:+, :-, :*, :/)
+    @eval Base.$op(::Union{ExactX,ExactXSum}, x::AbstractFloat) = _inexact_mix(x)
+    @eval Base.$op(x::AbstractFloat, ::Union{ExactX,ExactXSum}) = _inexact_mix(x)
+    @eval Base.$op(::Union{ExactX,ExactXSum}, x::Complex) = _inexact_mix(x)
+    @eval Base.$op(x::Complex, ::Union{ExactX,ExactXSum}) = _inexact_mix(x)
+end
+
+Base.one(::Type{ExactXSum}, k::Integer) = ExactXSum(_one_exactx(k))
+Base.one(s::ExactXSum) = one(ExactXSum, s.k)
+Base.isone(v::ExactX) = isempty(v.sqclass) && isone(v.p)
+Base.isone(s::ExactXSum) = length(s.terms) == 1 && isone(_term(s, first(keys(s.terms))))
 
 """
     radical_norm(s::ExactXSum) -> field element or nothing
@@ -1531,17 +1830,80 @@ function Base.show(io::IO, s::ExactXSum)
     print(io, "ExactXSum(k = ", s.k, ", ", join(parts, " + "), ")")
 end
 
+"""
+The same display an [`ExactX`](@ref) gets, one line per square class: no arithmetic, the shape of a term
+that is too long to write out, and the `≈` only when `IOContext(io, :approximate => true)` asks for it.
+A sum and a value differ in how many classes they carry, not in how they are read — and a sum of one
+class is read exactly like the value it is.
+"""
 function Base.show(io::IO, ::MIME"text/plain", s::ExactXSum)
-    println(io, "Exact sum at level k = ", s.k, "   (", length(s.terms),
-                length(s.terms) == 1 ? " square class" : " square classes", ", x = 2cos(π/", s.k + 2, "))")
+    h = s.k + 2
+    d = euler_phi(2h) ÷ 2
+    # one class reads exactly like a single value, because that is what it is; the count appears only
+    # when there is something to count
+    head = "Exact value at level k = " * string(s.k) *
+           (length(s.terms) > 1 ? ", " * string(length(s.terms)) * " square classes" : "") *
+           "   (x = 2cos(π/" * string(h) * "), degree " * string(d) * " over ℚ)"
+    lines = [head]
     if isempty(s.terms)
-        print(io, "  = 0")
+        print(io, lines[1], "\n  = 0")
         return
     end
-    for S in sort!(collect(keys(s.terms)))
-        println(io, "  + ", _xform_str(_term(s, S)))
+    long = false
+    for (i, S) in enumerate(sort!(collect(keys(s.terms))))
+        t = _term(s, S)
+        push!(lines, (i == 1 ? "  = " : "  + ") * _xform_str(t))
+        if _xform_long(t)
+            long = true
+            for l in _xform_dims(t)
+                push!(lines, "      " * l)
+            end
+        end
     end
-    v = numeric_value(s)
-    print(io, v === nothing ? "  (the value could not be certified numerically)" : "  ≈ " * string(Float64(v)))
+    long && push!(lines, "    `v.x_value` gives each (P, R) in full")
+    if get(io, :approximate, false)
+        v = numeric_value(s)
+        push!(lines, v === nothing ? "  (the value could not be certified numerically)" :
+                     "  ≈ " * string(Float64(v)))
+    end
+    print(io, join(lines, "\n"))
+end
+
+"""
+Properties beyond the stored fields, the same two an [`ExactX`](@ref) has.
+
+`s.x_value` is the vector of `(P, R)` pairs, one per square class, in the order the display lists them;
+`s.rad` is [`radical(s)`](@ref radical).
+"""
+function Base.getproperty(s::ExactXSum, f::Symbol)
+    if f === :x_value
+        t = getfield(s, :terms)
+        return [(P = t[S], R = _psi_prod(S, getfield(s, :k) + 2)) for S in sort!(collect(keys(t)))]
+    end
+    f === :rad && return radical(s)
+    return getfield(s, f)
+end
+Base.propertynames(::ExactXSum, private::Bool = false) =
+    private ? (:k, :terms, :x_value, :rad) : (:k, :terms, :x_value, :rad)
+
+"""
+    radical(s::ExactXSum; maxlen = 0, degree_limit = 32) -> RadExpr or NoRadical
+
+Term by term, added up. A sum of square classes has a radical form exactly when each of its terms does,
+and the first term that does not is the answer — with the *sum's* number under it, not the term's.
+"""
+function radical(s::ExactXSum; maxlen::Int = 0, degree_limit::Int = RADICAL_DESCENT_MAX_DEGREE)
+    isempty(s.terms) && return RadExpr(0)
+    acc = RadExpr(Rational{BigInt}(0))
+    for S in sort!(collect(keys(s.terms)))
+        e = radical(_term(s, S); maxlen = maxlen, degree_limit = degree_limit)
+        if e isa NoRadical
+            nv = numeric_value(s)
+            return NoRadical(s.k, e.kind, e.degree, e.field, e.limit,
+                             nv === nothing ? nothing : Float64(nv))
+        end
+        acc = RadExpr(acc.rat + e.rat, vcat(acc.terms, e.terms))
+    end
+    return simplify(acc)
 end
 

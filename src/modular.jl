@@ -55,24 +55,6 @@ end
 @inline _sin_at(tab::Vector{T}, r::Int, h::Int) where {T} = r < h ? @inbounds(tab[r+1]) :
                                                                     -@inbounds(tab[r-h+1])
 
-"""
-    smatrix(k; T = Float64) -> (S, labels)
-
-The modular S-matrix of SU(2)_k, `S_{ab} = √(2/h)·sin((2a+1)(2b+1)π/h)` with `h = k+2`, together with
-the spins labelling it.
-
-`S` is real, symmetric and orthogonal, `S² = C` is the charge conjugation matrix — the identity here,
-since every SU(2)_k object is self-dual — and `S_{0b}/S_{00}` is the quantum dimension of `b`.
-
-Built in `O(n²)` table lookups with no trigonometry per entry: along a row the argument advances by a
-constant, folded back into range by one comparison.
-
-```julia
-S, js = smatrix(6)
-S * S' ≈ I
-S[1, :] ./ S[1, 1] ≈ qdim.(js; k = 6)
-```
-"""
 function _smatrix(k::Integer, ::Type{T}) where {T<:AbstractFloat}
     kk = Int(k)
     kk >= 0 || throw(DomainError(k, "level must be nonnegative"))
@@ -93,6 +75,24 @@ function _smatrix(k::Integer, ::Type{T}) where {T<:AbstractFloat}
     end
     return S, level_labels(kk)
 end
+"""
+    smatrix(k; T = Float64) -> (S, labels)
+
+The modular S-matrix of SU(2)_k, `S_{ab} = √(2/h)·sin((2a+1)(2b+1)π/h)` with `h = k+2`, together with
+the spins labelling it.
+
+`S` is real, symmetric and orthogonal, `S² = C` is the charge conjugation matrix — the identity here,
+since every SU(2)_k object is self-dual — and `S_{0b}/S_{00}` is the quantum dimension of `b`.
+
+Built in `O(n²)` table lookups with no trigonometry per entry: along a row the argument advances by a
+constant, folded back into range by one comparison.
+
+```julia
+S, js = smatrix(6)
+S * S' ≈ I
+S[1, :] ./ S[1, 1] ≈ qdim.(js; k = 6)
+```
+"""
 smatrix(k::Integer; T::Type = Float64) = _smatrix(k, T)
 
 """
@@ -129,7 +129,7 @@ end
 
 The Virasoro central charge `c = 3k/(k+2)` of SU(2)_k. It enters the T-matrix through the framing
 anomaly `exp(−2πi c/24)`, and is fixed independently by the Gauss sums and by `(ST)³ = S²`, both of which
-[`test/modular.jl`](@ref) checks rather than assumes.
+`test/modular.jl` checks rather than assumes.
 """
 function central_charge(k::Integer)
     kk = Int(k)
@@ -137,14 +137,6 @@ function central_charge(k::Integer)
     return (3 * kk) // (kk + 2)
 end
 
-"""
-    tmatrix(k; T = ComplexF64, anomaly = true) -> (Tm, labels)
-
-The modular T-matrix, `T_{ab} = δ_{ab}·exp(−2πi c/24)·θ_a`. With `anomaly = false` the framing phase is
-dropped and the diagonal is the bare twists, which is what most fusion-category conventions print.
-
-Returned as a `Diagonal`-shaped dense matrix so that `(S*T)^3 ≈ S^2` can be written directly.
-"""
 function _tmatrix(k::Integer, ::Type{T}, anomaly::Bool) where {T<:Number}
     kk = Int(k)
     kk >= 0 || throw(DomainError(k, "level must be nonnegative"))
@@ -157,8 +149,22 @@ function _tmatrix(k::Integer, ::Type{T}, anomaly::Bool) where {T<:Number}
     end
     return M, js
 end
+"""
+    tmatrix(k; T = ComplexF64, anomaly = true) -> (Tm, labels)
+
+The modular T-matrix, `T_{ab} = δ_{ab}·exp(−2πi c/24)·θ_a`. With `anomaly = false` the framing phase is
+dropped and the diagonal is the bare twists, which is what most fusion-category conventions print.
+
+Returned as a `Diagonal`-shaped dense matrix so that `(S*T)^3 ≈ S^2` can be written directly.
+"""
 tmatrix(k::Integer; T::Type = ComplexF64, anomaly::Bool = true) = _tmatrix(k, T, anomaly)
 
+function _total_qdim(k::Integer, ::Type{T}) where {T<:AbstractFloat}
+    kk = Int(k)
+    kk >= 0 || throw(DomainError(k, "level must be nonnegative"))
+    h = kk + 2
+    return sqrt(T(h) / T(2)) / sin(T(pi) / T(h))
+end
 """
     total_qdim(k; T = Float64)
 
@@ -168,23 +174,8 @@ The closed form is used rather than the sum — they agree, and `test/modular.jl
 because `Σ_{n=1}^{h-1} sin²(nπ/h) = h/2` exactly, which is also why `D² = 2h/(4−x²)` is a rational
 function of the package's `x = 2cos(π/h)`.
 """
-function _total_qdim(k::Integer, ::Type{T}) where {T<:AbstractFloat}
-    kk = Int(k)
-    kk >= 0 || throw(DomainError(k, "level must be nonnegative"))
-    h = kk + 2
-    return sqrt(T(h) / T(2)) / sin(T(pi) / T(h))
-end
 total_qdim(k::Integer; T::Type = Float64) = _total_qdim(k, T)
 
-"""
-    gauss_sum(k; T = ComplexF64, inverse = false) -> Number
-
-`p₊ = Σ_a d_a² θ_a` (or `p₋ = Σ_a d_a² θ_a⁻¹`). The pair fixes the central charge without reference to
-the formula `3k/(k+2)`: `p₊ = D·exp(2πi c/8)`, so `p₊p₋ = D²` and `p₊/p₋ = exp(2πi c/4)`.
-
-(The last exponent is `/4`, not `/8` — the ratio doubles the anomaly. Getting it wrong is the one thing
-that made the checks below look inconsistent when they were not.)
-"""
 function _gauss_sum(k::Integer, ::Type{T}, inverse::Bool) where {T<:Number}
     kk = Int(k)
     kk >= 0 || throw(DomainError(k, "level must be nonnegative"))
@@ -200,6 +191,15 @@ function _gauss_sum(k::Integer, ::Type{T}, inverse::Bool) where {T<:Number}
     end
     return acc
 end
+"""
+    gauss_sum(k; T = ComplexF64, inverse = false) -> Number
+
+`p₊ = Σ_a d_a² θ_a` (or `p₋ = Σ_a d_a² θ_a⁻¹`). The pair fixes the central charge without reference to
+the formula `3k/(k+2)`: `p₊ = D·exp(2πi c/8)`, so `p₊p₋ = D²` and `p₊/p₋ = exp(2πi c/4)`.
+
+(The last exponent is `/4`, not `/8` — the ratio doubles the anomaly. Getting it wrong is the one thing
+that made the checks below look inconsistent when they were not.)
+"""
 gauss_sum(k::Integer; T::Type = ComplexF64, inverse::Bool = false) = _gauss_sum(k, T, inverse)
 
 """

@@ -69,7 +69,7 @@ export symbol_rule, level_admissible, symbol_family, symbol_of, nlabels
 export generic_sixj, prove_identity
 export xvalue, XValue
 export phi_form, splits_completely
-export ExactX, RadExpr, exact_x, radical_form, has_radical_form, radical_levels
+export ExactX, RadExpr, NoRadical, exact_x, radical, radical_form, has_radical_form, radical_levels
 export xpolynomial, radicand, numeric_value, ExactXSum
 export all_6j, iszero_at, issingular_at, level_spectrum
 
