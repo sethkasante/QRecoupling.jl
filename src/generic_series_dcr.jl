@@ -248,7 +248,7 @@ end
 
 
 """
-    build_dcr!(pref_func, base_func, ratio_func, z_min, z_max; kwargs...)
+    build_dcr!(buf::CycloBuffer, pref_func, base_func, ratio_func, z_min, z_max; kwargs...)
 
 The master DCR compiler. Generates the full combinatorial skeleton of an arbitrary 
 sequence by orchestrating closures over a highly optimized `CycloBuffer`.
@@ -315,7 +315,7 @@ into a Deferred Cyclotomic Representation (DCR).
 # Example
 ```julia
 my_series = qseries(3:10) do z
-    return (-1)^z * (qfact_mono(z) / qfact_mono(z - 3))
+    return (-1)^z * (QRecoupling.qfact_mono(z) / QRecoupling.qfact_mono(z - 3))
 end
 ```
 """

@@ -24,16 +24,17 @@ end
     iszero_at(symbol, k, labels...) -> Bool
     iszero_at(k, labels::AbstractVector) -> BitVector
 
-Whether a symbol is *exactly* zero at level `k`, including zeros that come from cancellation between
-finite terms. `symbol` is one of `q6j`, `q3j`, `fsymbol`, `gsymbol` (default `q6j`). Given a collection of
+Screen whether a symbol vanishes at level `k`, including cancellation between finite terms. `symbol` is one of `q6j`, `q3j`, `fsymbol`, `gsymbol` (default `q6j`). Given a collection of
 label tuples, the test runs over the batch with shared tables and threads.
 
-The answer is exact up to a false-positive probability of about 2⁻¹²⁴ from the modular test.
+Structural vanishing is exact; cancellation uses modular screening and should be confirmed by exact
+arithmetic when a proof is needed. No universal false-positive probability is guaranteed.
+Use `threads=1` for batch queries while packed-bit output concurrency remains unresolved.
 
 ```julia
 iszero_at(20, 5, 5, 5, 5, 5, 5)          # true: a cancellation zero
 iszero_at(q3j, 10, 1, 1, 1, 1, -1, 0)
-count(iszero_at(6, all_6j(k = 6)))       # how many symbols vanish at level 6
+count(iszero_at(6, all_6j(k = 6); threads=1))       # how many symbols vanish at level 6
 ```
 """
 iszero_at(k::Integer, args::Spin...) = iszero_at(q6j, k, args...)
@@ -102,7 +103,7 @@ end
 
 How one symbol behaves as the level varies, one entry per level in `k`: `:inadmissible` (the labels are not
 in the theory at that level, so the symbol is zero by convention), `:pole`, `:zero` (every term vanishes),
-`:cancels` (finite terms summing to exactly zero) or `:finite`. Cheap because the valuations are
+`:cancels` (a modular cancellation-zero candidate) or `:finite`. Cheap because the valuations are
 closed-form in the level; pass `cancellation = false` to skip the modular test and report `:finite`
 wherever terms contribute.
 

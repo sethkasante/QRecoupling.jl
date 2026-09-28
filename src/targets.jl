@@ -37,9 +37,9 @@ Level(k; T::Type = Float64) = Level{T,typeof(k)}(k)
 Exact level values.
 
 * `form=:x` (**the default**) returns an [`ExactX`](@ref): the value in the real basis
-  `x = q + q⁻¹ = 2cos(π/(k+2))`, at half the degree of the cyclotomic field, printed through the display
-  ladder — rational, a surd, nested radicals, or a polynomial in `x`, whichever is exact and short. It
-  is closed under `*`, `inv` and `^`, and sums of it are [`ExactXSum`](@ref).
+  `x = q + q⁻¹ = 2cos(π/(k+2))`, at half the degree of the cyclotomic field, printed as the polynomial
+  in `x` it is stored as. [`radical`](@ref) rewrites it in nested square roots where they exist. It is
+  closed under `*`, `inv` and `^`, and sums of it are [`ExactXSum`](@ref).
 * `form=:canonical` returns canonical cyclotomic coefficients in ℚ(ζ₂ₕ). This was the default before the
   real basis existed, and it is deprecated: it will be removed with the rest of the cyclotomic layer in
   v0.5.
@@ -48,7 +48,8 @@ Both use deterministic arithmetic; modular screening alone never establishes an 
 braiding phases retain their `QPhase` form in either.
 
 ```julia
-q6j(Exact(3), 1, 1, 1, 1, 1, 1)                    # (√5 − 3)/2, the Fibonacci level
+q6j(Exact(3), 1, 1, 1, 1, 1, 1)                    # x − 2 at x = 2cos(π/5)
+radical(q6j(Exact(3), 1, 1, 1, 1, 1, 1))           # (√5 − 3)/2, the Fibonacci level
 q6j(Exact(3; form = :canonical), 1, 1, 1, 1, 1, 1) # the same value in ℚ(ζ₁₀)
 ```
 """
@@ -65,7 +66,8 @@ end
 """
     At(q)
 
-Evaluation at a given q, symbolic or numeric, without assuming a root of unity.
+Numerical evaluation at a given real or complex q, without assuming a root of unity.
+Use `Symbolic()` instead for a generic expression.
 """
 struct At{Q} <: EvalTarget
     q::Q
@@ -117,7 +119,7 @@ end
 
 Request a parameter-independent representation instead of evaluation. Recoupling symbols return
 a [`SymbolicValue`](@ref) retaining the factorial rule without constructing a DCR or carrying out the
-sum. Display uses a simplified x-form for small rules and a deferred factorial sum in x for larger ones.
+sum. Display shows the deferred factorial rule in x for every label size; it never carries out the sum.
 Use `xvalue(value)` to request full expansion, or `value.dcr` for a lazily constructed compatibility DCR.
 `qdim` and `theta_value` use the same x-form interface. `rmatrix` and `twist` retain `QPhase`
 objects, displayed as algebraic phases over x with their q branch. No evaluation keywords are accepted.

@@ -20,8 +20,8 @@ returns. It retains the factorial `rule` without evaluating the sum. The compati
 `v.dcr` constructs and caches a DCR only when explicitly accessed.
 
 **Displayed as the rule**, a finite factorial sum in `x = q + q⁻¹`, whatever the labels are. Printing
-carries out no sum, so it costs the same for `j = 1` as for `j = 30` and a small symbol is not silently
-treated differently from a large one.
+carries out no sum or polynomial factorization. Its output length is bounded; the cost of
+formatting factorial and ψ factors still depends on the rule.
 
 Expanding is a separate request, and which of the two you want depends on the basis:
 

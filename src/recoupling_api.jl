@@ -47,7 +47,8 @@ end
 Evaluate the q6j symbol; the default is its classical value.
 Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
 `exact=true` requests an exact classical or level value. `q6j(Symbolic(), ...)`
-constructs a DCR from the factorial rule. Numerical classical/level calls evaluate the rule directly.
+retains a factorial rule with bounded x-form display; `.dcr` constructs a compatibility DCR lazily.
+Numerical classical/level calls evaluate the rule directly.
 `eager=true` is deprecated and uses the same evaluator.
 """
 function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
@@ -71,7 +72,8 @@ end
 Evaluate the Wigner 3j symbol; the default is its classical value.
 Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
 `exact=true` requests an exact classical or level value. `q3j(Symbolic(), ...)`
-constructs a DCR from the factorial rule. Numerical classical/level calls evaluate the rule directly.
+retains a factorial rule with bounded x-form display; `.dcr` constructs a compatibility DCR lazily.
+Numerical classical/level calls evaluate the rule directly.
 `eager=true` is deprecated and uses the same evaluator.
 """
 function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin=-m1-m2;
@@ -95,7 +97,8 @@ end
 Evaluate (−1)^(j1+j2+j4+j5) √([2j3+1][2j6+1]) {6j}, classically by default.
 Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
 `exact=true` requests an exact classical or level value. `fsymbol(Symbolic(), ...)`
-constructs a DCR from the factorial rule. Numerical classical/level calls evaluate the rule directly.
+retains a factorial rule with bounded x-form display; `.dcr` constructs a compatibility DCR lazily.
+Numerical classical/level calls evaluate the rule directly.
 """
 function fsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
                   k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64,
@@ -117,7 +120,8 @@ end
 Evaluate √(Πᵢ[2ji+1]) {6j}, classically by default.
 Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
 `exact=true` requests an exact classical or level value. `gsymbol(Symbolic(), ...)`
-constructs a DCR from the factorial rule. Numerical classical/level calls evaluate the rule directly.
+retains a factorial rule with bounded x-form display; `.dcr` constructs a compatibility DCR lazily.
+Numerical classical/level calls evaluate the rule directly.
 """
 function gsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
                   k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64,
@@ -139,7 +143,8 @@ end
 Evaluate the closed tetrahedron in the package’s existing normalization, classically by default.
 Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
 `exact=true` requests an exact classical or level value. `tetrahedron(Symbolic(), ...)`
-constructs a DCR from the factorial rule. Numerical classical/level calls evaluate the rule directly.
+retains a factorial rule with bounded x-form display; `.dcr` constructs a compatibility DCR lazily.
+Numerical classical/level calls evaluate the rule directly.
 """
 function tetrahedron(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
                   k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64,
@@ -158,7 +163,7 @@ end
 """
     theta_value(j1, j2, j3; k=nothing, q=nothing, exact=false, T=Float64)
 
-Theta-graph value, classical by default. Use `Symbolic()` for the monomial representation.
+Theta-graph value, classical by default. Use `Symbolic()` for a rule-backed x-form.
 """
 function theta_value(j1::Spin,j2::Spin,j3::Spin; k=nothing,q=nothing,exact::Bool=false,T::Type=Float64)
     q = _evaluation_q(k,q,exact)
@@ -184,7 +189,7 @@ end
 """
     qdim(j; k=nothing, q=nothing, exact=false, T=Float64)
 
-Quantum dimension [2j+1], classical by default. Use `qdim(Symbolic(), j)` for a monomial.
+Quantum dimension [2j+1], classical by default. Use `qdim(Symbolic(), j)` for a rule-backed x-form.
 """
 function qdim(j::Spin; k=nothing,q=nothing,exact::Bool=false,T::Type=Float64)
     q = _evaluation_q(k,q,exact)
