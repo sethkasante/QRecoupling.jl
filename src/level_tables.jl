@@ -140,8 +140,64 @@ function is_zero_at_level(s::FactorialSum, k::Int, tab::LevelZeroTable)
     st, segs = classify_at_level(s, k)
     (st === :empty || st === :zero) && return true
     st === :pole && return false
+    reflection_zero(s, segs, k) && return true          # a proof, and cheaper than the screen
     return is_cancellation_zero(s, segs, k, tab) === true
 end
+
+"""
+    reflection_zero(s, segs, k) -> Bool
+
+Does the sum vanish at level `k` by a *level reflection*? A proof, not a screen.
+
+At q = e^{iπ/h}, h = k + 2, the identity [h − n] = [n] gives
+
+    [m]! · [h−1−m]! = [h−1]!      (0 ≤ m ≤ h − 1),
+
+so every factor of a term can be moved across the fraction bar with its argument reflected, m ↦ h−1−m.
+Written that way — each factor as [z + b]!^μ(b) times a power of [h−1]! — a term T(z) has a canonical form,
+and so has T(c − z) with c = z₀ + z₁ the sum of the ends of the contributing range. When the two canonical
+forms agree and c is odd, z ↦ c − z is an involution of the range with no fixed point that reverses the
+sign (−1)^z and fixes the unsigned term, so the terms cancel in pairs.
+
+For the 6j symbol this is exactly the condition {β₁, β₂, β₃, k} = c − {α₁, …, α₄} with c odd, which
+forces k even; the equal-spin family {j j j; j j j} at k = 4j, j odd, is one case. Over every admissible
+6j symbol with k ≤ 22 (4.29 million) it flagged 9,739 symbols, every one an exact zero, and accounted for
+71% of all zeros — all of them at k = 4, 6, 8, 12, 14, 18 (`dev/results/level_reflection_zeros.md`).
+"""
+function reflection_zero(s::FactorialSum, segs, k::Int)
+    (s.alternating && length(segs) == 1) || return false
+    z0 = first(segs[1]); z1 = last(segs[1])
+    c = z0 + z1
+    isodd(c) || return false
+    h = k + 2
+    κo = 0; κi = 0
+    @inbounds for f in s.fac
+        a = Int(f.a); b = Int(f.b)
+        abs(a) == 1 || return false
+        lo, hi = minmax(a * z0 + b, a * z1 + b)
+        (lo >= 0 && hi <= h - 1) || return false            # where the reflection identity holds
+        a == 1 ? (κi += Int(f.c)) : (κo += Int(f.c))
+    end
+    κo == κi || return false
+    # canonical offsets: original  a = 1: (b, e);        a = −1: (h−1−b, −e)
+    #                    reflected a = 1: (h−1−c−b, −e);  a = −1: (b−c, e)
+    @inbounds for g in s.fac
+        for which in 1:2
+            x = which == 1 ? (Int(g.a) == 1 ? Int(g.b) : h - 1 - Int(g.b)) :
+                             (Int(g.a) == 1 ? h - 1 - c - Int(g.b) : Int(g.b) - c)
+            mo = 0; mi = 0
+            for f in s.fac
+                a = Int(f.a); b = Int(f.b); e = Int(f.c)
+                (a == 1 ? b : h - 1 - b) == x && (mo += a == 1 ? e : -e)
+                (a == 1 ? h - 1 - c - b : b - c) == x && (mi += a == 1 ? -e : e)
+            end
+            mo == mi || return false
+        end
+    end
+    return true
+end
+reflection_zero(s::FactorialSum, k::Int) = (st_segs = classify_at_level(s, k);
+    st_segs[1] === :finite && reflection_zero(s, st_segs[2], k))
 
 
 # ---- numbers at q = e^{iπ/h} ----

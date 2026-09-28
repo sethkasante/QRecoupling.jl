@@ -136,6 +136,7 @@ rel(a, b) = abs(a - b) / max(1.0, abs(b))
     @testset "q-numbers take the symbols' interface" begin
         @test qint(5) === 5.0 && qint(0) === 1.0        # [0] = 1, the package's convention
         @test abs(qint(25; k = 10) - sinpi(25 / 12) / sinpi(1 / 12)) < 1e-14   # periodic past h
+        @test isfinite(qfact(30; q = 2.7)) && rel(qfact(30; q = 2.7), 3.103962366449246e189) < 1e-13
         @test qfact(4) == 24.0 && qbinomial(5, 2) == 10.0
         @test qint(5; exact = true) == 5
         @test rel(qint(5; k = 10), sin(5 * pi / 12) / sin(pi / 12)) < 1e-12

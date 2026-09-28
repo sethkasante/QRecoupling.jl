@@ -217,9 +217,11 @@ pass that has lost *every* digit reports a bound of order `u·c·n·Σ|terms|` a
 Sizing a pass from that number is what makes escalation overshoot.
 """
 function _surviving_digits(value, bound, pessimism)
-    v = abs(Float64(value)); b = Float64(bound)
-    (iszero(v) || !isfinite(b)) && return -Inf
-    return log10(pessimism) - log10(b / v)
+    # Logarithms in the value's own type: a BigFloat value below the Float64 range (e.g. 2e-344 at a large
+    # level) must not read as zero, or the doubling loop that relies on this estimate never terminates.
+    (iszero(value) || !isfinite(bound)) && return -Inf
+    iszero(bound) && return Inf
+    return log10(pessimism) - Float64(log10(abs(bound)) - log10(abs(value)))
 end
 
 """
@@ -491,7 +493,8 @@ function level_escalate(s::FactorialSum, segs, k::Int, ::Type{T}, ztab::LevelZer
         v === nothing || return T(v)
     end
     # the pairwise test is a proof and costs a few comparisons; the modular screen is a pass over every term
-    (pairwise_zero(s) || is_cancellation_zero(s, segs, k, ztab) === true) && return zero(T)
+    (pairwise_zero(s) || reflection_zero(s, segs, k) ||
+     is_cancellation_zero(s, segs, k, ztab) === true) && return zero(T)
     target = _target_digits(T)
     if T === Float64                             # K-word tiers: κ up to ~1e30 (K = 3) and ~1e46 (K = 4)
         for tier in (Val(3), Val(4))

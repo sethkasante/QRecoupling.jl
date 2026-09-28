@@ -91,6 +91,194 @@ function _qint_analytic(n::Int, q::Union{Float64,ComplexF64})
     return q^(n - 1) * ((1 - inv(q^(2n))) / (((q - 1) * (q + 1)) / (q * q)))
 end
 
+# ---- q-factorials at generic q, without intermediate overflow ----
+#
+# [n]! = q^{−n(n−1)/2} ∏_{j=2}^{n} g_j,  g_j = (q^{2j} − 1)/(q² − 1),
+#
+# kept as a mantissa and a binary exponent throughout, so a value that fits in a Float64 is returned even
+# when its factors or its prefactor do not: the monomial route overflowed `qfact(30; q = 2.7)` (true value
+# 3.1·10¹⁸⁹) to Inf, and 39 representable cases of a test grid to Inf or 0. Each g_j is taken the way
+# `_qint_analytic` takes [n] — from `expm1` when q^{2j} is near 1, from an exact-base power otherwise, and
+# for |q| > 1 as q^{2j}(1 − q^{−2j}) with the large power split — so its error stays a few units whatever
+# the size of q^{2j}.
+
+"`x·2^n`, for complex `x` too."
+@inline _xldexp(x::Float64, n::Int) = ldexp(x, n)
+@inline _xldexp(x::ComplexF64, n::Int) = ComplexF64(ldexp(real(x), n), ldexp(imag(x), n))
+
+"Scale `m` by a power of two into [1/2, 1) in its largest component; `e` absorbs the exponent."
+@inline function _snorm(m::Float64, e::Int)
+    iszero(m) && return m, e
+    fr, ex = frexp(m)
+    return fr, e + ex
+end
+@inline function _snorm(m::ComplexF64, e::Int)
+    a = max(abs(real(m)), abs(imag(m)))
+    (iszero(a) || !isfinite(a)) && return m, e
+    ex = exponent(a) + 1
+    return ComplexF64(ldexp(real(m), -ex), ldexp(imag(m), -ex)), e + ex
+end
+
+# ---- double-word values, real (hi, lo) or complex (re_hi, re_lo, im_hi, im_lo) ----
+#
+# Powers are where a float product loses most: binary powering doubles the accumulated relative error at
+# every squaring, so z^t costs ~t·u — 1.6e-13 for cis(0.7)^4950, where Julia's compensated real `^` gives
+# 2e-17 but its complex `^` does not. Carried in double words the same powering costs ~t·u², and so does
+# the running q^{2j} of the factorial below; each is rounded to a double once, where it is used.
+
+@inline _tprod(a::Float64, b::Float64) = (p = a * b; (p, fma(a, b, -p)))
+@inline function _tsum(a::Float64, b::Float64)
+    s = a + b; bb = s - a
+    return s, (a - (s - bb)) + (b - bb)
+end
+@inline _qtsum(a::Float64, b::Float64) = (s = a + b; (s, b - (s - a)))
+@inline function _dwmul(ah, al, bh, bl)
+    p, e = _tprod(ah, bh)
+    return _qtsum(p, e + (ah * bl + al * bh))
+end
+@inline function _dwadd(ah, al, bh, bl)
+    s, e = _tsum(ah, bh)
+    return _qtsum(s, e + (al + bl))
+end
+
+_dwof(q::Float64) = (q, 0.0)
+_dwof(q::ComplexF64) = (real(q), 0.0, imag(q), 0.0)
+_qdwone(::Float64) = (1.0, 0.0)
+_qdwone(::ComplexF64) = (1.0, 0.0, 0.0, 0.0)
+@inline _qdwmul(a::NTuple{2,Float64}, b::NTuple{2,Float64}) = _dwmul(a[1], a[2], b[1], b[2])
+@inline function _qdwmul(a::NTuple{4,Float64}, b::NTuple{4,Float64})
+    rr = _dwmul(a[1], a[2], b[1], b[2]); ii = _dwmul(a[3], a[4], b[3], b[4])
+    ri = _dwmul(a[1], a[2], b[3], b[4]); ir = _dwmul(a[3], a[4], b[1], b[2])
+    re = _dwadd(rr[1], rr[2], -ii[1], -ii[2]); im = _dwadd(ri[1], ri[2], ir[1], ir[2])
+    return (re[1], re[2], im[1], im[2])
+end
+@inline _dwsub1(a::NTuple{2,Float64}) = _dwadd(a[1], a[2], -1.0, 0.0)
+@inline _dwsub1(a::NTuple{4,Float64}) = ((r = _dwadd(a[1], a[2], -1.0, 0.0)); (r[1], r[2], a[3], a[4]))
+@inline _dwscale(a::NTuple{N,Float64}, k::Int) where {N} = map(x -> ldexp(x, k), a)
+@inline _dwround(a::NTuple{2,Float64}) = a[1] + a[2]
+@inline _dwround(a::NTuple{4,Float64}) = ComplexF64(a[1] + a[2], a[3] + a[4])
+@inline function _dwnorm(a::NTuple{N,Float64}, e::Int) where {N}
+    mx = N == 2 ? abs(a[1]) : max(abs(a[1]), abs(a[3]))
+    (iszero(mx) || !isfinite(mx)) && return a, e
+    ex = exponent(mx) + 1
+    return _dwscale(a, -ex), e + ex
+end
+
+# Renormalising at every step costs a frexp or two ldexps; the exponent range only needs protecting when a
+# value has drifted far, so the loops below renormalise lazily, outside [2^−400, 2^400].
+@inline function _lnorm(m::Union{Float64,ComplexF64}, e::Int)
+    a = m isa Float64 ? abs(m) : max(abs(real(m)), abs(imag(m)))
+    (0x1p-400 < a < 0x1p400) && return m, e
+    return _snorm(m, e)
+end
+@inline function _ldwnorm(a::NTuple{N,Float64}, e::Int) where {N}
+    mx = N == 2 ? abs(a[1]) : max(abs(a[1]), abs(a[3]))
+    (0x1p-400 < mx < 0x1p400) && return a, e
+    return _dwnorm(a, e)
+end
+
+"b^t (t ≥ 0) for a double-word base with exponent `be`, as a split double word: error ~t·u², not t·u."
+function _dwpow(b::NTuple{N,Float64}, be::Int, t::Int) where {N}
+    r = N == 2 ? (1.0, 0.0) : (1.0, 0.0, 0.0, 0.0); re = 0
+    b, be = _dwnorm(b, be)
+    while t > 0
+        if isodd(t)
+            r = _qdwmul(r, b); re += be; r, re = _ldwnorm(r, re)
+        end
+        t >>= 1
+        if t > 0
+            b = _qdwmul(b, b); be *= 2; b, be = _dwnorm(b, be)
+        end
+    end
+    return r, re
+end
+
+"""
+[n]! at a real positive or complex q as a split value (m, e), or `nothing` where the formula does not apply.
+
+    [n]! = q^{−n(n−1)/2} ∏_{j=2}^{n} (q^{2j} − 1) / (q² − 1)^{n−1}
+
+The running q^{2j}, q² − 1 and both powers are double words, so the only roundings of size u are one per
+factor; a denominator rounded once and divided n times would make its error systematic, n·u.
+"""
+function _qfact_split(n::Int, q::T) where {T<:Union{Float64,ComplexF64}}
+    q isa Float64 && !(q > 0) && return nothing
+    (0x1p-300 < abs(q) < 0x1p300) || return nothing       # q² itself must be a double
+    n <= 1 && return one(T), 0
+    q2, q2e = _dwpow(_dwof(q), 0, 2)
+    d, de = _dwnorm(_dwsub1(_dwscale(q2, q2e)), 0)          # q² − 1, still a double word
+    iszero(d[1]) && return nothing
+    p, pe = q2, q2e                                         # q^{2j}, starting at j = 1
+    m, e = one(T), 0
+    q2, q2e = _dwscale(q2, q2e), 0                          # in range: |q|² is a modest number
+    for j in 2:n
+        p = _qdwmul(p, q2); pe += q2e; p, pe = _ldwnorm(p, pe)
+        g, ge = _pm1(p, pe)
+        m, e = _lnorm(m * g, e + ge)
+    end
+    dm, dme = _dwpow(d, de, n - 1)
+    m, e = _snorm(m / _dwround(dm), e - dme)
+    qm, qme = _dwpow(_dwof(q), 0, n * (n - 1) ÷ 2)
+    return _snorm(m / _dwround(qm), e - qme)
+end
+
+"""
+The q-binomial [n choose m] at a real positive or complex q as a split value, as one product of m ratios
+
+    q^{−m(n−m)} ∏_{j=1}^{m} (q^{2(n−m+j)} − 1) / (q^{2j} − 1),
+
+with the running powers in double words. Dividing three factorials would cost three times as much and
+round three times.
+"""
+function _qbinomial_split(n::Int, m::Int, q::T) where {T<:Union{Float64,ComplexF64}}
+    q isa Float64 && !(q > 0) && return nothing
+    (0x1p-300 < abs(q) < 0x1p300) || return nothing       # q² itself must be a double
+    m = min(m, n - m)
+    m <= 0 && return one(T), 0
+    q2, q2e = _dwpow(_dwof(q), 0, 2)
+    q2, q2e = _dwscale(q2, q2e), 0
+    a, ae = _dwpow(q2, q2e, n - m)                       # q^{2(n−m)}, advanced to q^{2(n−m+j)}
+    b, be = _qdwone(q), 0                                  # q^{2j}
+    val, e = one(T), 0
+    for j in 1:m
+        a = _qdwmul(a, q2); ae += q2e; a, ae = _ldwnorm(a, ae)
+        b = _qdwmul(b, q2); be += q2e; b, be = _ldwnorm(b, be)
+        num, ne = _pm1(a, ae); den, dne = _pm1(b, be)
+        iszero(den) && return nothing
+        val, e = _lnorm(val * (num / den), e + ne - dne)
+    end
+    qm, qme = _dwpow(_dwof(q), 0, m * (n - m))
+    return _snorm(val / _dwround(qm), e - qme)
+end
+
+"p − 1 for a split double word p = (p, pe), as a split double: exact enough in every regime of pe."
+@inline function _pm1(p::NTuple{N,Float64}, pe::Int) where {N}
+    pe == 0 && return _dwround(_dwsub1(p)), 0
+    mx = N == 2 ? abs(p[1]) : max(abs(p[1]), abs(p[3]))
+    lg = exponent(mx) + pe                                  # log2 |p·2^pe|, roughly
+    lg > 60 && return _dwround(p), pe                       # 1 is below the last place
+    lg < -60 && return (N == 2 ? -1.0 : ComplexF64(-1.0)), 0 # p is below the last place of 1
+    return _dwround(_dwsub1(_dwscale(p, pe))), 0
+end
+
+"A split value raised to an integer power p, and returned as a number (Inf or 0 only if the value is)."
+function _split_value(m::T, e::Int, p::Int) where {T}
+    if p < 0
+        m = inv(m); e = -e; p = -p
+    end
+    rm, re = one(T), 0
+    while p > 0
+        if isodd(p)
+            rm *= m; re += e; rm, re = _snorm(rm, re)
+        end
+        p >>= 1
+        if p > 0
+            m *= m; e *= 2; m, e = _snorm(m, e)
+        end
+    end
+    return _xldexp(rm, re)
+end
+
 "Π [n]!^c from the split tables at a level; `nothing` if a factorial reaches [h] = 0."
 function _qfacts_level(k::Int, pairs::NTuple{N,Tuple{Int,Int}}) where {N}
     tab = qint_tables(Float64, k)
@@ -136,9 +324,16 @@ function _qnumber_float(what::Symbol, a::Int, b::Int, k, q)
         what === :fact && return _qfacts_level(kk, ((a, b),))
         return _qfacts_level(kk, ((a, 1), (b, -1), (a - b, -1)))
     elseif q isa Union{Float64,ComplexF64}
-        what === :int || return nothing                      # products of many [m] keep the old route
-        v = _qint_analytic(a, q)
-        return v === nothing ? nothing : v^b
+        if what === :int
+            v = _qint_analytic(a, q)
+            return v === nothing ? nothing : v^b
+        elseif what === :fact
+            f = _qfact_split(a, q)
+            return f === nothing ? nothing : _split_value(f[1], f[2], b)
+        else
+            f = _qbinomial_split(a, b, q)
+            return f === nothing ? nothing : _split_value(f[1], f[2], 1)
+        end
     end
     return nothing
 end
@@ -188,6 +383,8 @@ qint(5; q = 0.7)
 qint(Exact(10), 5)      # exact, as a polynomial in x; `radical` for the surd
 ```
 """
+function qint end
+
 Base.@constprop :aggressive @inline function qint(n::Integer, p::Integer = 1; k = nothing, q = nothing, exact::Bool = false,
               T::Type{TT} = Float64, workspace = nothing) where {TT}
     q = _evaluation_q(k, q, exact)
@@ -207,6 +404,8 @@ end
 The q-factorial `([n]!)^p = ([1][2]⋯[n])^p`, classical by default, with the same keywords as [`qint`](@ref).
 `n < 0` is zero and `[0]! = [1]! = 1`.
 """
+function qfact end
+
 Base.@constprop :aggressive @inline function qfact(n::Integer, p::Integer = 1; k = nothing, q = nothing, exact::Bool = false,
                T::Type{TT} = Float64, workspace = nothing) where {TT}
     q = _evaluation_q(k, q, exact)
@@ -226,6 +425,8 @@ end
 The Gaussian binomial `[n]! / ([m]! [n−m]!)`, classical by default, with the same keywords as
 [`qint`](@ref). Outside `0 ≤ m ≤ n` it is zero.
 """
+function qbinomial end
+
 Base.@constprop :aggressive @inline function qbinomial(n::Integer, m::Integer; k = nothing, q = nothing, exact::Bool = false,
                    T::Type{TT} = Float64, workspace = nothing) where {TT}
     q = _evaluation_q(k, q, exact)
