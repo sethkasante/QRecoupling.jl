@@ -34,6 +34,31 @@ rel(a, b) = abs(a - b) / max(1.0, abs(b))
         @test q6j(a, b, c, d, e, f) ≈ q6j(d, e, c, a, b, f)
     end
 
+    @testset "exact classical target" begin
+        @test Exact() === Classical(exact=true)
+        @test q6j(Exact(), 1, 1, 1, 1, 1, 1) == 1//6
+        @test q6j(Exact(), 1, 1, 1, 1, 1, 4) == 0
+        r = q3j(Exact(), 1//2, 1//2, 0, 1//2, -1//2, 0)
+        @test r^2 == 1//2
+        for (f, args) in ((q6j, LABELS[4]), (q3j, (1,1,1,1,-1,0)),
+                          (fsymbol, LABELS[1]), (gsymbol, LABELS[1]),
+                          (QR.tetrahedron, LABELS[1]), (QR.theta_value, (1,1,0)),
+                          (qdim, (1//2,)), (rmatrix, (1,1,1)), (twist, (1//2,)),
+                          (qint, (5,)), (qfact, (5,)), (qbinomial, (5,2)))
+            v = f(Exact(), args...)
+            legacy = f(args...; q=1, exact=true)
+            @test v == legacy
+            @test typeof(v) === typeof(legacy)
+        end
+        s = q6j(Symbolic(), LABELS[1]...)
+        @test qeval(Exact(), s) == 1//6
+        @test qeval(Exact(), s.rule) == 1//6
+        @test q6j(Exact(), collect(LABELS)) == [q6j(Exact(), js...) for js in LABELS]
+        for kw in ((;q=1), (;k=10), (;exact=true), (;exact=false))
+            @test_throws ArgumentError q6j(Exact(), LABELS[1]...; kw...)
+        end
+    end
+
     @testset "level k" begin
         @test q6j(1, 1, 1, 1, 1, 1; k = 10) ≈ 0.1547005383792515
         for js in LABELS, k in (5, 10, 40)

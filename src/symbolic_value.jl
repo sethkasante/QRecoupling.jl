@@ -60,6 +60,13 @@ end
 Base.propertynames(v::SymbolicValue, private::Bool=false) =
     private ? (:rule,:dcr,:_dcache,:_xcache,:_xlock) : (:rule,:dcr)
 
+function _cached_x_form(v::SymbolicValue)
+    lock(v._xlock) do
+        v._xcache[] === nothing && (v._xcache[] = generic_value(v.rule))
+        return v._xcache[]::XValue
+    end
+end
+
 """
     x_form(v::SymbolicValue) -> XValue
 
@@ -78,12 +85,6 @@ it. The result is cached on the symbolic value, so asking twice is free; callers
 mutating its polynomial coefficients cannot corrupt later requests or display. Square roots describe the
 formal algebraic expression; numerical evaluation uses the rule's branch convention.
 """
-function _cached_x_form(v::SymbolicValue)
-    lock(v._xlock) do
-        v._xcache[] === nothing && (v._xcache[] = generic_value(v.rule))
-        return v._xcache[]::XValue
-    end
-end
 x_form(v::SymbolicValue) = deepcopy(_cached_x_form(v))
 x_form(s::FactorialSum) = generic_value(_validate_rule(s))
 

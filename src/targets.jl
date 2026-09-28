@@ -32,9 +32,14 @@ end
 Level(k; T::Type = Float64) = Level{T,typeof(k)}(k)
 
 """
+    Exact()
     Exact(k; form=:x)
 
-Exact level values.
+`Exact()` requests exact classical evaluation at q = 1. It is shorthand for
+`Classical(exact=true)`, reusing the direct classical evaluator and its rational/radical
+result types without constructing a DCR or a level field. Use `Symbolic()` to retain q.
+
+`Exact(k)` requests exact level values:
 
 * `form=:x` (**the default**) returns an [`ExactX`](@ref): the value in the real basis
   `x = q + q⁻¹ = 2cos(π/(k+2))`, at half the degree of the cyclotomic field, printed as the polynomial
@@ -48,6 +53,7 @@ Both use deterministic arithmetic; modular screening alone never establishes an 
 braiding phases retain their `QPhase` form in either.
 
 ```julia
+q6j(Exact(), 1, 1, 1, 1, 1, 1)                     # 1//6
 q6j(Exact(3), 1, 1, 1, 1, 1, 1)                    # x − 2 at x = 2cos(π/5)
 radical(q6j(Exact(3), 1, 1, 1, 1, 1, 1))           # (√5 − 3)/2, the Fibonacci level
 q6j(Exact(3; form = :canonical), 1, 1, 1, 1, 1, 1) # the same value in ℚ(ζ₁₀)
@@ -77,12 +83,14 @@ end
     Classical(; exact = false)
 
 The q → 1 limit: ordinary SU(2) recoupling. With `exact = true` the result is a rational/radical value
-rather than floating point.
+rather than floating point. Prefer `Exact()` for this exact classical request;
+`Classical(exact=true)` remains supported.
 """
 struct Classical <: EvalTarget
     exact::Bool
 end
 Classical(; exact::Bool = false) = Classical(exact)
+Exact() = Classical(exact=true)
 
 target_kwargs(t::Level{T}) where {T} = (; k = t.k, T = T)
 target_kwargs(t::Exact) = (; k = t.k, exact = true)
