@@ -9,6 +9,11 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        julia-version: ['1.10', '1.12']
+    env:
+      JULIA_NUM_THREADS: 4
     
     steps:
       - name: Checkout repository
@@ -17,7 +22,7 @@ jobs:
       - name: Setup Julia
         uses: julia-actions/setup-julia@v2
         with:
-          version: '1.10'
+          version: ${{ matrix.julia-version }}
 
       - name: Cache dependencies
         uses: julia-actions/cache@v2

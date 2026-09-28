@@ -1,55 +1,139 @@
-# API Reference
+# API reference
 
 ```@meta
 CurrentModule = QRecoupling
 ```
-This page details the public API for `QRecoupling.jl`. Internal evaluations are abstracted away to provide a clean, unified interface.
 
-## Core Recoupling Symbols
-The master dispatchers for evaluating $3j$ and $6j$ symbols. The computational regime is dynamically routed based on the provided target: integer level $k$ (Turaev-Viro), parameter $q$ (complex analytic), or $q=1$ (classical Ponzano-Regge limit). Precision is controlled via the exact boolean flag.
+## Evaluation targets
+
+Omitting q and k requests classical numerical evaluation. `Exact()` requests exact
+classical rational/radical values, while `Symbolic()` retains the parameter. `Exact(k)` defaults to the real x basis;
+`Symbolic()` retains a factorial rule. See [Getting started](getting_started.md) for target
+selection and [Accuracy and performance](performance.md) for precision limits.
+
+```@docs
+EvalTarget
+Classical
+Level
+Exact
+At
+Symbolic
+```
+
+## Recoupling and product functions
+
+Public spin labels are physical spins. `qint`, `qfact`, and `qbinomial` also evaluate
+classically by default in v0.4; use their `Symbolic()` methods for a generic expression.
+The graph helpers below require the `QRecoupling.` qualifier.
+
 ```@docs
 q6j
 q3j
-```
-
----
-
-### Other TQFT Tensors
-Composite tensors and network invariants used in the construction of 3D TQFTs, spin foam models, and string-net models.
-```@docs
-qdim
-rmatrix
 fsymbol
 gsymbol
-```
----
-
-### $q$-Hypergeometric Primitives
-Public primitives to easily build algebraic representations of $q$-deformed integers, factorials, and binomial coefficients. These functions return `CyclotomicMonomial` objects and are designed to be used inside the `qseries` sequence builder.
-```@docs
+qdim
+rmatrix
+QRecoupling.tetrahedron
+QRecoupling.theta_value
 qint
 qfact
 qbinomial
 ```
 
----
+## Fusion and modular data
 
-## Generic Series & Universal Evaluation
-`QRecoupling.jl` separates algebraic construction from field evaluation. These functions allow you to construct custom $q$-hypergeometric series and project abstract Deferred Cyclotomic Representation (DCR) objects into concrete target fields.
 ```@docs
-qseries
-build_series
-build_dcr!
-qeval
-CyclotomicMonomial
-DCR
+fmatrix
+fmatrix_labels
+bmatrix
+smatrix
+tmatrix
+level_labels
+twist
+monodromy
+central_charge
+total_qdim
+gauss_sum
+verlinde
 ```
 
---- 
+## Rules, series, and repeated evaluation
 
-### Low-Level Buffer Operations & Projections
-For developers building advanced, memory-optimized loops or requesting specific projection regimes directly without routing through `qeval`.
 ```@docs
+AffineFactorial
+FactorialSum
+qseries
+qeval
+EvaluationWorkspace
+all_6j
+empty_caches!
+```
+
+## Symbolic and exact x forms
+
+The [exact-forms tutorial](tutorials/exact_forms.md) documents `SymbolicValue`, `x_form`,
+`XValue`, `ExactX`, `ExactXSum`, and `numeric_value` with examples. Coefficients and radical
+extraction are accessible independently of the bounded display.
+
+```@docs
+exact_x
+xpolynomial
+radicand
+radical_form
+has_radical_form
+radical_levels
+RadExpr
+generic_sixj
+prove_identity
+```
+
+## Structural queries
+
+Cancellation queries use modular screening. They are useful for exploration but should not
+be presented as universal exact-zero certificates. Use serial `iszero_at` batches while the
+packed-bit concurrency issue is open. See [Accuracy and performance](performance.md).
+
+```@docs
+iszero_at
+issingular_at
+level_spectrum
+```
+
+## Extending symbols
+
+`SixJ`, `ThreeJ`, `FSymbol`, `GSymbol`, `Tetrahedron`, and `ThetaValue` identify supported
+symbol families. The rule interface uses physical labels; some lower-level algebraic
+constructors instead use doubled integers, as stated in their signatures.
+
+```@docs
+QSymbol
+symbol_rule
+nlabels
+level_admissible
+symbol_family
+symbol_of
+```
+
+## Compatibility and low-level projections
+
+DCR display is structural. These APIs support existing code and callback series; they are
+not required to obtain a numerical symbol or a generic x-form. `project_exact` is the legacy
+cyclotomic projector; prefer `Exact(k)` for current rule-backed exact level values.
+`Exact(k; form=:canonical)` remains deprecated compatibility behavior. The former deferred
+exact carrier and dedicated identity-verifier APIs are no longer part of the current package.
+
+```@docs
+qint_mono
+qfact_mono
+qbinomial_mono
+CyclotomicMonomial
+DCR
+QPhase
+symbolic_terms
+phi_form
+splits_completely
+build_series
+build_dcr!
 add_qint!
 add_qfact!
 project_discrete
@@ -57,12 +141,4 @@ project_exact
 project_classical
 project_classical_exact
 project_analytic
-```
-
----
-
-## Memory & Cache Management
-When changing the topological level $k$ drastically, performing exact computations in cyclotomic fields, or benchmarking tight loops, it is recommended to clear these caches to free RAM.
-```@docs
-empty_caches!
 ```

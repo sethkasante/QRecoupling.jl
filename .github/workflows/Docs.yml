@@ -12,14 +12,21 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        julia-version: ['1.10', '1.12']
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
         with:
-          version: '1.10'
+          version: ${{ matrix.julia-version }}
+      - uses: julia-actions/cache@v2
       - name: Install dependencies
-        run: julia --project=docs -e 'using Pkg; Pkg.develop(path="."); Pkg.Registry.update(); Pkg.instantiate()'
-      - name: Build and deploy
+        run: julia --project=docs -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
+      - name: Check README examples
+        run: julia --project=docs docs/check_readme.jl
+      - name: Build examples and documentation
         env:
+          QRECOUPLING_DOCS_DEPLOY: ${{ github.event_name == 'push' && matrix.julia-version == '1.12' && 'true' || 'false' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: julia --project=docs docs/make.jl

@@ -1,108 +1,104 @@
+# Checking and proving identities
 
-# Proving Topological Identities
+Numerical agreement tests conventions and implementations. An exact residual can prove an
+identity for fixed labels. A generic rational-function identity can prove it before choosing
+a level. These are different kinds of evidence.
 
-Another advantage of `QRecoupling.jl` is its ability to verify axioms of 3D topological quantum field theories (TQFTs). 
+## Numerical orthogonality
 
-In this tutorial, we will prove the two most important topological identities in the Turaev-Viro/Ponzano-Regge state sum models: The **Orthogonality Relation** (Bubble Move) and the **Biedenharn-Elliott Pentagon Identity** (Pachner 2-3 Move).
+```@example identities
+using QRecoupling, LinearAlgebra
+F, e, f = fmatrix(1,1,1,1; k=6)
+@assert transpose(F)*F ≈ I # hide
+norm(transpose(F)*F - I)
+```
 
----
+This checks the whole recoupling matrix at one level to floating-point accuracy. It does
+not prove a symbolic identity for arbitrary labels or levels.
 
-### Proof of Orthogonality 
+## Exact orthogonality at one level
 
-The quantum $6j$ symbols satisfy the orthogonal relation generically for all $q \in \mathbb{C}^\times$. The orthogonal identity relates the sum of product of two $6j$ symbols to the Kronecker delta and quantum dimensions.
+For fixed outer spins equal to 1 and channel p = 1, orthogonality states
+`[3] * Σₓ [2x+1] {1 1 x; 1 1 1}² = 1`. At level 6 all channels x = 0, 1, 2 are allowed.
 
-We can prove this *exactly* for discrete level $k$ model (without floating-point errors) using the `exact=true` condition.
-
-```julia
-using QRecoupling
-
-function test_orthogonality(j1, j2, j3, j4, j5, j6;k=k)
-    # determine valid bounds for x
-    x_min = max(abs(j1 - j2), abs(j3 - j4))
-    x_max = min(j1 + j2, j3 + j4)
-    
-    LHS = 0
-    
-    for x in x_min:x_max
-        # sum over admissible spins 
-        if (j1 + j2 + x) <= k && (j3 + j4 + x) <= k
-            dim_x = qdim(x, k=k, exact=true)
-            sym1  = q6j(j1, j2, x, j3, j4, j5, k=k, exact=true)
-            sym2  = q6j(j1, j2, x, j3, j4, j6, k=k, exact=true)
-            val = dim_x * sym1 * sym2
-            
-            LHS += iseven(2*(j1+j2+j3+j4)) ? val : - val
-        end
+```@example identities
+k = 6
+lhs = let total = ExactXSum(k)
+    for x in 0:2
+        v = q6j(Exact(k), 1,1,x,1,1,1)
+        total = total + qdim(Exact(k),1) * qdim(Exact(k),x) * v^2
     end
-    
-    # evaluate exact RHS
-    RHS = 0
-    if j5 == j6 && QRecoupling.qδ(j1,j4,j5,k) && QRecoupling.qδ(j2,j3,j5,k) 
-        RHS = 1/qdim(j5, k=k, exact=true)
-    end
-    
-    diff = LHS-RHS
-
-    println("Orthogonality Check for SU(2)_$k")
-    println("--------------------------------")
-    println("LHS (Sum): ", LHS)
-    println("RHS (Exact): ", RHS)
-    println("LHS - RHS = ", diff)
-    println(iszero(diff)  ? "Identity Holds!" : "Identity Failed!")
+    total
 end
-
-
-julia> test_orthogonality(1,1,1,1,1,1, k=5)
-Orthogonality Check for SU(2)_5
---------------------------------
-LHS (Sum): Exact Algebraic Result in ℚ(ζ₁₄):
-  Value: (-ζ^4 + ζ^3)
-RHS (Exact): -ζ^4 + ζ^3
-LHS - RHS = Exact Algebraic Result in ℚ(ζ₁₄):
-  Value: 0
-Identity Holds!
-
-julia> test_orthogonality(3/2,3/2,1/2,1/2,2,2, k=8)
-Orthogonality Check for SU(2)_8
---------------------------------
-LHS (Sum): Exact Algebraic Result in ℚ(ζ₂₀):
-  Value: (-1//2*ζ^6 + 1//2*ζ^4)
-RHS (Exact): -1//2*ζ^6 + 1//2*ζ^4
-LHS - RHS = Exact Algebraic Result in ℚ(ζ₂₀):
-  Value: 0
-Identity Holds!
-
-
-julia> test_orthogonality(12,15,17,18,13,14, k=60)
-Orthogonality Check for SU(2)_60
---------------------------------
-LHS (Sum): Exact Algebraic Result in ℚ(ζ₁₂₄):
-  Value: 0
-RHS (Exact): 0
-LHS - RHS = Exact Algebraic Result in ℚ(ζ₁₂₄):
-  Value: 0
-Identity Holds!
-
-test_orthogonality(13/2,13/2,11/2,15/2,2,2, k=25)
-Orthogonality Check for SU(2)_25
---------------------------------
-LHS (Sum): Exact Algebraic Result in ℚ(ζ₅₄):
-  Value: (-ζ^17 + ζ^15 - ζ^13 + ζ^11 + ζ^10 - ζ^7 - ζ^6 + ζ^5 + ζ^4 - ζ^3 - ζ^2 + 1)
-RHS (Exact): -ζ^17 + ζ^15 - ζ^13 + ζ^11 + ζ^10 - ζ^7 - ζ^6 + ζ^5 + ζ^4 - ζ^3 - ζ^2 + 1
-LHS - RHS = Exact Algebraic Result in ℚ(ζ₅₄):
-  Value: 0
-Identity Holds!
+one_at_level = qdim(Exact(k),0)
+residual = lhs - one_at_level
+@assert isempty(residual) # hide
+isempty(residual)
 ```
-By leveraging `QRecoupling.jl`, the radical prefactors of the $6j$-symbols perfectly annihilate each other (when possible) during multiplication, keeping the entire computation division-free and strictly inside the cyclotomic field $\mathbb{Q}(\zeta)$.
 
---- 
+An **empty exact residual** means every stored coefficient canceled exactly. No floating
+comparison is needed for this example.
 
-### The Biedenharn-Elliott (Pentagon) Identity
-The Pentagon Identity guarantees that topological invariants are independent of the chosen triangulation. It relates the product of two $6j$-symbols to a sum over the product of three $6j$-symbols.
+## The Biedenharn–Elliott relation
 
-Because this involves a large summation and many multiplications, it is the perfect candidate for our high-speed `:numeric` engine.
-```julia
-using QRecoupling
+Here is a fixed-label pentagon check, assembled from the same public arithmetic. With all
+nine external labels equal to 1, the phase of each summand is `(-1)^(9+x)`.
 
-#TODO: test  ∑ {6j}{6j}{6j} = {6j}{6j} 
+```@example identities
+lhs_be = let total = ExactXSum(k)
+    for x in 0:2
+        v = q6j(Exact(k),1,1,x,1,1,1)
+        total = total + (-1)^(9+x) * qdim(Exact(k),x) * v^3
+    end
+    total
+end
+rhs_be = q6j(Exact(k),1,1,1,1,1,1)^2
+residual_be = lhs_be - rhs_be
+@assert isempty(residual_be) # hide
+isempty(residual_be)
 ```
+
+This verifies one admissible coefficient identity, not the full theorem for arbitrary
+labels. For general labels, derive the summation bounds, parity, and level truncation from
+the three left-hand symbols and check the right-hand symbols' admissibility. The test suite
+contains broader label samples.
+
+## Prove a generic identity in x
+
+The same diagonal orthogonality relation can be compared before choosing a level:
+
+```@example identities
+lhs_x = let total = zero(XValue)
+    for x in 0:2
+        v = x_form(q6j(Symbolic(),1,1,x,1,1,1))
+        weight = x_form(qdim(Symbolic(),1)) * x_form(qdim(Symbolic(),x))
+        total = total + weight * v^2
+    end
+    total
+end
+certificate = prove_identity(lhs_x, one(XValue); kmax=30)
+@assert certificate.verdict == :proved # hide
+certificate
+```
+
+`prove_identity` compares normalized generic expressions by polynomial arithmetic. A proved
+identity is valid in the formal algebraic expression wherever the denominators are nonzero;
+complex numerical evaluation must retain consistent square-root branches. The returned
+`exceptional` list scans levels only through `kmax`. A canceled expression can have fewer
+visible denominator zeros than the original summands, so this list is not a substitute for
+checking their admissibility or singularities.
+
+`generic_sixj` is a lower-level alternative that takes **doubled integer labels**. Prefer
+`x_form(q6j(Symbolic(), ...))` when working with physical spins consistently.
+
+## When a zero test is a certificate
+
+`ExactXSum` keeps terms in radical classes. At a particular level, different generic
+classes can represent dependent roots. The current `iszero`/`==` implementation uses exact
+arguments where available and a numerical fallback in remaining multi-class cases. Do not
+interpret every `true` from that fallback as a general exact proof.
+
+For proof-oriented work, exhibit an empty exact residual as above, or use a generic
+polynomial certificate where applicable. Conversely, a nonempty residual need not disprove
+a specialized identity: additional algebraic simplification can still be required.
+`iszero_at` is a screening interface and does not replace this distinction.

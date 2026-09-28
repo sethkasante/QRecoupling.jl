@@ -6,170 +6,115 @@
 
 # QRecoupling.jl
 
-**QRecoupling.jl** is a high-performance Julia library for the **stable and scalable evaluation of quantum recoupling coefficients and q-hypergeometric series**, designed to overcome computational limitations of direct numerical and symbolic methods.
+**Quantum recoupling, from fast numerical coefficients to readable exact formulas.**
 
-It is designed to overcome fundamental limitations of direct numerical and symbolic evaluation of $q$-deformed symbols, including catastrophic cancellation, expression swell, and redundant computation.
+Evaluate classical and quantum 3j/6j symbols, fusion and braiding data, and finite
+q-factorial series in Julia. Use the same labels at q = 1, at a root of unity, or at a
+real or complex q. Build exact level values and generic formulas in `x = q + q⁻¹`.
 
+QRecoupling provides local building blocks for angular momentum, spin networks,
+Turaev–Viro models, and fusion-based tensor networks. It does not contract full networks
+or assemble state sums automatically.
 
-> **Main idea:** separate algebraic structure from numerical evaluation.
+## Quick start
 
-All quantities are first represented symbolically in a **Deferred Cyclotomic Representation (DCR)**, where exact cancellations happen automatically. Only after the expression is maximally reduced is it projected into a target field (numeric, exact algebraic, or classical asymptotic limit).
-
----
-
-## Key Features
-
-### • Deferred Cyclotomic Representation (DCR)
-Instead of expanding quantum factorials into massive rational polynomials, the DCR encodes $q$-hypergeometric series using the sparse integer exponents of their cyclotomic factorization:
-$$\mathcal{M} = \sigma q^P \prod_d \Phi_d(q^2)^{e_d} $$
-- Multiplication and division are reduced to highly efficient integer vector addition/subtraction.
-- Perfect square roots (like those in $\Delta$-triangle coefficients) are extracted exactly at the exponent level, bypassing the need for algebraic field extensions.
-
----
-
-### • Universal Projection Framework
-
-A single compiled DCR object can be evaluated across multiple regimes without recomputation:
-
-| Regime | Description |
-|------|-------------|
-| **Root of unity ($k$)** | Fast numerical evaluation using Log-Sum-Exp |
-| **Exact algebraic** | Evaluation in cyclotomic field $(\mathbb{Q}(\zeta_{2h}))$ via `Nemo.jl` |
-| **Complex analytic** | Efficient evaluation for $q \in \mathbb{C}$ |
-| **Classical limit** | Exact $q \to 1$ evaluation (recover Ponzano-Regge amplitudes) |
-
-### • HPC-Ready & Zero-Allocation
-
-The package is designed to be thread-safe and implements **zero-allocation** loops during large numerical evaluations.
-
----
-
-### • Extensible TQFT Toolkit
-
-The framework natively supports:
-
-- $6j$ symbols (Racah–Wigner)
-- $3j$ symbols  
-- $F$-symbols (fusion)
-- $R$-matrices (braiding)
-- $G$-symbols (tetrahedral weights)
-
-and is designed to extend to more $q$-deformed tensors.
-
-
-## Installation
-
-```julia
-# Press ']' in the Julia REPL to enter the package manager
-pkg> add QRecoupling
-```
---- 
-## Quick Start
-
-Evaluate the core quantum $6j$ and $3j$-symbols. The evaluation mode is controlled via keyword arguments, dynamically routing the computation to the most optimal engine.
-
-### DCR algebraic object construction
-If no evaluation parameters are passed, the package builds the parameter-independent DCR object:
 ```julia
 using QRecoupling
 
-j = 1
+js = (1, 1, 1, 1, 1, 1)
+q6j(js...)                      # classical value ≈ 1/6
+q6j(Exact(), js...)             # exact classical rational/radical
+q6j(Level(10), js...)           # q = exp(iπ/12)
+v = q6j(Exact(10), js...)       # stored x-form: (2x² − 7)/3
+radical(v)                     # explicitly request (2√3 − 3)/3
+q6j(At(0.8 + 0.2im), js...)     # numerical complex deformation
 
-# 1. Deferred Graph Construction (Returns a DCR Object)
-julia> dcr6j = q6j(j, j, j, j, j, j)
-DCR (Deferred Cyclotomic Representation)
- ├─ Range    : 3:4
- ├─ Max Index: d = 5
- ├─ Radical  : 1
- ├─ Root     : q¹² Φ₂⁻⁴ Φ₃⁻² Φ₄⁻²
- ├─ Base Term: -q⁻⁶ Φ₂² Φ₃ Φ₄
- └─ Sequence : 1 update ratios {R_z}
+s = q6j(Symbolic(), js...)      # bounded symbolic x-form
+x_form(s)                      # explicit generic rational form with ψ radicals
 ```
-This representation is exact, minimal, and independent of evaluation field
 
+Public spin labels are physical spins: use `1//2` for a half-integer. The same target
+interface applies to 3j, F/G symbols, dimensions, and q-integer/factorial/binomial products.
 
-### Projections 
-Project or evaluate the same abstract symbol into your required target field using the `qeval` function:
+## What makes it useful?
+
+- **Direct numerical kernels.** Factorial rules supply scaled ratios and adaptive precision
+  without constructing or expanding a symbolic expression first.
+- **Related coefficients share work.** Batches reuse tables; F matrices share recurrence
+  coefficients across columns. Reusable workspaces reduce repeated scratch allocation.
+- **Exact algebra in a readable basis.** Nemo-backed level values use the minimal polynomial
+  of `2cos(π/(k+2))`; generic expressions use x with ψ factors under radicals.
+- **Explicit control of symbolic cost.** Large expressions stay deferred. Expansion and
+  radical extraction are requests, not hidden requirements for computing a number.
+
 ```julia
-# 1. Projection into discrete level `k` (Float64 by default)
-julia> qeval(dcr6j,k=10)
-0.1547005383792515
+using LinearAlgebra
+F, e, f = fmatrix(1, 1, 1, 1; k=6)
+@assert transpose(F) * F ≈ I
 
-julia> j=1; 
-
-# full evaluation (constructs dcr object internally and then project)
-julia> q6j(j, j, j, j, j, j, k=10)
-0.1547005383792515
-
-# 2. Exact algebraic projection in cyclotomic fields (ζ)
-julia> qeval(dcr6j, k=10, exact=true)
-Exact Algebraic Result in ℚ(ζ₂₄):
-  Value: (-2//3*ζ^6 + 4//3*ζ^2 - 1)
-
-julia> q6j(j, j, j, j, j, j, k=10, exact=true) #alternative
-Exact Algebraic Result in ℚ(ζ₂₄):
--2//3*ζ^6 + 4//3*ζ^2 - 1
-
-#3. Generic complex q projection
-julia> qeval(dcr6j,q=exp(0.5im))
-0.035851185150113485 + 1.969762350587362e-17im
-
-# 4. Classical projection: Ponzano-Regge Limit (q -> 1, WignerSymbols) 
-julia> qeval(dcr6j,q=1,exact=true)
-1//6
+labels = [(j,j,j,j,j,j) for j in 1:5]
+values = q6j(Level(20), labels)
+grid = q6j(Level(15:20), labels)  # labels × levels
 ```
-### Topological Tensors
 
-`QRecoupling.jl` provides direct APIs for constructing the composite tensors necessary for 3D state sums, automatically handling internal phase shifts and quantum dimensions.
+At generic complex q, F matrices are complex orthogonal, not generally unitary: use
+`transpose(F)`, not the adjoint, in the algebraic identity.
+
+## Custom finite series
+
 ```julia
-julia> k = 5;
-#quantum dimensions
-julia> qdim(1/2,k=k,exact=true)
--ζ^5 + ζ^4 - ζ^3 + ζ^2 + 1
-
-# R-Matrix braiding
-julia> rmatrix(1,1,1,k=5)
--0.6234898018587336 + 0.7818314824680298im
-
-# F-Symbol (fusion)
-julia> fsymbol(1, 1, 1, 1, 1, 1, k=5)
-0.19806226419516196
-
-# G-Symbol (tetrahedral weight for Turaev-Viro invariant)
-julia> gsymbol(1, 1, 1, 1, 1, 1, k=5)
-1.0000000000000007
+n = 5
+s = FactorialSum(0:n; prefactor=[n=>2],
+                 factors=[(1,0,-2), (-1,n,-2)])
+# [n]!² ∑ⱼ 1/([j]!² [n-j]!²)
+@assert qeval(s) ≈ binomial(2n,n)
+qeval(s; q=0.8)
+qeval(Exact(20), s)
 ```
 
-## Generic $q$-Series
-`QRecoupling.jl` can also be used to study generic basic $q$-hypergeometric series. Here's how to construct a DCR for a custom sequence, such as $\sum_{z=1}^{10} (-1)^z [z]_q!$:
+This interface covers finite factorial-product sums. Arbitrary parameterized q-Pochhammer
+factors and infinite-series convergence are not currently supported. A compatibility DCR
+callback interface remains available for cyclotomic monomials and explicit q powers.
+
+## Install and migrate
+
+Requires Julia 1.10 or later:
+
 ```julia
-
-# build the q-series 
-julia> custom_series = qseries(1:10) do z
-           return (-1)^z * qfact(z)
-       end
-
-julia> qeval(custom_series, k=10)
-10527.615497522727
-
-julia> qeval(custom_series, q=0.05+0.95im)
--0.8168346401544203 - 0.22668133997266324im
+using Pkg
+Pkg.add("QRecoupling")
 ```
 
-## More features
-- **Memory Management:** `QRecoupling.jl` caches cyclotomic tables and numeric workspaces to speed up parameter sweeps. You can manually flush these by calling `empty_caches!()`.
-- **Exact Algebra Computations:** The `exact=true` flag for quantum symbols returns a `CompositeExactResult`. You can multiply these by raw integers, floats, or other exact symbols.
+**This README describes v0.4, currently unreleased.** Until it is registered, `Pkg.add`
+may install v0.3.4. To work from a local v0.4 checkout, use `Pkg.develop(path="/path/to/QRecoupling.jl")`.
 
-## Documentation
+In v0.4, omitted q/k means classical evaluation, including `qint`, `qfact`, and
+`qbinomial`. Use `Exact()` for exact classical values and `Symbolic()` for generic output.
+`exact=true` remains supported in v0.4. `Exact(k)` defaults to `ExactX`;
+`eager=true` is deprecated. DCRs remain available through `.dcr` and display only their
+structure. See the [migration guide](docs/src/migration.md) and [changelog](CHANGELOG.md).
 
-For the complete API reference, interactive tutorials, and deep dives into the mathematical architecture, please see the [Official Documentation](https://sethkasante.github.io/QRecoupling.jl/).
+## Documentation and scope
+
+- [Getting started](docs/src/getting_started.md)
+- [Tensor networks and modular data](docs/src/tutorials/tensor_networks.md)
+- [Exact formulas](docs/src/tutorials/exact_forms.md) and [identity checks](docs/src/tutorials/identities.md)
+- [Finite series](docs/src/tutorials/finite_series.md)
+- [Accuracy and performance](docs/src/performance.md)
+- [Research applications](docs/src/applications.md)
+- [Rendered documentation](https://sethkasante.github.io/QRecoupling.jl/)
+
+Numerical convergence, exact coefficient arithmetic, and exact-zero certification are
+separate contracts. Current limitations include multi-class exact equality fallbacks,
+modular zero screening, F-matrix precision beyond Float64, and some concurrency/cache
+paths. The accuracy guide documents these explicitly. No package-wide zero-allocation
+or universal thread-safety guarantee is implied.
 
 ## Citation
 
-If you use `QRecoupling.jl` in your research, please cite the mathematical framework behind the evaluation algorithm:
-
-**Deferred Cyclotomic Representation for Stable and Exact Evaluation of q-Hypergeometric Series**
-Seth K. Asante (2026). *arXiv preprint arXiv:2604.13196*.
+For the original cyclotomic framework, cite Seth K. Asante,
+[Deferred Cyclotomic Representation for Stable and Exact Evaluation of q-Hypergeometric Series](https://arxiv.org/abs/2604.13196).
+The v0.4 factorial-rule and x-form implementations extend that framework.
 
 ```bibtex
 @misc{Asante2026dcr,
@@ -181,4 +126,3 @@ Seth K. Asante (2026). *arXiv preprint arXiv:2604.13196*.
       primaryClass={math-ph}
 }
 ```
-

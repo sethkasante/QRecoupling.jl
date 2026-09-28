@@ -1,117 +1,79 @@
-# Topological Symbols & Invariants
+# Recoupling symbols and conventions
 
-`QRecoupling.jl` provides the exact, high-performance building blocks required for computing spin networks, knot invariants, and 3D state-sum models.
+## Symbols and label order
 
-This page demonstrates how to evaluate the core recoupling symbols, manipulate topological phases, and transition smoothly between discrete quantum topologies and continuous classical limits.
+| Function | Meaning |
+|:--|:--|
+| `q6j(a,b,e,c,d,f)` | `{a b e; c d f}` |
+| `q3j(j1,j2,j3,m1,m2,m3)` | Three-spin coupling coefficient; m labels sum to zero |
+| `fsymbol(a,b,e,c,d,f)` | Fusion-basis transformation coefficient |
+| `gsymbol(a,b,e,c,d,f)` | Package's dimension-weighted tetrahedral coefficient |
+| `qdim(j)` | Quantum dimension `[2j+1]` |
+| `rmatrix(a,b,c)` | Braiding eigenvalue in fusion channel c |
+| `QRecoupling.tetrahedron(...)` | Tetrahedron evaluation |
+| `QRecoupling.theta_value(a,b,c)` | Theta-graph evaluation |
 
----
+These functions use classical values by default. `Level(k)`, `Exact()`, `Exact(k)`, `At(q)`, and
+`Symbolic()` select the other supported regimes. The graph helpers are currently
+qualified names rather than exports.
 
-## The Wigner 6j-Symbol
-
-The fundamental vertex in $\rm SU(2)_q$ recoupling theory is the quantum $6j$-symbol (or Racah-Wigner symbol). It represents the probability amplitude of a tetrahedral quantum geometry.
-
-To evaluate a $6j$-symbol, simply provide the six half-integer spins $j_i$ and an evaluation target—such as the discrete Turaev-Viro level $k$.
-
-```julia
+```@example symbols
 using QRecoupling
-
-# Evaluate at a discrete root of unity (Turaev-Viro regime)
-val = q6j(1, 1, 1, 1, 1, 1, k=10)
-println(val) 
-# Output: 0.1547005383792515
-
-# Evaluate exactly in the cyclotomic field ℚ(ζ)
-exact_val = q6j(1, 1, 1, 1, 1, 1, k=10, exact=true)
-println(exact_val) 
-# Output: Exact Algebraic Result in ℚ(ζ₂₄): Value: -2//3*ζ^6 + 4//3*ζ^2 - 1
-
-```
-
-### Generic Complex Deformations
-
-If you are studying analytic continuation, hyperbolic geometries, or generic quantum groups, you can evaluate the geometry at any continuous complex deformation parameter $q$.
-
-```julia
-cval = q6j(1, 1, 1, 1, 1, 1, q=exp(0.5im))
-
-```
-
----
-
-## The Classical Limit (Ponzano-Regge)
-
-As the level $k \to \infty$, the quantum deformation parameter $q \to 1$. This limit reduces the quantum spherical spacetime to a flat, classical Ponzano-Regge geometry.
-
-Setting `q = 1` dynamically routes the package to evaluate standard classical angular momentum coefficients.
-
-```julia
-# Fast floating-point classical limit
-cl_float = q6j(1, 1, 1, 1, 1, 1, q=1)
-
-# Exact, zero-loss rational classical limit
-cl_rational = q6j(1, 1, 1, 1, 1, 1, q=1, exact=true)
-println(cl_rational)
-# Output: Classical Result: 1//6
-
-```
-
----
-
-## Auxiliary Tensors & Symbols
-
-When constructing large tensor networks, fusion categories, or knot invariants, you often need composite symbols that include specific geometric phases or dimension regularizations.
-
-`QRecoupling.jl` provides direct APIs for the full suite of observables:
-
-```julia
 k = 5
-
-# 1. Quantum Dimensions [2j+1]_q
-dim = qdim(1, k=k)
-
-# 2. Wigner 3j Symbol (coupling of angular momenta)
-val_3j = q3j(1, 1, 1, 0, 0, 0, k=k)
-
-# 3. F-Symbol (fusion tree crossing matrix)
-f_val = fsymbol(1, 1, 1, 1, 1, 1, k=k)
-
-# 4. G-Symbol (tetrahedrally symmetric invariant for state sums)
-g_val = gsymbol(1, 1, 1, 1, 1, 1, k=k)
-
+(qdim(1; k=k), q3j(1,1,1,1,-1,0; k=k),
+ fsymbol(1,1,1,1,1,1; k=k), gsymbol(1,1,1,1,1,1; k=k))
 ```
 
-### Topological Phases (`QPhase`)
+The F convention is
 
-Tracking fractional framing anomalies and braiding eigenvalues is notorious for causing floating-point drift or algebraic type errors. `QRecoupling.jl` safely handles these via a deferred fractional architecture.
-
-```julia
-# R-Matrix (braiding eigenvalue for two crossings)
-r_val = rmatrix(1, 1, 1, k=k)
-
-# Exact Evaluation dynamically returns an isolated QPhase object
-exact_phase = rmatrix(1/2, 1/2, 1, exact=true)
-println(exact_phase)
-# Output: q^(1//2)
-
+```math
+[F^{abc}_d]_{ef}=(-1)^{a+b+c+d}
+\sqrt{[2e+1][2f+1]}\begin{Bmatrix}a&b&e\\c&d&f\end{Bmatrix}_q.
 ```
 
----
+Keep the returned channel labels when using `fmatrix`: they specify the matrix ordering.
+At a unitary level the matrix is real orthogonal. At generic complex q the corresponding
+identity uses **transpose**, not conjugate transpose. Do not assume that a complex
+recoupling matrix is unitary.
 
-## High-Performance quantum Wigner Symbols
+## Exact values and phases
 
-To contract massive tensor networks (like an entire manifold triangulation), computation speed is critical.
-
-By default, `QRecoupling.jl` evaluates symbols by first compiling a deferred cyclotomic graph (the DCR) to prevent overflow/NaN poisoning. However, if you are calling the same function millions of times in a tight loop and are confident in the scale of the boundaries, you can use the `eager=true` flag.
-
-This bypasses the symbolic graph allocation entirely and pushes floating-point data straight into the optimized numerical solver.
-
-```julia
-# Bypasses algebraic graph allocation for maximum speed inside tight loops
-fast_val = q6j(10, 10, 10, 10, 10, 10, k=5000, eager=true)
-#Output: -0.002916327224229094
-
+```@example symbols
+v = q6j(Exact(10), 1,1,1,1,1,1)
+@assert v isa ExactX # hide
+v
 ```
 
-*(Note: `eager=true` is strictly available for discrete numerical evaluations where an integer level `k` is provided.)*
+Exact level recoupling coefficients use `ExactX`, in the real algebraic variable
+`x = 2cos(π/(k+2))`, with square-root factors as needed. They do not default to the old
+cyclotomic-field wrapper. See [Exact forms](tutorials/exact_forms.md).
 
----
+Braiding and twists carry q phases. `rmatrix(Symbolic(), ...)` and exact level phase
+calls retain a `QPhase`; these are not ordinary real x-polynomials.
+
+```@example symbols
+phase = rmatrix(Symbolic(), 1//2, 1//2, 1)
+phase
+```
+
+The display makes the algebraic extension explicit: `u² − xu + 1 = 0`, with `u = q`.
+It retains the branch needed to distinguish q from its inverse. At a numerical target:
+
+```@example symbols
+(rmatrix(1//2, 1//2, 1; k=5), twist(1//2; k=5))
+```
+
+Generic complex square roots follow the package's balanced branch convention. Replacing
+products of roots by a principal root of their product can change a sign. Use the supplied
+symbol evaluators to preserve that convention.
+
+## Admissibility and model boundaries
+
+For recoupling symbols, level-inadmissible labels return zero by convention. A custom
+factorial series is a different object: a denominator can vanish at that level and
+produce a pole. `level_admissible(SixJ(), k, labels...)` checks representation constraints
+without evaluating a coefficient.
+
+A local 6j coefficient is an ingredient of a state sum, not an entire Turaev–Viro or
+Ponzano–Regge invariant. Edge weights, summation ranges, triangulation data, normalization,
+and any boundary observables must be supplied by the application.
