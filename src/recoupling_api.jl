@@ -191,6 +191,10 @@ end
 
 Quantum dimension [2j+1], classical by default. Use `qdim(Symbolic(), j)` for a rule-backed x-form.
 """
+function qdim end
+
+# The docstring sits on the bare `function qdim end` above: a docstring written directly on a
+# `Base.@constprop` definition is not attached by Julia 1.10, which broke the documentation build.
 # Constant propagation of the default `exact = false` lets inference drop the exact branch, so a numeric
 # call returns a concrete Float64 instead of a boxed Union with `ExactX` — the last allocation on this path.
 Base.@constprop :aggressive function qdim(j::Spin; k=nothing,q=nothing,exact::Bool=false,
