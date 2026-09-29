@@ -1,0 +1,49 @@
+cff-version: 1.2.0
+message: >-
+  If you use QRecoupling.jl, please cite the software (this record) and the article describing
+  its cyclotomic framework (the preferred citation below).
+type: software
+title: "QRecoupling.jl: numerical and exact computation of classical and quantum recoupling coefficients"
+abstract: >-
+  A Julia package for numerical, exact and symbolic evaluation of classical and quantum
+  recoupling coefficients (3j and 6j symbols, fusion and braiding data) and finite sums of
+  factorial products, at q = 1, at unitary levels, at real or complex q, and as generic
+  expressions in x = q + 1/q.
+authors:
+  - family-names: Asante
+    given-names: Seth K.
+    affiliation: "Department of Mathematics and Statistics, University of New Brunswick"
+version: 0.4.0
+doi: 10.5281/zenodo.19446095
+repository-code: "https://github.com/sethkasante/QRecoupling.jl"
+url: "https://sethkasante.github.io/QRecoupling.jl/"
+license: MIT
+keywords:
+  - quantum recoupling
+  - Wigner symbols
+  - 6j symbols
+  - quantum groups
+  - Turaev-Viro
+  - tensor networks
+  - q-hypergeometric series
+  - exact arithmetic
+  - Julia
+preferred-citation:
+  type: article
+  title: "Deferred cyclotomic representation for stable and exact evaluation of q-hypergeometric series"
+  authors:
+    - family-names: Asante
+      given-names: Seth K.
+  journal: "SciPost Physics Core"
+  volume: 9
+  issue: 3
+  start: "059"
+  year: 2026
+  month: 9
+  doi: 10.21468/SciPostPhysCore.9.3.059
+  url: "https://doi.org/10.21468/SciPostPhysCore.9.3.059"
+  repository-code: "https://github.com/sethkasante/QRecoupling.jl"
+  identifiers:
+    - type: other
+      value: "arXiv:2604.13196"
+      description: arXiv preprint
