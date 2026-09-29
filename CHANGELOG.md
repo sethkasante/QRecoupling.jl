@@ -48,7 +48,7 @@
 - Factorial rules also construct the 3j/6j/F/G/tetrahedron compatibility DCRs. General-slope
   DCR ratio construction accumulates exponents without expanding every q-integer separately.
 
-### Fixed
+### Fixed issues
 
 - Exact-sum equality resolves dependent radical classes with exact algebraic arithmetic,
   rather than a numerical tolerance that could turn small nonzero values into zeros.

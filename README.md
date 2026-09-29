@@ -93,9 +93,9 @@ Coming from v0.3: omitted q/k now means classical evaluation, including `qint`, 
 
 **What the numbers mean.** Floating-point values, exact values, and zero tests are three separate contracts, each stated in the [accuracy guide](docs/src/performance.md):
 
-- *Floating point:* factorial-rule sums with compensated arithmetic; precision is raised when cancellation in the sum would otherwise cost digits.
+- *Floating point:* factorial-rule sums with compensated arithmetic; precision is raised when cancellation in the sum would otherwise cost digits loss.
 - *Exact:* algebraic numbers in the x-basis; equality, including `ExactXSum`, is decided by algebraic arithmetic, never by a numerical tolerance.
-- *Zero tests:* `iszero_at` and `level_spectrum` are fast modular screens; confirm a reported zero with `Exact(k)` when you need a proof.
+- *Zero tests:* `iszero_at` and `level_spectrum` are fast modular screens. Confirm a reported zero with `Exact(k)` when you need a proof.
 
 The fast paths are Float64 and machine-size labels. High-degree exact sums and BigFloat F matrices are supported but cost more. Batches and level grids can run on several threads; do not clear caches while other threads are evaluating.
 

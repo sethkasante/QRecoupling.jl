@@ -13,8 +13,8 @@ _perms(v) = length(v) <= 1 ? [collect(v)] : [vcat(v[i], p) for i in eachindex(v)
         α, β = QR.racah_sums(J...)
         c = QR.regge_canonical(J...)
         @test QR._δtet(c...) && QR.racah_sums(c...) == (α, β)
-        @test QR.regge_canonical(c...) == c                                   # idempotent
-        k = maximum(α) + 1                                                     # the smallest admissible level
+        @test QR.regge_canonical(c...) == c   v# idempotent
+        k = maximum(α) + 1     # the smallest admissible level
         v_q, v_k, v_e = q6j(js...; q = 0.8), q6j(js...; k = k), q6j(Exact(), js...)
         images = Set(_labels_from_sums(α[pa], β[pb]) for pa in _perms(1:4) for pb in _perms(1:3))
         push!(orbit_sizes, length(images))
@@ -23,7 +23,7 @@ _perms(v) = length(v) <= 1 ? [collect(v)] : [vcat(v[i], p) for i in eachindex(v)
         @test all(I -> rel(q6j((I .// 2)...; k = k), v_k) < 1e-13, images)
         @test all(I -> q6j(Exact(), (I .// 2)...) == v_e, images)
     end
-    @test maximum(orbit_sizes) > 24                                            # Regge adds to the tetrahedral orbit
+    @test maximum(orbit_sizes) > 24     # Regge adds to the tetrahedral orbit
     # a canonical sweep keeps one label set per class, and every label set has its class represented
     k = 4
     canon(l) = QR.regge_canonical(QR.doubled(l...)...)
