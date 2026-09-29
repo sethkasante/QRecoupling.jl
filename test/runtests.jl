@@ -174,4 +174,5 @@ rel(a, b) = abs(a - b) / max(1.0, abs(b))
     end
 
     include("release_tests.jl")
+    include("regge_tests.jl")
 end

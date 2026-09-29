@@ -1,8 +1,6 @@
 # Changelog
 
-## v0.4.0 (unreleased)
-
-This section describes the current release-candidate implementation, not a registered release.
+## v0.4.0
 
 ### Breaking changes and migration
 
@@ -52,9 +50,19 @@ This section describes the current release-candidate implementation, not a regis
 
 ### Fixed
 
+- Exact-sum equality resolves dependent radical classes with exact algebraic arithmetic,
+  rather than a numerical tolerance that could turn small nonzero values into zeros.
+- Threaded `iszero_at` batches use independently writable Boolean storage before packing
+  the returned `BitVector`, preventing lost flags at worker boundaries.
+- Modular sine-table cache keys include the numeric type as well as precision.
+- BigFloat F matrices use scalar `fsymbol` evaluation at the requested precision;
+  machine-precision matrices retain the shared recurrence.
 - Corrected the theta-graph denominator so the unsigned normalization satisfies
   `theta_value(j,j,0) = qdim(j)` instead of returning 1 for every admissible triple.
 - Restored expanded x-form rendering after symbolic-display cleanup.
+- `all_6j(canonical = true)` keeps one label set per class of all 144 6j symmetries (tetrahedral and
+  Regge), as documented; previously only the 24 tetrahedral relabellings were merged. Canonical
+  sweeps are about 6× faster.
 
 ### Deprecated
 
@@ -70,58 +78,27 @@ This section describes the current release-candidate implementation, not a regis
 - Replaced stale exact-output transcripts and an unfinished identity tutorial with executable
   examples and assertions for numerical matrices, exact residuals, and generic identities.
 - Rewrote the README and migration guide, including the changed product-function defaults.
-
-### Known limitations before registration
-
-- `ExactXSum` equality can use a numerical fallback for dependent specialized radical classes;
-  arbitrary multi-class zero tests are not universal exact certificates.
-- Structural cancellation queries still use modular screening; batch `iszero_at` has a packed-bit
-  concurrency issue. Use serial queries and exact confirmation for proof-oriented work.
-- F-matrix columns currently use machine-precision storage before conversion to `T`; requesting
-  BigFloat matrix elements alone does not increase their precision.
-- Cache-key/concurrency coverage and arbitrary exact-sum numerical cancellation remain open.
-  See the accuracy guide and release review before claiming broader guarantees.
+- Added targeted release regression tests while keeping the default package suite small.
+  The full independent-reference and identity suites remain local development checks.
 
 See [the migration guide](docs/src/migration.md) for replacements and examples.
 
-## v0.3.4 (released)
+## v0.3.4
 
-Correctness release. Several results were wrong without any warning; upgrading is recommended.
+Correctness release; upgrading from v0.3.3 or earlier is recommended.
 
 ### Fixed
-- **Exact and analytic 6j symbols had the wrong sign in about half of cases.** `evaluate_exact` and
-  analytic evaluation took the principal square root of a radical that carries a phase. Both now use
-  the balanced branch √(q^P ΠΨ_d) = q^{P/2} √(ΠΨ_d) with Ψ_d(q) = q^{-φ(d)} Φ_d(q²), the branch that is
-  continuous from q = 1.
-- **`q3j` through the DCR path (including `q = 1`) missed the phase (−1)^{j₁−j₂−m₃}**; it now agrees
-  with the eager path and with the classical Wigner 3j symbol.
-- **`q3j` with |m| > j or mismatched parity** returned nonzero values; it now returns zero.
-- **Discrete projection dropped phases and signs.** Values at q = e^{iπ/(k+2)} now keep exact integer
-  phases and the sign of every cyclotomic factor, returning `Complex` results when the value is not real
-  (for example Σ q^z), and `qdim` above the level has the correct sign.
-- **Φ_{mh} (m ≥ 2) was treated as zero** in the discrete and exact tables. Its value is now
-  Λ̃(m) Π_{e | mh, h ∤ e} (q^{2e} − 1)^{μ(mh/e)}.
-- **Terms vanishing at Φ_h** are skipped by valuation instead of producing `NaN` or spurious poles.
-- `empty_caches!()` threw `UndefVarError`; it now clears every cache and is exported.
-- `fuse_root` threw a `MethodError`.
-- `QPhase * CompositeExactResult` threw a `FieldError`; integer powers of q now multiply exactly and
-  half-integer powers raise an `ArgumentError`.
-- `rmatrix_mono` returned a `String` for half-integer powers; it now returns a `QPhase`.
-- `qseries`/`build_series` silently truncated a series at an interior zero term; it now raises an
-  `ArgumentError` (trailing zeros are still allowed).
-- `build_dcr!` returned `ZERO_DCR` when handed a reused buffer whose sign was zero.
-- Spins that are not multiples of 1/2 are rejected with an `ArgumentError` instead of being rounded.
-  Spin arguments now accept any `Integer`, `Rational` or `AbstractFloat`.
-- The root-of-unity table cache is read under its lock.
+- **Sign of exact and analytic 6j symbols** (wrong in about half of cases, including at |q| = 1): the
+  radical now uses the balanced branch √(q^P ΠΨ_d) = q^{P/2} √(ΠΨ_d), continuous from q = 1.
+- **`q3j`**: the DCR path (including q = 1) now includes the phase (−1)^{j₁−j₂−m₃}, and |m| > j or
+  mismatched parity gives zero.
+- **Values at q = e^{iπ/(k+2)}** keep exact phases and signs (complex results where the value is not
+  real); Φ_{mh} (m ≥ 2) is no longer treated as zero; terms vanishing at Φ_h no longer give `NaN`.
+- Crashes in `empty_caches!` (now exported), `fuse_root`, `QPhase * CompositeExactResult` and
+  `rmatrix_mono`; `qseries` no longer truncates silently at an interior zero term.
+- Spins that are not multiples of 1/2 raise an `ArgumentError` instead of being rounded.
 
-### Added
-- `^` with a non-negative integer exponent for `CompositeExactResult`.
-
-### Packaging
+### Packaging and tests
 - Documenter and Test are no longer runtime dependencies.
-- Removed the stray `src/Project.toml`; `docs/build/` and `test/Manifest.toml` are no longer tracked.
-
-### Tests
-- Randomized cross-backend tests against independent BigFloat/BigInt Racah formulas (6j and 3j,
-  level k and q = 1), cyclotomic values checked against Nemo, the Biedenharn–Elliott and orthogonality
-  identities, and regression tests for every fix above.
+- Randomized cross-checks against independent BigFloat/BigInt Racah formulas, Nemo, and the
+  Biedenharn–Elliott and orthogonality identities, with regression tests for every fix.

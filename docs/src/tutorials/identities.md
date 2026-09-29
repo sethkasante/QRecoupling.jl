@@ -94,11 +94,12 @@ checking their admissibility or singularities.
 ## When a zero test is a certificate
 
 `ExactXSum` keeps terms in radical classes. At a particular level, different generic
-classes can represent dependent roots. The current `iszero`/`==` implementation uses exact
-arguments where available and a numerical fallback in remaining multi-class cases. Do not
-interpret every `true` from that fallback as a general exact proof.
+classes can represent dependent roots. `iszero`/`==` use structural and norm tests first,
+then exact algebraic numbers in the selected real embedding when those tests are
+inconclusive. A `true` result is an exact zero decision, independent of numerical tolerance
+or rational rescaling. The fallback can be more expensive for high-degree values.
 
-For proof-oriented work, exhibit an empty exact residual as above, or use a generic
-polynomial certificate where applicable. Conversely, a nonempty residual need not disprove
-a specialized identity: additional algebraic simplification can still be required.
-`iszero_at` is a screening interface and does not replace this distinction.
+An empty residual is the cheapest certificate. A nonempty residual can also vanish after
+specialization; use `iszero` to resolve it. Generic polynomial certificates instead prove
+an identity before specialization. `iszero_at` remains a modular screening interface,
+so a cancellation candidate from that query still needs exact confirmation.

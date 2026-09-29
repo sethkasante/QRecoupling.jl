@@ -66,16 +66,20 @@ This interface covers finite factorial-product sums. Arbitrary parameterized q-P
 
 ## Install and migrate
 
-Requires Julia 1.10 or later:
+Requires Julia 1.10 or later. In the package manager (press `]` at the Julia prompt):
 
 ```julia
-using Pkg
-Pkg.add("QRecoupling")
+pkg> add QRecoupling
 ```
 
-**This README describes v0.4, currently unreleased.** Until it is registered, `Pkg.add` may install v0.3.4. To work from a local v0.4 checkout, use `Pkg.develop(path="/path/to/QRecoupling.jl")`.
+If you already have it, update to the latest release — older versions contain sign errors fixed in v0.3.4 — and check which version you have:
 
-In `v0.4` release, omitted q/k means classical evaluation, including `qint`, `qfact`, and `qbinomial`. Use `Exact()` for exact classical values (rationals) and `Symbolic()` for generic output. `exact=true` remains supported in v0.4. `Exact(k)` defaults to `ExactX`; `eager=true` is deprecated. DCRs remain available through `.dcr` and display only their structure. See the [migration guide](docs/src/migration.md) and [changelog](CHANGELOG.md).
+```julia
+pkg> up QRecoupling
+pkg> status QRecoupling
+```
+
+Coming from v0.3: omitted q/k now means classical evaluation, including `qint`, `qfact`, and `qbinomial`. Use `Exact()` for exact classical values (rationals) and `Symbolic()` for generic output; `exact=true` is still supported. `Exact(k)` returns an `ExactX`, and `eager=true` is deprecated. DCRs remain available through `.dcr` and display only their structure. See the [migration guide](docs/src/migration.md) and [changelog](CHANGELOG.md).
 
 ## Documentation and scope
 
@@ -87,7 +91,13 @@ In `v0.4` release, omitted q/k means classical evaluation, including `qint`, `qf
 - [Research applications](docs/src/applications.md)
 - [Rendered documentation](https://sethkasante.github.io/QRecoupling.jl/)
 
-Numerical convergence, exact arithmetics, and exact-zero certification of the symbols are provided as separate contracts. `ExactXSum` equality uses deterministic algebraic arithmetic; high-degree fallbacks and BigFloat F matrices can cost more than their common fast paths. Current limitations include modular zero screening, numerical cancellation in exact-sum conversion, and concurrent cache clearing. The accuracy guide documents these explicitly. No package-wide zero-allocation or universal thread-safety guarantee is implied.
+**What the numbers mean.** Floating-point values, exact values, and zero tests are three separate contracts, each stated in the [accuracy guide](docs/src/performance.md):
+
+- *Floating point:* factorial-rule sums with compensated arithmetic; precision is raised when cancellation in the sum would otherwise cost digits.
+- *Exact:* algebraic numbers in the x-basis; equality, including `ExactXSum`, is decided by algebraic arithmetic, never by a numerical tolerance.
+- *Zero tests:* `iszero_at` and `level_spectrum` are fast modular screens; confirm a reported zero with `Exact(k)` when you need a proof.
+
+The fast paths are Float64 and machine-size labels. High-degree exact sums and BigFloat F matrices are supported but cost more. Batches and level grids can run on several threads; do not clear caches while other threads are evaluating.
 
 ## Citation
 

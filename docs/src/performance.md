@@ -56,21 +56,21 @@ Final conversion can still overflow or underflow the output type.
 
 ## Current limits to account for
 
-- **F-matrix precision:** the current recurrence forms Float64/ComplexF64 columns before
-  storing the requested matrix element type. `T=BigFloat` does not provide arbitrary-precision
-  F-matrix entries. For a high-precision matrix, evaluate scalar `fsymbol` entries explicitly.
-- **Exact sums:** coefficient arithmetic is exact, but `ExactXSum` equality can use a numerical
-  fallback when different radical classes specialize to dependent roots. An empty exact
-  residual or a generic polynomial identity is a stronger certificate; see
-  [Identity checks](tutorials/identities.md).
+- **F-matrix precision:** Float64/ComplexF64 matrices use the shared column recurrence.
+  BigFloat inputs or `T=BigFloat`/`T=Complex{BigFloat}` use scalar `fsymbol` evaluations to
+  preserve the requested precision. This higher-precision path costs more per entry.
+- **Exact sums:** `ExactXSum` equality uses deterministic algebraic arithmetic, including
+  dependent radical classes. The algebraic fallback can be expensive at high degree; see
+  [Identity checks](tutorials/identities.md). Numerical conversion of a sum is a separate
+  operation and does not yet adapt precision to cancellation between its terms.
 - **Zero screening:** `iszero_at` and cancellation entries of `level_spectrum` can rely on
   modular screening. Treat cancellation zeros as candidates for exact confirmation rather
-  than as a general proof. For batch `iszero_at`, use `threads=1` while the packed-bit output
-  concurrency issue remains open.
+  than as a general proof. Threaded batch queries pack their Boolean results after the
+  workers finish, so individual flags do not share writable storage.
 - **Custom series at singular targets:** cancellation of poles between separate summands is
   not generally regularized. Keep denominator factorials away from roots when possible.
-- **Caches:** concurrency and cache-key coverage remain release-review items. In particular,
-  do not rely on mixed Float64/64-bit-BigFloat modular-table requests sharing a cache safely.
+- **Caches:** modular sine tables distinguish numeric type and precision. Broader concurrent
+  cache-clearing workflows are not supported; clear caches between evaluations.
 
 These limits distinguish the numerical coefficients, exact algebraic representation, and
 proof facilities; none should be inferred solely from another. The release review tracks
