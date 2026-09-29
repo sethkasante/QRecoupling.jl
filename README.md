@@ -102,15 +102,18 @@ The fast paths are Float64 and machine-size labels. High-degree exact sums and B
 ## Citation
 
 For the original cyclotomic framework, cite Seth K. Asante,
-[Deferred Cyclotomic Representation for Stable and Exact Evaluation of q-Hypergeometric Series](https://arxiv.org/abs/2604.13196). The v0.4 factorial-rule numeric and exact implementations extend that framework.
+[Deferred Cyclotomic Representation for Stable and Exact Evaluation of q-Hypergeometric Series](https://doi.org/10.21468/SciPostPhysCore.9.3.059), SciPost Phys. Core **9**, 059 (2026). The v0.4 factorial-rule numeric and exact implementations extend that framework.
 
 ```bibtex
-@misc{Asante2026dcr,
-      title={Deferred Cyclotomic Representation for Stable and Exact Evaluation of q-Hypergeometric Series}, 
-      author={Seth K. Asante},
+@article{Asante2026dcr,
+      title={Deferred cyclotomic representation for stable and exact evaluation of q-hypergeometric series},
+      author={Asante, Seth K.},
+      journal={SciPost Phys. Core},
+      volume={9},
+      pages={059},
       year={2026},
+      doi={10.21468/SciPostPhysCore.9.3.059},
       eprint={2604.13196},
-      archivePrefix={arXiv},
-      primaryClass={math-ph}
+      archivePrefix={arXiv}
 }
 ```
