@@ -13,7 +13,7 @@ _perms(v) = length(v) <= 1 ? [collect(v)] : [vcat(v[i], p) for i in eachindex(v)
         α, β = QR.racah_sums(J...)
         c = QR.regge_canonical(J...)
         @test QR._δtet(c...) && QR.racah_sums(c...) == (α, β)
-        @test QR.regge_canonical(c...) == c   v# idempotent
+        @test QR.regge_canonical(c...) == c   # idempotent
         k = maximum(α) + 1     # the smallest admissible level
         v_q, v_k, v_e = q6j(js...; q = 0.8), q6j(js...; k = k), q6j(Exact(), js...)
         images = Set(_labels_from_sums(α[pa], β[pb]) for pa in _perms(1:4) for pb in _perms(1:3))

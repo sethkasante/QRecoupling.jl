@@ -68,13 +68,13 @@ This interface covers finite factorial-product sums. Arbitrary parameterized q-P
 
 Requires Julia 1.10 or later. In the package manager (press `]` at the Julia prompt):
 
-```julia
+```text
 pkg> add QRecoupling
 ```
 
 If you already have it, update to the latest release — older versions contain sign errors fixed in v0.3.4 — and check which version you have:
 
-```julia
+```text
 pkg> up QRecoupling
 pkg> status QRecoupling
 ```
