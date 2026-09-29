@@ -64,7 +64,7 @@ qeval(Exact(20), s)
 
 This interface covers finite factorial-product sums. Arbitrary parameterized q-Pochhammer factors and infinite-series convergence are not currently supported. A compatibility DCR callback interface remains available for cyclotomic monomials and explicit q powers.
 
-## Install and migrate
+## Install and upgrade version
 
 Requires Julia 1.10 or later. In the package manager (press `]` at the Julia prompt):
 
@@ -91,7 +91,7 @@ Coming from v0.3: omitted q/k now means classical evaluation, including `qint`, 
 - [Research applications](docs/src/applications.md)
 - [Rendered documentation](https://sethkasante.github.io/QRecoupling.jl/)
 
-**What the numbers mean.** Floating-point values, exact values, and zero tests are three separate contracts, each stated in the [accuracy guide](docs/src/performance.md):
+**What the numbers mean.** Floating-point values, exact values, and zero tests are computed separately, each stated in the [accuracy guide](docs/src/performance.md):
 
 - *Floating point:* factorial-rule sums with compensated arithmetic; precision is raised when cancellation in the sum would otherwise cost digits loss.
 - *Exact:* algebraic numbers in the x-basis; equality, including `ExactXSum`, is decided by algebraic arithmetic, never by a numerical tolerance.
