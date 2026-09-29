@@ -38,6 +38,9 @@ include("factorial_series.jl")
 include("generic_x.jl")     # exact values in x = q + 1/q: generic q, canonical forms, identity proofs
 include("phi_form.jl")      # the closed form a user sees: Φ factors in q
 include("exact_x.jl")       # exact level values in x = 2cos(π/h), and the radical display ladder
+include("exact_radicals.jl") # radical expressions and the Lagrange descent
+include("exact_display.jl")  # rendering of exact values
+include("exact_arithmetic.jl") # arithmetic, sums by square class, exact equality
 include("symbolic_value.jl") # what Symbolic() returns: the rule and its DCR, shown in x
 
 include("modular.jl")      # modular data: twists, S and T, the total dimension
