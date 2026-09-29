@@ -225,14 +225,38 @@ function _split_product(tab::QIntTables{Float64}, pairs)
     return _renorm(m, e)
 end
 
+"""
+Upper bound on the bits the Horner accumulators reach, Σ_z log₂(|a_z| + b_z), so that they can be
+allocated once. Growing them a limb at a time was most of the allocations of an exact classical symbol
+(310 at {100×6}, against 77 presized).
+"""
+function _horner_bits(s::FactorialSum)
+    bits = 64
+    for z in (s.zhi - 1):-1:s.zlo
+        for f in s.fac
+            lo, hi, c = _factor_step(f, z)
+            lo > hi && continue
+            bits += abs(c) * (hi - lo + 1) * (64 - leading_zeros(max(hi, 1)))
+        end
+        bits += 1
+    end
+    return bits
+end
+
 "Exact S / t_lo = P / Q by Horner nesting; throws OverflowError if a ratio exceeds a machine word."
 function _horner_sum(s::FactorialSum)
-    P = big(1); Q = big(1); T1 = big(0); T2 = big(0)
+    nb = _horner_bits(s)
+    P = BigInt(; nbits = nb); Q = BigInt(; nbits = nb); T1 = BigInt(; nbits = nb); T2 = BigInt(; nbits = nb)
+    MPZ.set_si!(P, 1); MPZ.set_si!(Q, 1)
     for z in (s.zhi - 1):-1:s.zlo
         a = s.alternating ? -1 : 1
         b = 1
         for f in s.fac
             lo,hi,c = _factor_step(f,z)
+            if lo == hi && abs(c) == 1                  # the 6j and 3j case: one integer per factor
+                c > 0 ? (a = Base.checked_mul(a, lo)) : (b = Base.checked_mul(b, lo))
+                continue
+            end
             for x in lo:hi, _ in 1:abs(c)
                 if c > 0
                     a = Base.checked_mul(a,x)

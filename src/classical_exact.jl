@@ -56,27 +56,35 @@ function _classical_square_factors(s::FactorialSum)
     return pairs
 end
 
-"Reduced factorial product via Legendre valuations; cancellation precedes BigInt products."
+"""
+Reduced factorial product via Legendre valuations; cancellation precedes BigInt products. Prime powers
+are gathered in a machine word and multiplied into the BigInt only when the word is full, instead of one
+`big(p)^e` per prime. `num` and `den` have disjoint prime supports, so they are coprime by construction.
+"""
 function _classical_factorial_ratio(pairs)
     num = big(1); den = big(1)
     isempty(pairs) && return num,den
-    for p in _classical_primes(last(pairs).first)
-        p > last(pairs).first && break
+    N = last(pairs).first
+    wn = UInt64(1); wd = UInt64(1)
+    for p in _classical_primes(N)
+        p > N && break
         e = 0
         for (n,c) in pairs
             e = Base.checked_add(e,Base.checked_mul(c,_factorial_valuation(n,p)))
         end
         iszero(e) && continue
-        dest = e > 0 ? num : den
-        power = abs(e)
-        if power == 1
-            MPZ.mul_si!(dest,dest,p)
-        elseif power == 2 && p <= isqrt(typemax(Int))
-            MPZ.mul_si!(dest,dest,p*p)
-        else
-            MPZ.mul!(dest,dest,big(p)^power)
+        pp = UInt64(p)
+        for _ in 1:abs(e)
+            if e > 0
+                w, over = Base.mul_with_overflow(wn, pp)
+                over ? (MPZ.mul_ui!(num, wn); wn = pp) : (wn = w)
+            else
+                w, over = Base.mul_with_overflow(wd, pp)
+                over ? (MPZ.mul_ui!(den, wd); wd = pp) : (wd = w)
+            end
         end
     end
+    MPZ.mul_ui!(num, wn); MPZ.mul_ui!(den, wd)
     return num,den
 end
 
@@ -126,8 +134,14 @@ function classical_exact(s::FactorialSum)
     end
     iszero(P) && return zero(ClassicalResult)
     num,den = _classical_factorial_ratio(_classical_square_factors(s))
-    r = P//Q
-    sq = (num//den)*r^2
+    # num/den and P/Q are each coprime once P/Q is reduced, so the squared value needs one cross-reduction
+    # rather than the gcds of `P//Q`, `r^2` and a rational product.
+    g = gcd(P,Q)
+    isone(g) || (P = div(P,g); Q = div(Q,g))
+    P2 = P*P; Q2 = Q*Q
+    g1 = gcd(num,Q2); isone(g1) || (num = div(num,g1); Q2 = div(Q2,g1))
+    g2 = gcd(den,P2); isone(g2) || (den = div(den,g2); P2 = div(P2,g2))
+    sq = Rational{BigInt}(num*P2, den*Q2)
     sg = s.sign0 * (s.alternating && isodd(s.zlo) ? -1 : 1) * sign(P)
     return ClassicalResult(sg,sq)
 end
