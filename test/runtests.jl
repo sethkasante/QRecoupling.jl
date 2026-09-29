@@ -173,11 +173,5 @@ rel(a, b) = abs(a - b) / max(1.0, abs(b))
         @test q6j(1, 1, 1, 1, 1, 1; k = 1) == 0.0       # inadmissible at this level
     end
 
-    # # The full suite lives outside the package: twenty files, ~167,000 assertions,
-    # # three minutes. Kept out of CI on purpose; run it before a release.
-    # if get(ENV, "QRECOUPLING_FULL_TESTS", "") != ""
-    #     full = joinpath(@__DIR__, "..", "dev", "tests", "runtests.jl")
-    #     isfile(full) ? include(full) :
-    #         @warn "QRECOUPLING_FULL_TESTS is set but $full is not present"
-    # end
+    include("release_tests.jl")
 end
