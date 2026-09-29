@@ -79,19 +79,19 @@ pkg> up QRecoupling
 pkg> status QRecoupling
 ```
 
-Coming from v0.3: omitted q/k now means classical evaluation, including `qint`, `qfact`, and `qbinomial`. Use `Exact()` for exact classical values (rationals) and `Symbolic()` for generic output; `exact=true` is still supported. `Exact(k)` returns an `ExactX`, and `eager=true` is deprecated. DCRs remain available through `.dcr` and display only their structure. See the [migration guide](docs/src/migration.md) and [changelog](CHANGELOG.md).
+Coming from v0.3: omitted q/k now means classical evaluation, including `qint`, `qfact`, and `qbinomial`. Use `Exact()` for exact classical values (rationals) and `Symbolic()` for generic output; `exact=true` is still supported. `Exact(k)` returns an `ExactX`, and `eager=true` is deprecated. DCRs remain available through `.dcr` and display only their structure. See the [migration guide](https://sethkasante.github.io/QRecoupling.jl/stable/migration/) and [changelog](https://github.com/sethkasante/QRecoupling.jl/blob/main/CHANGELOG.md).
 
 ## Documentation and scope
 
-- [Getting started](docs/src/getting_started.md)
-- [Tensor networks and modular data](docs/src/tutorials/tensor_networks.md)
-- [Exact formulas](docs/src/tutorials/exact_forms.md) and [identity checks](docs/src/tutorials/identities.md)
-- [Finite series](docs/src/tutorials/finite_series.md)
-- [Accuracy and performance](docs/src/performance.md)
-- [Research applications](docs/src/applications.md)
-- [Rendered documentation](https://sethkasante.github.io/QRecoupling.jl/)
+- [Getting started](https://sethkasante.github.io/QRecoupling.jl/stable/getting_started/)
+- [Tensor networks and modular data](https://sethkasante.github.io/QRecoupling.jl/stable/tutorials/tensor_networks/)
+- [Exact formulas](https://sethkasante.github.io/QRecoupling.jl/stable/tutorials/exact_forms/) and [identity checks](https://sethkasante.github.io/QRecoupling.jl/stable/tutorials/identities/)
+- [Finite series](https://sethkasante.github.io/QRecoupling.jl/stable/tutorials/finite_series/)
+- [Accuracy and performance](https://sethkasante.github.io/QRecoupling.jl/stable/performance/)
+- [Research applications](https://sethkasante.github.io/QRecoupling.jl/stable/applications/)
+- [Full documentation](https://sethkasante.github.io/QRecoupling.jl/stable/) (latest release; [`dev`](https://sethkasante.github.io/QRecoupling.jl/dev/) follows `main`)
 
-**What the numbers mean.** Floating-point values, exact values, and zero tests are computed separately, each stated in the [accuracy guide](docs/src/performance.md):
+**What the numbers mean.** Floating-point values, exact values, and zero tests are computed separately, each stated in the [accuracy guide](https://sethkasante.github.io/QRecoupling.jl/stable/performance/):
 
 - *Floating point:* factorial-rule sums with compensated arithmetic; precision is raised when cancellation in the sum would otherwise cost digits loss.
 - *Exact:* algebraic numbers in the x-basis; equality, including `ExactXSum`, is decided by algebraic arithmetic, never by a numerical tolerance.
