@@ -451,7 +451,7 @@ needs its one triangle, from three labels rather than six.
 _rule_admissible(rule, s::FactorialSum, l, k) = s.zlo <= k
 _rule_admissible(::typeof(_rule_3j), s::FactorialSum, l, k) = _qδ(doubled(l[1],l[2],l[3])...,k)
 
-_fb_6j(l, k, ::Type{T}) where {T} = project_discrete(q6j_dcr(canonical_spins(l...)...), k, T)
+_fb_6j(l, k, ::Type{T}) where {T} = project_discrete(q6j_dcr(regge_canonical(doubled(l...)...)...), k, T)
 _fb_3j(l, k, ::Type{T}) where {T} = (p = _pad3j(l); project_discrete(q3j_dcr(doubled(p...)...), k, T))
 _fb_f(l, k, ::Type{T}) where {T} = project_discrete(fsymbol_dcr(doubled(l...)...), k, T)
 _fb_g(l, k, ::Type{T}) where {T} = project_discrete(gsymbol_dcr(canonical_spins(l...)...), k, T)
@@ -529,8 +529,9 @@ end
     all_6j(; k, jmax = k, canonical = false, doubled = false)
 
 Every 6j label set that is admissible at level `k`, as spin tuples (multiples of 1/2 as `Rational`), with
-each spin at most `jmax`. With `canonical = true` only one representative per Regge symmetry class is kept,
-which is what a sweep over a level wants. With `doubled = true` the labels come back as `DoubledLabels`,
+each spin at most `jmax`. With `canonical = true` only one representative per symmetry class is kept (all 144
+symmetries: tetrahedral relabellings and Regge's), which is what a sweep over a level of 6j values wants. F- and
+G-symbols carry dimension factors that are not invariant, so sweep them over all labels. With `doubled = true` the labels come back as `DoubledLabels`,
 which behaves the same but lets batches skip the conversion to doubled integers (~10% on a whole level).
 
 ```julia
@@ -551,7 +552,7 @@ function all_6j(; k::Integer, jmax::Real = k, canonical::Bool = false, doubled::
                 for J6 in max(abs(J1 - J5), abs(J2 - J4)):2:min(J1 + J5, J2 + J4, Jmax)
                     (_qδ(J1, J5, J6, k) && _qδ(J2, J4, J6, k)) || continue
                     if canonical
-                        c = canonical_spins(J1 // 2, J2 // 2, J3 // 2, J4 // 2, J5 // 2, J6 // 2)
+                        c = regge_canonical(J1, J2, J3, J4, J5, J6)
                         c in seen && continue
                         push!(seen, c)
                     end

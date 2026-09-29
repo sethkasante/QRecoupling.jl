@@ -143,7 +143,8 @@ end
 
 """
 The 6j symbol as a factorial rule. The rule depends on the labels only through the sorted sums α and β, so
-it is the same for all 24 tetrahedral relabellings and needs no canonical form. Inadmissible labels give a
+it is the same for all 144 symmetries (24 tetrahedral relabellings times Regge's 6, which permute α and β
+independently) and needs no canonical form. Inadmissible labels give a
 rule with `sign0 = 0` of the same type (an empty sum).
 """
 function sixj_sum(J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int)

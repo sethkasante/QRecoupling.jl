@@ -52,16 +52,24 @@ end
 
 
 
-@inline function regge_symmetries(t::NTuple{6, Float64})
-    s = (t[1]+t[2]+t[4]+t[5])/2
-    # The Regge symmetry maps (j1,j2,j3,j4,j5,j6) -> (s-j4, s-j5, j3, s-j1, s-j2, j6)
-    r1 = (s-t[4], s-t[5], t[3], s-t[1], s-t[2], t[6])
-    # ... there are 144 such combinations in total
-    # To be continued.
+"""
+    regge_canonical(J1, J2, J3, J4, J5, J6) -> NTuple{6,Int}
+
+Doubled labels of one fixed representative of the class of a 6j symbol under all 144 symmetries (the 24
+tetrahedral relabellings times Regge's 6). The value depends only on the sorted triangle sums α and
+quadrilateral sums β (`racah_sums`), and the 144 symmetries are exactly the independent permutations of α and
+of β. So placing the sorted sums in fixed positions, `j = (α_i + α_k − β_m)/2`, gives a class invariant.
+For admissible labels the result is admissible, at every level where the input is. The G-symbol is not
+Regge invariant, because its dimension factors are not; use `canonical_spins` for it.
+"""
+@inline function regge_canonical(J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int)
+    α, β = racah_sums(J1, J2, J3, J4, J5, J6)
+    return (α[1] + α[2] - β[3], α[1] + α[3] - β[2], α[1] + α[4] - β[1],
+            α[3] + α[4] - β[3], α[2] + α[4] - β[2], α[2] + α[3] - β[1])
 end
 
 
-#TODO: implement symmetries of 3j and other Regge symmetries?
+#TODO: implement the symmetries of the 3j symbol (Regge's 72)?
 
 
 
