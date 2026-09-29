@@ -14,7 +14,8 @@
 #    Convention (as for DCR projections): with the prefactor under a square root, the doubled valuation
 #    of a term is v_pre + 2V(z); negative is a pole, positive means the term vanishes.
 #  * Cancellation zeros. The contributing sum vanishes in ℚ(ζ) iff it vanishes at every Galois
-#    conjugate; testing two conjugates modulo one prime errs with probability about p⁻².
+#    conjugate. Testing two conjugates modulo one prime screens for zero candidates;
+#    a candidate still needs exact confirmation, with no universal false-positive probability.
 #  * Numbers. A ratio loop over q-integer tables on the contributing ranges only.
 # ---------------------------------------------------------------------------------
 

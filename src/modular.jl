@@ -35,7 +35,7 @@ function level_labels(k::Integer)
     return [J // 2 for J in 0:kk]
 end
 
-const _SIN_TABLE = LRU{Tuple{Int,Int},Any}(maxsize = 32)
+const _SIN_TABLE = LRU{Tuple{Int,DataType,Int},Any}(maxsize = 32)
 const _SIN_LOCK = ReentrantLock()
 
 """
@@ -43,7 +43,7 @@ const _SIN_LOCK = ReentrantLock()
 needed: `sin` beyond it is the same table with a sign, which is what `_sin_at` uses.
 """
 function _sin_table(h::Int, ::Type{T}) where {T<:AbstractFloat}
-    key = (h, T === BigFloat ? precision(BigFloat) : 8 * sizeof(T))
+    key = (h, T, precision(T))
     lock(_SIN_LOCK) do
         get!(_SIN_TABLE, key) do
             [sin(T(m) * T(pi) / T(h)) for m in 0:h]

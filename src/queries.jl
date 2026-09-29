@@ -29,7 +29,6 @@ label tuples, the test runs over the batch with shared tables and threads.
 
 Structural vanishing is exact; cancellation uses modular screening and should be confirmed by exact
 arithmetic when a proof is needed. No universal false-positive probability is guaranteed.
-Use `threads=1` for batch queries while packed-bit output concurrency remains unresolved.
 
 ```julia
 iszero_at(20, 5, 5, 5, 5, 5, 5)          # true: a cancellation zero
@@ -50,8 +49,11 @@ iszero_at(k::Integer, labels::AbstractVector; threads = nothing) = iszero_at(q6j
 function iszero_at(f::Function, k::Integer, labels::AbstractVector; threads = nothing)
     k = Int(k)
     n = length(labels)
-    out = falses(n)
-    n == 0 && return out
+    n == 0 && return falses(0)
+    nw = _nworkers(n, threads)
+    # Packed bits share storage words. Parallel workers must own independently writable bytes;
+    # preserve the compact public return type by packing only after every worker has joined.
+    out = nw == 1 ? falses(n) : Vector{Bool}(undef, n)
     ztab = level_zero_table(k)                  # built once, read-only afterwards
     work = function (rng)
         for i in rng
@@ -59,7 +61,6 @@ function iszero_at(f::Function, k::Integer, labels::AbstractVector; threads = no
             out[i] = !_admissible_at(f, k, l...) || is_zero_at_level(_rule_for(f, l...), k, ztab)
         end
     end
-    nw = _nworkers(n, threads)
     if nw == 1
         work(1:n)
     else
@@ -67,7 +68,7 @@ function iszero_at(f::Function, k::Integer, labels::AbstractVector; threads = no
             Threads.@spawn work(c)
         end
     end
-    return out
+    return out isa BitVector ? out : BitVector(out)
 end
 
 """

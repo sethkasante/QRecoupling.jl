@@ -107,8 +107,9 @@ level_zero_table(k::Int) = get_level!(() -> LevelZeroTable(k), LEVEL_ZERO_TABLES
 """
     is_cancellation_zero(s, segs, k) -> Bool or nothing
 
-Determine whether the contributing sum vanishes exactly, from two Galois conjugates modulo one prime (false
-positives with probability about p⁻² ≈ 2⁻¹²⁴). `nothing` if a factorial falls outside the level tables.
+Screen the contributing sum at two Galois conjugates modulo one prime. `false` excludes a zero;
+`true` is a candidate requiring exact confirmation, without a universal false-positive probability.
+Return `nothing` if a factorial falls outside the level tables.
 """
 is_cancellation_zero(s::FactorialSum, segs, k::Int) = is_cancellation_zero(s, segs, k, level_zero_table(k))
 

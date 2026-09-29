@@ -1603,8 +1603,8 @@ and stay exact; sums cannot, so they are kept apart.
 
 The keys are the classes of `generic_x.jl`, squarefree over ℚ(x) — but a class that is squarefree there
 can become a **square** modulo `Ψ_h`, so two keys may denote the same root and `isempty(terms)` is the only
-immediate proof of vanishing. `iszero` uses exact tests where available, but can fall back
-to numerical comparison for multiple specialized radical classes.
+immediate proof of vanishing. `iszero` first uses the structural and norm tests, then resolves
+dependent specialized classes with exact algebraic numbers when necessary.
 """
 struct ExactXSum
     k::Int
@@ -1772,27 +1772,44 @@ function is_provably_nonzero(s::ExactXSum)
 end
 
 """
-Whether the sum is zero.
-
-An empty term list is zero by construction, and a single term is zero exactly when its coefficient or its
-radical vanishes — both free. With several terms the class keys may not be independent, so the norm
-decides: a nonzero norm **proves** the value nonzero. A zero norm means *some* sign choice of the roots
-vanishes, and which one is settled by evaluating; the candidates differ by the whole size of a term, so
-the comparison is not delicate. This is the same contract the cyclotomic layer offers, at half the degree.
+Whether the sum is exactly zero. Structural zeros and a nonzero radical norm settle the common cases.
+When specialized classes are dependent, Nemo's algebraic numbers select the real embedding
+`x = 2cos(π/(k+2))` and the nonnegative square roots exactly. No numerical tolerance decides equality.
+This fallback can cost more for large algebraic degrees; numerical symbol evaluation never uses it.
 """
 function Base.iszero(s::ExactXSum)
     isempty(s.terms) && return true
+    if length(s.terms) == 2
+        # Different generic classes often reduce to the very same radicand at a level.
+        # Merge that pair in the base field before either the norm or the algebraic fallback.
+        (S, a), state = iterate(s.terms)
+        (T, b), _ = iterate(s.terms, state)
+        r = _psi_prod(S, s.k + 2)
+        if r == _psi_prod(T, s.k + 2)
+            return iszero(r) || iszero(a + b)
+        end
+    end
     is_provably_nonzero(s) && return false
     length(s.terms) == 1 && return true              # its coefficient or its radical vanishes
-    v = numeric_value(s)
-    v === nothing && return false                    # cannot evaluate: keep the structural answer
-    scale = zero(v)
-    for S in keys(s.terms)
-        t = numeric_value(_term(s, S))
-        t === nothing && return false
-        scale = max(scale, abs(t))
+    return iszero(_algebraic_value(s))
+end
+
+"Resolve an undecided exact sum in its real embedding, including dependencies between radical classes."
+function _algebraic_value(s::ExactXSum)
+    h = s.k + 2
+    x = 2 * cospi(QQBar(1 // h))
+    acc = QQBar(0)
+    for (S, c) in s.terms
+        p = evaluate(c, x)
+        iszero(p) && continue
+        if !isempty(S)
+            r = evaluate(_psi_prod(S, h), x)
+            r < 0 && throw(DomainError(s.k, "the exact sum has a negative real radicand"))
+            p *= sqrt(r)
+        end
+        acc += p
     end
-    return abs(v) <= 1e-20 * max(scale, one(scale))
+    return acc
 end
 
 Base.:(==)(a::ExactXSum, b::ExactXSum) = a.k == b.k && iszero(a - b)
@@ -1906,4 +1923,3 @@ function radical(s::ExactXSum; maxlen::Int = 0, degree_limit::Int = RADICAL_DESC
     end
     return simplify(acc)
 end
-
