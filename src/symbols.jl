@@ -89,7 +89,7 @@ symbol_family(::QSymbol) = nothing
 The symbol a public evaluation function computes. Attaching a new function to a symbol is one method.
 """
 symbol_of(::typeof(q6j)) = SixJ()
-symbol_of(::typeof(q3j)) = ThreeJ()
+symbol_of(::typeof(q3j_factorial)) = ThreeJ()
 symbol_of(::typeof(fsymbol)) = FSymbol()
 symbol_of(::typeof(gsymbol)) = GSymbol()
 symbol_of(::Any) = nothing

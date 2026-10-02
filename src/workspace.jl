@@ -2,7 +2,7 @@
     EvaluationWorkspace()
 
 Reusable Float64 ratio/recoupling scratch and bounded fixed-q analytic tables. Pass `workspace=work` to
-`q6j`, `q3j`, `fsymbol`, `gsymbol`, or `qeval(::FactorialSum)`. Storage grows on demand.
+`q6j`, `q3j_factorial`, `fsymbol`, `gsymbol`, or `qeval(::FactorialSum)`. Storage grows on demand.
 One workspace may be reused sequentially, but must not be shared by concurrent tasks.
 Batched symbol evaluation creates a separate workspace for each worker automatically.
 Analytic tables are keyed by q, numeric type, precision, and capacity; changing q

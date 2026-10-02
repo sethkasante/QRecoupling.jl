@@ -24,7 +24,7 @@ end
     iszero_at(symbol, k, labels...) -> Bool
     iszero_at(k, labels::AbstractVector) -> BitVector
 
-Screen whether a symbol vanishes at level `k`, including cancellation between finite terms. `symbol` is one of `q6j`, `q3j`, `fsymbol`, `gsymbol` (default `q6j`). Given a collection of
+Screen whether a symbol vanishes at level `k`, including cancellation between finite terms. `symbol` is one of `q6j`, `q3j_factorial`, `fsymbol`, `gsymbol` (default `q6j`). Given a collection of
 label tuples, the test runs over the batch with shared tables and threads.
 
 Structural vanishing is exact; cancellation uses modular screening and should be confirmed by exact
@@ -32,7 +32,7 @@ arithmetic when a proof is needed. No universal false-positive probability is gu
 
 ```julia
 iszero_at(20, 5, 5, 5, 5, 5, 5)          # true: a cancellation zero
-iszero_at(q3j, 10, 1, 1, 1, 1, -1, 0)
+iszero_at(q3j_factorial, 10, 1, 1, 1, 1, -1, 0)
 count(iszero_at(6, all_6j(k = 6); threads=1))       # how many symbols vanish at level 6
 ```
 """
@@ -77,7 +77,7 @@ end
 
 Whether these labels are singular at level `k`: the level-k rule has a contributing term of negative
 valuation, i.e. a q-factorial in a denominator that vanishes. Decided from the valuations alone, with no
-arithmetic. `symbol` is one of `q6j`, `q3j`, `fsymbol`, `gsymbol` (default `q6j`).
+arithmetic. `symbol` is one of `q6j`, `q3j_factorial`, `fsymbol`, `gsymbol` (default `q6j`).
 
 Singular labels are exactly the ones a level cannot represent — for the 6j, those with a triangle sum above
 2k. Labels that *are* admissible at the level are never singular (their prefactor and term valuations are both

@@ -102,7 +102,7 @@ Base.show(io::IO, t::Exact) = print(io, "Exact(", t.k, t.form === :x ? "" : "; f
 Base.show(io::IO, t::At) = print(io, "At(", t.q, ")")
 Base.show(io::IO, t::Classical) = print(io, "Classical(", t.exact ? "; exact = true" : "", ")")
 
-for f in (:q6j, :q3j, :fsymbol, :gsymbol, :rmatrix, :tetrahedron, :theta_value, :qdim, :qeval,
+for f in (:q6j, :q3j_factorial, :fsymbol, :gsymbol, :rmatrix, :tetrahedron, :theta_value, :qdim, :qeval,
           :twist, :qint, :qfact, :qbinomial)
     @eval function $f(t::EvalTarget, args...; kw...)
         t isa Symbolic && throw(ArgumentError("Symbolic() does not accept evaluation keywords"))
@@ -137,7 +137,7 @@ struct Symbolic <: EvalTarget end
 Base.show(io::IO,::Symbolic) = print(io,"Symbolic()")
 
 q6j(::Symbolic,js::Vararg{Spin,6}) = SymbolicValue(sixj_sum(doubled(js...)...))
-q3j(::Symbolic,j1::Spin,j2::Spin,j3::Spin,m1::Spin,m2::Spin,m3::Spin=-m1-m2) =
+q3j_factorial(::Symbolic,j1::Spin,j2::Spin,j3::Spin,m1::Spin,m2::Spin,m3::Spin=-m1-m2) =
     SymbolicValue(threej_sum(doubled(j1,j2,j3,m1,m2,m3)...))
 fsymbol(::Symbolic,js::Vararg{Spin,6}) = SymbolicValue(fsymbol_sum(doubled(js...)...))
 gsymbol(::Symbolic,js::Vararg{Spin,6}) = SymbolicValue(gsymbol_sum(doubled(js...)...))
@@ -165,7 +165,7 @@ qbinomial(::Symbolic,n::Integer,m::Integer) = _product_symbolic(_qbinomial_pairs
 qeval(::Symbolic,s::FactorialSum) = SymbolicValue(_validate_rule(s))
 qeval(::Symbolic,s::Union{SymbolicValue,DCR,CyclotomicMonomial,QPhase}) = s
 
-for (f,nlab) in ((:q6j,:((6,))),(:q3j,:((5,6))),(:fsymbol,:((6,))),(:gsymbol,:((6,))))
+for (f,nlab) in ((:q6j,:((6,))),(:q3j_factorial,:((5,6))),(:fsymbol,:((6,))),(:gsymbol,:((6,))))
     @eval function $f(t::Symbolic,labels::Union{AbstractVector,Base.Generator,Base.Iterators.Filter,Tuple{Any,Vararg{Any}}})
         L = _normalize_labels(labels,$nlab,$(string(f)))
         return SymbolicValue[$f(t,l...) for l in L]
@@ -219,7 +219,7 @@ function _canonical_target(f,k,args...)
         throw(ArgumentError("unsupported canonical exact expression"))
     end
     if length(args)==1 && !(only(args) isa Spin)
-        L=_normalize_labels(only(args),f === q3j ? (5,6) : (6,),string(f))
+        L=_normalize_labels(only(args),f === q3j_factorial ? (5,6) : (6,),string(f))
         return [_canonical_target(f,kk,l...) for l in L]
     end
     s = f === tetrahedron ? tetrahedron_sum(doubled(args...)...) : _rule_for(f,args...)
@@ -260,7 +260,7 @@ function _exact_x_target(f,k,args...)
     end
     sym=symbol_of(f)
     sym === nothing && throw(ArgumentError(
-        "`form = :x` has no rule for $(f). The symbols it knows are q6j, q3j, fsymbol, gsymbol, " *
+        "`form = :x` has no rule for $(f). The symbols it knows are q6j, q3j_factorial, fsymbol, gsymbol, " *
         "tetrahedron, qdim, theta_value and rmatrix."))
     if length(args)==1 && !(only(args) isa Spin)
         L=_normalize_labels(only(args),(nlabels(sym),),string(f))

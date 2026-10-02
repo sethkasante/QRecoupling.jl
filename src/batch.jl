@@ -514,7 +514,7 @@ function _batched(rule::R, fallback::F, symbol::S, labels, nlab, fname;
 end
 
 for (f, rule, fb, nlab) in ((:q6j, :_rule_6j, :_fb_6j, :((6,))),
-                            (:q3j, :_rule_3j, :_fb_3j, :((5, 6))),
+                            (:q3j_factorial, :_rule_3j, :_fb_3j, :((5, 6))),
                             (:fsymbol, :_rule_f, :_fb_f, :((6,))),
                             (:gsymbol, :_rule_g, :_fb_g, :((6,))))
     @eval function $f(labels::Union{AbstractVector,Base.Generator,Base.Iterators.Filter,Tuple{Any,Vararg{Any}}};
