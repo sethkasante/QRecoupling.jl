@@ -152,7 +152,7 @@ end
 # at a random point of F_p with probability at most D/p. Two 62-bit primes and two fixed points make a false
 # "zero" as unlikely as the classical screen's (~2⁻¹²⁴ for D ≲ 10⁶); a nonzero residue is a proof that the
 # sum is not identically zero. Without this, an identically vanishing sum at generic q had no bound to
-# certify and escalated until `analytic_value` gave up: `q3j(5, 5, 5, 1, -2, 1; q = 0.8)` threw.
+# certify and escalated until `analytic_value` gave up: `q3j_factorial(5, 5, 5, 1, -2, 1; q = 0.8)` threw.
 
 const _GENERIC_ZERO_SEEDS = (UInt64(0x1f3a9c2d7e4b5a61), UInt64(0x2b7e151628aed2a6))
 const GENERIC_MOD_TABLES = LevelCache{Tuple{ClassicalModTable,ClassicalModTable}}()

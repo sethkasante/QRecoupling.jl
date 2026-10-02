@@ -641,9 +641,40 @@ const CUT_MARGIN = 1e-6
 "Mantissas that carry guard digits of their own, so the sum needs no compensation."
 _wide_arith(q) = real(q) isa BigFloat || real(q) isa DWNum
 
-function _analytic_pass(s::FactorialSum,tab::AnalyticRuleTable)
+"""
+`q^n` and `q^{n/2}` as scaled values, accurate to about one rounding of the pass's own precision.
+
+Binary powering in Float64 carries a relative error that grows like `n·u` (each squaring doubles the error
+already there), and the Clebsch–Gordan weights reach `n ~ j²`. A Float64 pass therefore powers in a double
+word and rounds once; the double-word and arbitrary-precision passes power in their own arithmetic, where
+`n·u` is far below what they certify.
+"""
+_aqpow(q,n::Int) = _apow(_ascaled(q),n)
+_aqpow(q::ComplexF64,n::Int) = _anarrow(_apow(_ascaled(_dwnum(q)),n))
+_aqhalfpow(q::Real,n::Int) = iseven(n) ? _aqpow(q,n÷2) : _apow(_asqrt(_ascaled(q)),n)   # odd n: q > 0
+_aqhalfpow(q::Complex,n::Int) = _aexp_pow(q,n//2)
+_aqhalfpow(q::ComplexF64,n::Int) = _anarrow(_aqhalfpow(_dwnum(q),n))
+# Real Float64: Base's `^` is compensated (measured ≤ 0.3 ulp for integer and half-integer exponents) and
+# five times cheaper than a double-word powering, whenever the result cannot leave the exponent range.
+@inline _pow_in_range(q::Float64,n::Int) = abs(n)*(abs(exponent(q))+1) < 1000
+_aqpow(q::Float64,n::Int) =
+    _pow_in_range(q,n) ? _ascaled(q^n) : _anarrow(_apow(_ascaled(_dwnum(q)),n))
+_aqhalfpow(q::Float64,n::Int) = iseven(n) ? _aqpow(q,n÷2) :
+    _pow_in_range(q,n) ? _ascaled(q^(0.5*n)) : _anarrow(_aqhalfpow(_dwnum(q),n))
+_anarrow(a::AnalyticScaled) = _ascaled(_narrow(a.m),a.e)
+
+"""
+    _analytic_pass(s, tab, w = 0, e2 = 0)
+
+One scaled pass over the rule `s` at `tab.q`. A nonzero `w` multiplies term `z` by `q^{w z}` (one constant
+factor per ratio step) and `e2` multiplies the value by `q^{e2/2}`: the q-power weights of the quantum
+Clebsch–Gordan coefficient, which a symmetric factorial rule cannot carry (see `qcg.jl`). Both default to
+zero, and then the pass is the unweighted one.
+"""
+function _analytic_pass(s::FactorialSum,tab::AnalyticRuleTable,w::Int=0,e2::Int=0)
     q=tab.q
     ints=tab.ints; facts=tab.facts
+    qw=iszero(w) ? _ascaled(one(q)) : _aqpow(q,w)
     # One unit-slope dividing step anywhere in the rule pays for the table of
     # reciprocals; without one the table is never built. `_factor_step` negates
     # the power for a decreasing factor, so the step divides when a*c < 0.
@@ -658,7 +689,8 @@ function _analytic_pass(s::FactorialSum,tab::AnalyticRuleTable)
     # the per-step rounding. This is the accumulator Theorem 1 needs, and it costs one add per term.
     wmass=AnalyticScaled(zero(abs(one(q))),0); jstep=0
     for z in s.zlo:s.zhi-1
-        ratio=_ascaled(s.alternating ? -one(q) : one(q))
+        # The weight q^w seeds the ratio, so it costs no product of its own.
+        ratio=s.alternating ? _aneg(qw) : qw
         for f in s.fac
             lo,hi,c=_factor_step(f,z)
             c==0 && continue
@@ -684,6 +716,14 @@ function _analytic_pass(s::FactorialSum,tab::AnalyticRuleTable)
         wmass=_aadd(wmass,_amul(AnalyticScaled(oftype(abs(one(q)),jstep),0),_aabs(t)))
     end
     pre,pw,nr,cut=_analytic_prefactor(s,tab)
+    if !(iszero(w) && iszero(e2))
+        # Inside the scaled representation: q^{e2/2} grows like q^{j²} and only the product is O(1). The
+        # first term's weight q^{w·zlo} is common to every term, so it joins the same power: one rounding
+        # for the power and one for the product.
+        pz=e2+2*w*s.zlo
+        iszero(pz) || (pre=_amul(pre,_aqhalfpow(q,pz)))
+        nr+=2
+    end
     v=_amul(pre,acc)
     s.sign0<0 && (v=_aneg(v))
     cond=iszero(acc.m) ? oftype(real(q),Inf) : _avalue(_adiv(mass,_aabs(acc)))
@@ -722,11 +762,12 @@ precision and a `q` the caller gave in `Complex{BigFloat}` must not be narrowed 
 for less than `q` already carries gives what `q` carries. A real `T` with a complex `q` widens the same
 way, which is why `q6j(js...; q = 0.8 + 0.3im)` keeps returning a `ComplexF64`.
 """
-function analytic_value(s::FactorialSum,q::Number,::Type{T};workspace=nothing,labels=nothing) where {T}
+function analytic_value(s::FactorialSum,q::Number,::Type{T};workspace=nothing,labels=nothing,
+                        weight::Tuple{Int,Int}=(0,0)) where {T}
     R = real(T)
     qq = (R === BigFloat && !(real(typeof(float(q*1.0))) === BigFloat)) ?
          (q isa Real ? BigFloat(q) : Complex{BigFloat}(q)) : q
-    v = analytic_value(s,qq;workspace=workspace,labels=labels)
+    v = analytic_value(s,qq;workspace=workspace,labels=labels,weight=weight)
     return convert(promote_type(T,typeof(v)),v)
 end
 
@@ -739,15 +780,24 @@ cancellation at all. It is offered the case only after the double word has faile
 `level_escalate` does at a level, and it declines whenever its own estimate cannot certify the entry — so
 the arbitrary-precision ladder below is still what answers when the recurrence is unsafe.
 """
-function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothing)
+function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothing,
+                        weight::Tuple{Int,Int}=(0,0))
     qq=_analytic_q(q); T=typeof(qq); R=typeof(real(qq))
     is_empty_sum(s) && return zero(T)
+    w,e2=weight
+    weighted=!(iszero(w) && iszero(e2))
+    # q^{e2/2} for odd e2 is not real at negative q; the weighted rules are evaluated there as complex.
+    weighted && q isa Real && signbit(qq) && isodd(e2) &&
+        return analytic_value(s,complex(q);workspace=workspace,weight=weight)
     N=max_argument(s)
     # Conservative operation count: table and prefix-product roundings as well as
     # the accumulated ratio operations. Multiplied by the working precision's
     # unit roundoff and by the sum's own cancellation it bounds the result.
     ops=16*(N+1)*(1+sum(f->abs(Int(f.c)),s.fac;init=0)+
                    sum(p->abs(Int(p.second)),s.pre;init=0))*(s.zhi-s.zlo+1)
+    # The weights: one product per step, and powers whose error in the pass's own arithmetic grows like
+    # the exponent (`_aqpow`), charged on the same footing.
+    weighted && (ops+=16*(s.zhi-s.zlo+1)*(abs(w)*(s.zhi+1)+abs(e2)+2))
     tol=R===BigFloat ? eps(one(real(qq)))*32 : R(64)*eps(R)
     if R===Float64
         # Plain tier, accepted on a *running* bound rather than an operation count.
@@ -775,8 +825,9 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
         mode=POLICY[]
         if !(mode === :strict || mode === :strict_lazy || mode === :compensated_only)
             tabp=_analytic_table(qq,N,workspace)
-            vp,kp,wrel,pw,nr,cut=_analytic_pass(s,tabp)
-            cstep=2*sum(f->abs(Int(f.c)),s.fac;init=0)+2
+            vp,kp,wrel,pw,nr,cut=_analytic_pass(s,tabp,w,e2)
+            # A weight adds one product per step, and q^w its own rounding.
+            cstep=2*sum(f->abs(Int(f.c)),s.fac;init=0)+2+(iszero(w) ? 0 : 2)
             mpre=2*(sum(p->abs(Int(p.second)),s.pre;init=0)+sum(f->abs(Int(f.c)),s.fac;init=0))+2
             phase=iszero(pw) ? zero(R) : R(CPHASE)*R(pw)*abs(log(qq))
             # Every table entry a rule reads is only `pcond·u` accurate, so `pcond` multiplies the
@@ -802,11 +853,12 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
         end
         # A zero never certifies itself, so a pairwise-cancelling sum would otherwise pay for the double
         # word and then for arbitrary precision. The test is a proof and a few integer comparisons.
-        pairwise_zero(s) && return zero(T)
+        # The zero screens are statements about the unweighted rule; a weight moves terms apart.
+        !weighted && pairwise_zero(s) && return zero(T)
         # Double-word tier: u² per operation, so this bound is met for every
         # well-conditioned q and the arbitrary-precision tiers below are reached
         # only near a singularity of the rule.
-        vd,kd,_,_,_,_=_analytic_pass(s,_analytic_table(_dwnum(qq),N,workspace))
+        vd,kd,_,_,_,_=_analytic_pass(s,_analytic_table(_dwnum(qq),N,workspace),w,e2)
         if isfinite(kd) && ops*eps(DWNum)*kd <= tol
             return T(_aldexp(_narrow(vd.m),vd.e))
         end
@@ -818,13 +870,13 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
         # that is a measured heuristic; asking for 1e−14 instead made the tier decline the whole unit
         # circle, where the table's conditioning puts a floor of about 5e−14 on it, and the arbitrary
         # precision tier then cost 46 µs at j = 30 to deliver digits nobody was promised.
-        if labels !== nothing
+        if labels !== nothing && !weighted
             vr = sixj_entry(labels,qq,_column_workspace(workspace);rtol=RTOL_PLAIN/8)
             vr === nothing || return T(vr)
         end
         v=AnalyticScaled(T(_narrow(vd.m)),vd.e)
     else
-        v,kappa,_,_,_,_=_analytic_pass(s,_analytic_table(qq,N,workspace))
+        v,kappa,_,_,_,_=_analytic_pass(s,_analytic_table(qq,N,workspace),w,e2)
         if isfinite(kappa) && ops*eps(one(real(qq)))*kappa <= tol
             return T(_avalue(v))
         end
@@ -832,7 +884,7 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
     # Every fixed-precision tier has failed. If the sum is the zero function of q there is no bound for
     # any precision to certify, and the ladder below would only double its bits until it gave up; the
     # generic-q screen decides that first, as the modular screens do at a level and at q = 1.
-    is_generic_zero(s) && return zero(T)
+    !weighted && is_generic_zero(s) && return zero(T)
     # Rebuild from the supplied q at each precision, never from rounded table
     # entries. A tier that certifies its own bound is accepted on its own: the
     # machine-precision value is not a reliable witness, so requiring the two to
@@ -843,7 +895,7 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
     for _ in 1:8
         next,condition,_,_,_,_=setprecision(BigFloat,bits) do
             qb=q isa Real ? BigFloat(q) : Complex{BigFloat}(q)
-            _analytic_pass(s,_analytic_table(qb,N,workspace))
+            _analytic_pass(s,_analytic_table(qb,N,workspace),w,e2)
         end
         if iszero(next.m)
             _analytic_close(previous,next,tol/4) && return T(_avalue(next))
