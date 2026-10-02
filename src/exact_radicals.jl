@@ -404,7 +404,7 @@ function radical_levels(f, labels...; kmax::Integer = 64, refine::Bool = true,
     kk >= 0 || throw(DomainError(kmax, "kmax must be nonnegative"))
     sym = symbol_of(f)
     sym === nothing && throw(ArgumentError(
-        "radical_levels needs a function attached to a symbol rule: q6j, q3j_factorial, fsymbol, gsymbol"))
+        "radical_levels needs a function attached to a symbol rule: q6j, QRecoupling.q3j_factorial, fsymbol, gsymbol"))
     out = Int[]
     for k in 0:kk
         level_admissible(sym, k, labels...) || continue

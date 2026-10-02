@@ -169,7 +169,7 @@ rel(a, b) = abs(a - b) / max(1.0, abs(b))
         @test_throws DomainError has_radical_form(-1)
         @test_throws DivideError inv(zero(ExactX, 10))
         # an identically vanishing symbol at generic q is a zero, not an error
-        @test q3j_factorial(5, 5, 5, 1, -2, 1; q = 0.8) == 0.0
+        @test QR.q3j_factorial(5, 5, 5, 1, -2, 1; q = 0.8) == 0.0
         @test q6j(1, 1, 1, 1, 1, 1; k = 1) == 0.0     # inadmissible at this level
     end
 

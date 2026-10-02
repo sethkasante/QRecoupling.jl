@@ -29,6 +29,10 @@ The graph helpers below require the `QRecoupling.` qualifier.
 ```@docs
 q6j
 q3j
+QRecoupling.q3j_factorial
+qcg
+qcg_matrix
+qcg_row
 fsymbol
 gsymbol
 qdim

@@ -67,6 +67,12 @@ Generic complex square roots follow the package's balanced branch convention. Re
 products of roots by a principal root of their product can change a sign. Use the supplied
 symbol evaluators to preserve that convention.
 
+Negative real `q` uses the same branch as `complex(q)` throughout the recoupling
+symbols, `qcg`, and `fmatrix`; the result type is complex even when the value is real.
+At a point on the negative real axis, `arg(q)=π` and the square root of a negative
+balanced factor is the positive imaginary root. Passing a nonzero imaginary part
+evaluates that complex parameter without snapping it to the axis.
+
 ## Admissibility and model boundaries
 
 For recoupling symbols, level-inadmissible labels return zero by convention. A custom

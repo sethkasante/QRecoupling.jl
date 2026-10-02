@@ -114,7 +114,8 @@ the unit circle, against 9–36/40 for a root of the product
 (`dev/results/user_facing_exact.md` §2). Each `Ψ_d` is real on `|q| = 1`, and is snapped to the real axis
 when its imaginary part is at rounding level so that the branch is reproducible.
 
-For real `q` the ordinary square root of the assembled value is kept, bit for bit as before.
+For positive real `q` the ordinary square root of the assembled value is kept.
+Negative-real DCR projections enter through the complex branch, as in the factorial-rule evaluator.
 """
 function _radical_sqrt(rad::CyclotomicMonomial, q::T, table) where T
     T <: Real && return sqrt(_eval_mono_analytic(rad, q, table))
@@ -131,7 +132,8 @@ function _radical_sqrt(rad::CyclotomicMonomial, q::T, table) where T
         r = sqrt(ψ)
         acc *= e > 0 ? r^e : inv(r)^(-e)
     end
-    return acc * exp((P // 2) * log(q))
+    phase = _negative_real_axis(q) ? _avalue(_aqhalfpow(q,P)) : exp((P // 2) * log(q))
+    return acc * phase
 end
 
 function _eval_analytic_dcr(res::DCR, q::T, q_sq::T) where T
@@ -209,6 +211,7 @@ end
 Fast, thread-safe for evaluating TQFT symbols at any generic q.
 """
 function project_analytic(dcr::DCR, q::Number)
+    _negative_real_axis(q) && (q = complex(real(q)))
     T = typeof(q * 1.0)
     
     dcr.base.sign == 0 && return zero(T)

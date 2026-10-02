@@ -51,10 +51,11 @@ include("symbols.jl")   # the symbol interface: one table, dispatched
 include("queries.jl")
 include("targets.jl")
 include("qcg.jl")       # quantum Clebsch–Gordan coefficients and the quantum 3j symbol: weighted rules
+include("qcg_columns.jl") # coupling columns by the Casimir recurrence: qcg_matrix and the near-edge tier
 
 
 # Export physics tqft and recoupling symbols api
-export q6j, q3j, q3j_factorial, qcg, fsymbol, gsymbol, rmatrix, qdim
+export q6j, q3j, qcg, qcg_matrix, qcg_row, fsymbol, gsymbol, rmatrix, qdim
 export fmatrix, fmatrix_labels
 export smatrix, tmatrix, bmatrix, twist, monodromy, verlinde
 export level_labels, central_charge, total_qdim, gauss_sum

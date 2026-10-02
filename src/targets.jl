@@ -260,7 +260,7 @@ function _exact_x_target(f,k,args...)
     end
     sym=symbol_of(f)
     sym === nothing && throw(ArgumentError(
-        "`form = :x` has no rule for $(f). The symbols it knows are q6j, q3j_factorial, fsymbol, gsymbol, " *
+        "`form = :x` has no rule for $(f). The symbols it knows are q6j, QRecoupling.q3j_factorial, fsymbol, gsymbol, " *
         "tetrahedron, qdim, theta_value and rmatrix."))
     if length(args)==1 && !(only(args) isa Spin)
         L=_normalize_labels(only(args),(nlabels(sym),),string(f))

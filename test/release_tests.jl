@@ -73,4 +73,55 @@
             @test eltype(first(fmatrix(1,1,1,1; k=6, T=Complex{BigFloat}))) === Complex{BigFloat}
         end
     end
+
+    @testset "negative-q branches agree across F and CG interfaces" begin
+        labels = ((1//2,1//2,0,1//2,1//2,1), (3//2,1,3//2,1,3//2,2), (2,2,2,2,2,2))
+        for q in (-0.5,-0.8,-1.25,-2.0), l in labels
+            for f in (q6j,fsymbol,gsymbol)
+                v = f(l...;q)
+                r = setprecision(() -> f(l...;q=Complex{BigFloat}(q)),BigFloat,256)
+                @test v == f(l...;q=complex(q))
+                @test abs(v-r) <= 1e-13*abs(r)
+                @test qeval(f(Symbolic(),l...);q) == v
+            end
+            @test fsymbol([l,l];q,threads=2) == fill(fsymbol(l...;q),2)
+            # The symbolic compatibility projection must use the same root convention.
+            dcr = fsymbol(Symbolic(),l...).dcr
+            @test project_analytic(dcr,q) ≈ fsymbol(l...;q) rtol=1e-13
+        end
+        l = first(labels); q = -0.8
+        @test real(fsymbol(l...;q)) < 0  # previously the real-q path returned the opposite sign
+        for p in -5:5
+            s=FactorialSum(0:0;prefactor=((2,p),),sqrt_prefactor=true)
+            @test qeval(s;q) ≈ (im*sqrt(-qint(2;q)))^p rtol=1e-14
+        end
+        # Near -1 the real q-integer limit is well-conditioned, as near +1.
+        # It must not acquire a spurious root-of-unity warning through complex promotion.
+        @test_logs q6j(1,1,1,1,1,1;q=-nextfloat(1.0))
+        for q in (-0.8,-1.25), a in (1//2,1,3//2)
+            F, es, fs = fmatrix(a,a,a,a;q)
+            expected = [fsymbol(a,a,e,a,a,f;q) for e in es,f in fs]
+            identity = [i==j ? 1.0 : 0.0 for i in eachindex(fs),j in eachindex(fs)]
+            @test F ≈ expected rtol=1e-13
+            @test maximum(abs,transpose(F)*F-identity) < 1e-13
+        end
+        for kw in ((;q=-0.8,T=BigFloat), (;q=0.8+0.3im,T=BigFloat),
+                   (;q=big"-0.8",T=Float64), (;q=big"0.8",T=Float64))
+            F,es,fs = fmatrix(1,1,1,1;kw...)
+            E = kw.q isa Real && kw.q > 0 ? BigFloat : Complex{BigFloat}
+            @test eltype(F) === E
+            ref = [fsymbol(1,1,e,1,1,f;q=kw.q,T=BigFloat) for e in es,f in fs]
+            @test F == ref
+        end
+        # Half powers are evaluated by exact quarter-turns, including at high precision.
+        setprecision(BigFloat,256) do
+            q = big"-0.8"
+            for args in ((1//2,1//2,1,0,1//2), (10,3,8,-2,12))
+                v=qcg(args...;q)
+                @test v == qcg(args...;q=complex(q))
+                r=setprecision(() -> qcg(args...;q=BigFloat(q),T=BigFloat),BigFloat,512)
+                @test abs(v-r) <= 64eps(BigFloat)*abs(r)
+            end
+        end
+    end
 end
