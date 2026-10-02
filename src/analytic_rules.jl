@@ -201,7 +201,10 @@ mutable struct AnalyticRuleTable{T}
     balanced::Vector{AnalyticScaled{T}}
     roots::Vector{AnalyticScaled{T}}  # √Ψ_d on the package's branch; complex q only
     condmax::Vector{Float64}          # prefix maxima of the q-integer condition; see `_prefactor_cond`
+    accurate::Bool                    # entries rounded from double words: each within half an ulp
 end
+AnalyticRuleTable(q,bits,circle,ints,inverses,facts,balanced,roots,condmax) =
+    AnalyticRuleTable(q,bits,circle,ints,inverses,facts,balanced,roots,condmax,false)
 
 """
     _on_unit_circle(q) -> Bool
@@ -270,6 +273,7 @@ function _table_roots(tab::AnalyticRuleTable)
 end
 
 function _analytic_table(q::T,N::Int) where T
+    q isa Complex && _negative_real_axis(q) && return _negative_axis_table(q,N)
     R=typeof(real(q)); bits=precision(R)
     ints=Vector{AnalyticScaled{T}}(undef,N)
     facts=Vector{AnalyticScaled{T}}(undef,N+1)
@@ -298,6 +302,7 @@ end
 
 "Double-word table, built from exact arithmetic only (no log/exp/expm1)."
 function _analytic_table(q::T,N::Int) where {T<:Union{DWNum,Complex{DWNum}}}
+    q isa Complex && _negative_real_axis(q) && return _negative_axis_table(q,N)
     ints=Vector{AnalyticScaled{T}}(undef,N)
     facts=Vector{AnalyticScaled{T}}(undef,N+1)
     unit=one(T)
@@ -323,6 +328,90 @@ function _analytic_table(q::T,N::Int) where {T<:Union{DWNum,Complex{DWNum}}}
     end
     empty=AnalyticScaled{T}[]
     AnalyticRuleTable(q,precision(DWNum),_on_unit_circle(q),ints,empty,facts,copy(empty),copy(empty),Float64[])
+end
+
+"""
+Real Float64 `q`: the double-word table, rounded once per entry.
+
+The plain tier's bound counts each table read as one rounding, which needs entries correct to about `u`. The
+machine-precision recurrence above does not deliver that on the real axis: its `[n]` drift by up to 280 u and
+its `[n]!` by up to 88,000 u at n = 600 (measured near q = 0.95–0.999, where `[n+1] = (q + q⁻¹)[n] − [n−1]`
+is only weakly dominant), and the bound, which charged none of it, accepted values up to 2.3e−12 against a
+promise of 9.1e−13 (`q3j_factorial` at j ≤ 150, q = 0.999; `dev/results/qcg_recurrences.md` §5). Rounded
+from double words, every entry is within half an ulp and the bound holds as written. The table is cached per
+`q`, so the 6× longer build is paid once per parameter, not per symbol.
+"""
+function _analytic_table(q::Float64,N::Int)
+    # [n+1] = x[n] − [n−1], x = g + 1/g with g = max(|q|, 1/|q|), in double words: near q = 1 the recurrence
+    # is only weakly dominant and its error grows like n²·u², which at u² is still far below an ulp. Values
+    # carry a separate exponent so that |q|^n cannot overflow; each entry is rounded to Float64 once.
+    ints=Vector{AnalyticScaled{Float64}}(undef,N)
+    facts=Vector{AnalyticScaled{Float64}}(undef,N+1)
+    facts[1]=_ascaled(1.0)
+    aq=abs(q)
+    g=aq<1 ? inv(DWNum(aq)) : DWNum(aq)
+    x=g+inv(g)
+    prev=zero(DWNum); cur=one(DWNum); e=0          # [n] = cur·2^e
+    fm=one(DWNum); fe=0                             # [n]! = fm·2^fe
+    negative=signbit(q)
+    for n in 1:N
+        v=_ascaled(Float64(cur),e)
+        neg=negative && iseven(n)                   # [n]_{−q} = (−1)^{n+1} [n]_q
+        ints[n]=neg ? _aneg(v) : v
+        fm=fm*cur; fe+=e
+        neg && (fm=-fm)
+        facts[n+1]=_ascaled(Float64(fm),fe)
+        if !(0x1p-400<abs(fm.hi)<0x1p400)                 # keep the running product in range
+            ex=exponent(fm.hi); fm=ldexp(fm,-ex); fe+=ex
+        end
+        nxt=x*cur-prev
+        prev,cur=cur,nxt
+        if abs(cur.hi)>0x1p500
+            prev=ldexp(prev,-500); cur=ldexp(cur,-500); e+=500
+        end
+    end
+    empty=AnalyticScaled{Float64}[]
+    AnalyticRuleTable(q,precision(Float64),false,ints,empty,facts,copy(empty),copy(empty),Float64[],true)
+end
+
+"""
+Complex Float64 `q` near the unit circle: the double-word table, rounded once per entry.
+
+There the machine-precision recurrence is only `pcond·u` accurate — `|q^{−2n}|` stays near 1, so every q-integer
+is built from a subtraction of comparable numbers (`_prefactor_cond`) — and the plain tier charged `pcond` on
+every read. Near a root of unity that charge refused the plain pass for almost every symbol, and on the circle
+every call ran in double words (15–22 µs). Rounded from double words the entries are within half an ulp, the
+charge is not needed, and the plain pass is accepted on its own bound. The value is still the one at the `q`
+that was passed; only the table is more accurate. Off the circle `pcond` is a few units and the recurrence is
+kept, so those tables are unchanged.
+"""
+function _analytic_table(q::ComplexF64,N::Int)
+    _negative_real_axis(q) && return _negative_axis_table(q,N)
+    abs(abs(q)-1) < 0.1 || return invoke(_analytic_table,Tuple{Any,Int},q,N)
+    d=_analytic_table(_dwnum(q),N)
+    r(a)=_ascaled(_narrow(a.m),a.e)
+    empty=AnalyticScaled{ComplexF64}[]
+    AnalyticRuleTable(q,precision(Float64),_on_unit_circle(q),map(r,d.ints),empty,map(r,d.facts),
+                      copy(empty),copy(empty),Float64[],true)
+end
+
+"Negative-axis q-integers are real: lift the real table without logarithmic phase noise."
+function _negative_axis_table(q::Complex,N::Int)
+    t = _analytic_table(real(q),N)
+    lift(a) = AnalyticScaled(complex(a.m),a.e)
+    empty = AnalyticScaled{typeof(q)}[]
+    return AnalyticRuleTable(q,t.bits,false,map(lift,t.ints),empty,map(lift,t.facts),
+                             copy(empty),copy(empty),Float64[],t.accurate)
+end
+
+@inline _negative_real_axis(q) = real(q) < 0 && iszero(imag(q))
+
+"Multiply a real scaled value by i^n using exact sign changes and component swaps."
+@inline function _quarter_turn(a::AnalyticScaled{R},n::Int) where {R<:Real}
+    r = mod(n,4); z = zero(R); m = a.m
+    v = r == 0 ? complex(m,z) : r == 1 ? complex(z,m) :
+        r == 2 ? complex(-m,z) : complex(z,-m)
+    return AnalyticScaled(v,a.e)
 end
 
 function _analytic_table(q::T,N::Int,w::EvaluationWorkspace) where T
@@ -444,6 +533,19 @@ roots and balanced-factor multiplications, which the operation count of the call
 """
 function _analytic_prefactor(s,tab)
     q=tab.q
+    if s.sqrt_pre && q isa Complex && _negative_real_axis(q)
+        # Ψ₂=q+1/q is the only negative balanced factor on this axis; all
+        # Ψ_d, d>2, are positive. Thus the factor-by-factor root is
+        # i^E₂ sqrt(|Π[n]!^c|), E₂=Σ c floor(n/2). No exponent vector,
+        # transcendental phase or branch-cut precision escalation is needed.
+        p = _ascaled(one(real(q))); e2 = 0
+        for (n,c) in s.pre
+            a = tab.facts[n+1]
+            p = _amul_power(p,AnalyticScaled(abs(real(a.m)),a.e),Int(c))
+            e2 += Int(c) * (Int(n) ÷ 2)
+        end
+        return _quarter_turn(_asqrt(p),e2),0.0,0,1.0
+    end
     if !s.sqrt_pre || (q isa Real && q>0)
         p=_ascaled(one(q))
         for (n,c) in s.pre
@@ -542,7 +644,7 @@ The loop is short: once `|q^{-2n}|` leaves a neighbourhood of 1 the ratio is bou
 so only `|q| = 1` runs the full length, and there nothing can overflow.
 """
 function _prefactor_cond(q,N::Int)
-    q isa Real && return 1.0
+    (q isa Real || _negative_real_axis(q)) && return 1.0
     u=inv(q*q); t=one(u); c=1.0
     for _ in 1:N
         t*=u
@@ -563,7 +665,7 @@ runs its full length on every call — as expensive as building the table it is 
 are a property of `q` alone, so they are computed once per table and indexed.
 """
 function _prefactor_cond(tab::AnalyticRuleTable,N::Int)
-    tab.q isa Real && return 1.0
+    (tab.q isa Real || _negative_real_axis(tab.q)) && return 1.0
     N <= 0 && return 1.0
     cm = tab.condmax
     if isempty(cm)
@@ -652,7 +754,8 @@ word and rounds once; the double-word and arbitrary-precision passes power in th
 _aqpow(q,n::Int) = _apow(_ascaled(q),n)
 _aqpow(q::ComplexF64,n::Int) = _anarrow(_apow(_ascaled(_dwnum(q)),n))
 _aqhalfpow(q::Real,n::Int) = iseven(n) ? _aqpow(q,n÷2) : _apow(_asqrt(_ascaled(q)),n)   # odd n: q > 0
-_aqhalfpow(q::Complex,n::Int) = _aexp_pow(q,n//2)
+_aqhalfpow(q::Complex,n::Int) = _negative_real_axis(q) ?
+    _quarter_turn(_aqhalfpow(-real(q),n),n) : _aexp_pow(q,n//2)
 _aqhalfpow(q::ComplexF64,n::Int) = _anarrow(_aqhalfpow(_dwnum(q),n))
 # Real Float64: Base's `^` is compensated (measured ≤ 0.3 ulp for integer and half-integer exponents) and
 # five times cheaper than a double-word powering, whenever the result cannot leave the exponent range.
@@ -744,7 +847,9 @@ function _analytic_q(q::Number)
     # Do not perturb exactly representable singular roots through log/exp.
     # Their cancellations belong to the level/symbolic projection machinery.
     qq in (-1,im,-im) && throw(DomainError(q,"use a level target at roots of unity"))
-    return qq
+    # One convention for negative real q and the same point supplied as complex:
+    # principal roots of balanced factors, and arg(q)=π for half powers.
+    return _negative_real_axis(qq) ? complex(real(qq)) : qq
 end
 
 """
@@ -763,11 +868,11 @@ for less than `q` already carries gives what `q` carries. A real `T` with a comp
 way, which is why `q6j(js...; q = 0.8 + 0.3im)` keeps returning a `ComplexF64`.
 """
 function analytic_value(s::FactorialSum,q::Number,::Type{T};workspace=nothing,labels=nothing,
-                        weight::Tuple{Int,Int}=(0,0)) where {T}
+                        weight::Tuple{Int,Int}=(0,0),near_edge=nothing) where {T}
     R = real(T)
     qq = (R === BigFloat && !(real(typeof(float(q*1.0))) === BigFloat)) ?
          (q isa Real ? BigFloat(q) : Complex{BigFloat}(q)) : q
-    v = analytic_value(s,qq;workspace=workspace,labels=labels,weight=weight)
+    v = analytic_value(s,qq;workspace=workspace,labels=labels,weight=weight,near_edge=near_edge)
     return convert(promote_type(T,typeof(v)),v)
 end
 
@@ -781,14 +886,17 @@ cancellation at all. It is offered the case only after the double word has faile
 the arbitrary-precision ladder below is still what answers when the recurrence is unsafe.
 """
 function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothing,
-                        weight::Tuple{Int,Int}=(0,0))
-    qq=_analytic_q(q); T=typeof(qq); R=typeof(real(qq))
+                        weight::Tuple{Int,Int}=(0,0),near_edge=nothing)
+    # Keep the positive-real specialization concrete. Promoting negative inputs
+    # here avoids a Real/Complex union throughout every positive-real pass.
+    q isa Real && q < 0 && return analytic_value(s,complex(q);workspace=workspace,
+                                                labels=labels,weight=weight,near_edge=near_edge)
+    qq = q isa Real ? real(_analytic_q(q)) : _analytic_q(q)
+    T=typeof(qq); R=typeof(real(qq))
+    input_q = _negative_real_axis(q) ? qq : q
     is_empty_sum(s) && return zero(T)
     w,e2=weight
     weighted=!(iszero(w) && iszero(e2))
-    # q^{e2/2} for odd e2 is not real at negative q; the weighted rules are evaluated there as complex.
-    weighted && q isa Real && signbit(qq) && isodd(e2) &&
-        return analytic_value(s,complex(q);workspace=workspace,weight=weight)
     N=max_argument(s)
     # Conservative operation count: table and prefix-product roundings as well as
     # the accumulated ratio operations. Multiplied by the working precision's
@@ -843,9 +951,12 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
             # to `N`. On the unit circle the worst `[n]` is often above the prefactor's reach, and
             # charging the whole bound at `condmax[N]` then rejects a pass whose prefactor never touched
             # the bad index — which is most of what kept the unit circle on the double word at large spin.
-            pcond=R(_prefactor_cond(tabp,N))
-            pcpre=R(_prefactor_cond(tabp,_pre_max(s)))
-            pcond >= NEAR_ROOT_COND && _warn_near_root(qq,N)
+            # A table rounded from double words is accurate whatever `pcond` is, and is charged nothing for
+            # it; the condition still decides the near-root warning, which is about `q`, not the table.
+            pc=_prefactor_cond(tabp,N)
+            pc >= NEAR_ROOT_COND && _warn_near_root(qq,N)
+            pcond=tabp.accurate ? one(R) : R(pc)
+            pcpre=tabp.accurate ? one(R) : R(_prefactor_cond(tabp,_pre_max(s)))
             relb=(cstep*wrel*pcond+2*kp+(mpre+2*nr)*pcpre+phase)*eps(R)
             if isfinite(relb) && relb <= RTOL_PLAIN && cut >= CUT_MARGIN
                 return T(_avalue(vp))
@@ -874,6 +985,12 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
             vr = sixj_entry(labels,qq,_column_workspace(workspace);rtol=RTOL_PLAIN/8)
             vr === nothing || return T(vr)
         end
+        # The same tier for a rule that brings its own: a coupling coefficient from its Casimir column
+        # (`qcg_columns.jl`), which declines with `nothing` when it cannot certify the entry.
+        if near_edge !== nothing
+            vr = near_edge()
+            vr === nothing || return T(vr)
+        end
         v=AnalyticScaled(T(_narrow(vd.m)),vd.e)
     else
         v,kappa,_,_,_,_=_analytic_pass(s,_analytic_table(qq,N,workspace),w,e2)
@@ -894,7 +1011,7 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
     bits=max(128,precision(R)+32)
     for _ in 1:8
         next,condition,_,_,_,_=setprecision(BigFloat,bits) do
-            qb=q isa Real ? BigFloat(q) : Complex{BigFloat}(q)
+            qb=input_q isa Real ? BigFloat(input_q) : Complex{BigFloat}(input_q)
             _analytic_pass(s,_analytic_table(qb,N,workspace),w,e2)
         end
         if iszero(next.m)
