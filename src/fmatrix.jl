@@ -35,20 +35,21 @@ function _family_context(k, q, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int)
         return LevelQ(qint_tables(Float64, kk), kk), kk
     end
     (q === nothing || _is_classical(q)) && return ClassicalQ(), nothing
-    q isa Real && return real_q_tables(float(q), J2, J3, L1, L2, L3), nothing
-    return complex_q_tables(ComplexF64(q), J2, J3, L1, L2, L3), nothing
+    qq = _analytic_q(q)
+    qq isa Real && return real_q_tables(qq, J2, J3, L1, L2, L3), nothing
+    return complex_q_tables(ComplexF64(qq), J2, J3, L1, L2, L3), nothing
 end
 
 """
-Element type of the matrix: whatever the caller asked for, else Float64/ComplexF64,
-preserving BigFloat for a parameter supplied at that precision.
+Element type of the matrix: T is a precision floor, preserving complex values
+and a higher-precision parameter, as in the scalar API.
 """
 _fmatrix_bigq(q) = q !== nothing && real(typeof(float(q))) === BigFloat
-function _fmatrix_eltype(::Nothing, q)
-    _fmatrix_bigq(q) && return q isa Real ? BigFloat : Complex{BigFloat}
-    return (q !== nothing && !(q isa Real) && !_is_classical(q)) ? ComplexF64 : Float64
+function _fmatrix_eltype(T, q)
+    E = T === nothing ? Float64 : T
+    q === nothing || (E = promote_type(E,typeof(float(q))))
+    return q isa Real && q < 0 ? Complex{real(E)} : E
 end
-_fmatrix_eltype(T::Type, _) = T
 
 """
 Validate the target keywords up front, so that an inadmissible or nonsensical level is reported even when
@@ -81,14 +82,15 @@ together with the intermediate spins labelling its rows (`e`) and columns (`f`).
 
     F[i, j] = fsymbol(a, b, e[i], c, d, f[j]) = (-1)^{a+b+c+d} √([2e+1][2f+1]) {a b e; c d f} ,
 
-which is the **orthogonal** normalisation: `F' * F ≈ I`, so the inverse change of basis is `transpose(F)`.
+which is the **orthogonal** normalisation: `transpose(F) * F ≈ I`, so the inverse change of basis is `transpose(F)`.
 
-Use `k` for a unitary level, `q` for any deformation — positive real, or complex — or neither for the
+Use `k` for a unitary level, `q` for a real or complex deformation, or neither for the
 classical limit; `k` and `q` are mutually exclusive, as elsewhere in the package. At a level the ranges are
 the level-admissible intermediates, so `F` can be smaller than the classical matrix, or empty.
 
-`T` defaults to the natural element type: `Float64` at a level, classically and at real `q`, `ComplexF64`
-off the real axis; BigFloat inputs preserve their real or complex element type. Requests for `BigFloat`
+`T` sets a precision floor. The default is `Float64` at a level, classically and at positive real `q`,
+and `ComplexF64` at negative real or complex `q`. Negative real q uses the same branch as `complex(q)`.
+BigFloat inputs preserve their real or complex precision. Requests for `BigFloat`
 or `Complex{BigFloat}` entries, and BigFloat inputs, use scalar `fsymbol` evaluations at the requested
 precision instead of the machine-precision recurrence. This path is slower but retains the extra digits.
 The orthogonality relation `Σ_e [F]_{ef} [F]_{ef'} = δ_{ff'}` is an algebraic identity,
