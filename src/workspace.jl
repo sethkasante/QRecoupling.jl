@@ -2,17 +2,22 @@
     EvaluationWorkspace()
 
 Reusable Float64 ratio/recoupling scratch and bounded fixed-q analytic tables. Pass `workspace=work` to
-`q6j`, `q3j_factorial`, `fsymbol`, `gsymbol`, or `qeval(::FactorialSum)`. Storage grows on demand.
+`q6j`, `q3j`, `qcg`, `QRecoupling.q3j_factorial`, `fsymbol`, `gsymbol`, or `qeval(::FactorialSum)`. Storage grows on demand.
 One workspace may be reused sequentially, but must not be shared by concurrent tasks.
 Batched symbol evaluation creates a separate workspace for each worker automatically.
 Analytic tables are keyed by q, numeric type, precision, and capacity; changing q
 invalidates them. A workspace retains at most four precision/type tiers.
+CG recurrence scratch retains one sector, rebuilding its coefficients when the
+target or `(j1,j2,m1+m2)` changes. Repeated entries reuse its arrays and coefficients.
 """
 struct EvaluationWorkspace
     ratios::Vector{Float64}
     column::ColumnWork
     analytic::Dict{Any,Any}
+    cg::Base.RefValue{Any}
 end
+EvaluationWorkspace(ratios::Vector{Float64}, column::ColumnWork, analytic::Dict{Any,Any}) =
+    EvaluationWorkspace(ratios,column,analytic,Ref{Any}(nothing))
 EvaluationWorkspace(ratios::Vector{Float64}, column::ColumnWork) =
     EvaluationWorkspace(ratios,column,Dict{Any,Any}())
 EvaluationWorkspace() = EvaluationWorkspace(Float64[],ColumnWork())
