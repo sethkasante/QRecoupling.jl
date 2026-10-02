@@ -6,7 +6,7 @@
 #  the symmetry relations and the q = 1 limit are checked on top of that.
 # ---------------------------------------------------------------------------------
 @testset "qcg and q3j" begin
-    _qn(n, q) = (q^n - q^(-n)) / (q - 1 / q)
+    _qn(n, q) = isone(q) ? n * one(q) : (q^n - q^(-n)) / (q - 1 / q)
     # the few matrix helpers needed, so the tests take no extra dependency
     function _kron(A, B)
         p, q = size(B)
@@ -21,23 +21,59 @@
         function rep(j, q)
             ms = collect(j:-1:-j)
             K = _diag([q^m for m in ms]); E = zeros(typeof(q), length(ms), length(ms))
+            # Independently recover balanced factors from [n] = Π_{d|n,d>1} Ψ_d.
+            # Root each factor separately, as required by the package's complex-q gauge.
+            # Taking sqrt([n]) after multiplication can change signs across branch cuts.
+            psi = ones(typeof(q), Int(2j)); roots = ones(typeof(q), Int(2j))
+            for n in 2:Int(2j)
+                psi[n] = _qn(n, q)
+                for d in 2:n-1
+                    n % d == 0 && (psi[n] /= psi[d])
+                end
+                abs(abs(q) - 1) < 8eps() && (psi[n] = real(psi[n]))
+                for d in 2:n
+                    n % d == 0 && (roots[n] *= sqrt(psi[d]))
+                end
+            end
             for (i, m) in enumerate(ms)
-                i > 1 && (E[i-1, i] = sqrt(_qn(j - m, q) * _qn(j + m + 1, q)))
+                i > 1 && (E[i-1, i] = roots[Int(j - m)] * roots[Int(j + m + 1)])
             end
             return ms, K, E
         end
-        for q in (0.8, 1.3), (j1, j2) in pairs
+        for kw in ((; q = 1.0), (; q = 0.8), (; q = 1.3), (; q = -0.8),
+                   (; q = 0.7 + 0.4im), (; q = cispi(0.1373)), (; k = 5), (; k = 11)), (j1, j2) in pairs
+            q = haskey(kw, :k) ? cispi(1 / (kw.k + 2)) : complex(kw.q)
             m1s, K1, E1 = rep(j1, q); m2s, K2, E2 = rep(j2, q)
             ΔK = _kron(K1, K2); ΔE = _kron(E1, K2) + _kron(_diag([1 / K1[i, i] for i in axes(K1, 1)]), E2)
+            ΔF = _kron(transpose(E1), K2) + _kron(_diag([1 / K1[i, i] for i in axes(K1, 1)]), transpose(E2))
             for j in abs(j1 - j2):(j1 + j2)
+                haskey(kw, :k) && j1 + j2 + j > kw.k && continue
                 ms, Kj, Ej = rep(j, q)
-                V = zeros(length(m1s) * length(m2s), length(ms))
+                V = zeros(ComplexF64, length(m1s) * length(m2s), length(ms))
                 for (c, m) in enumerate(ms), (a, x) in enumerate(m1s), (b, y) in enumerate(m2s)
-                    x + y == m && (V[(a - 1) * length(m2s) + b, c] = qcg(j1, x, j2, y, j, m; q = q))
+                    x + y == m && (V[(a - 1) * length(m2s) + b, c] = qcg(j1, x, j2, y, j, m; kw...))
                 end
-                @test maximum(abs, ΔK * V - V * Kj) < 1e-13
-                @test maximum(abs, ΔE * V - V * Ej) < 1e-12
+                for (A, B) in ((ΔK, Kj), (ΔE, Ej), (ΔF, transpose(Ej)))
+                    lhs, rhs = A * V, V * B
+                    @test maximum(abs, lhs - rhs) < 1e-12 * max(1.0, maximum(abs, lhs), maximum(abs, rhs))
+                end
             end
+        end
+    end
+
+    @testset "spin-half singlet: a closed-form coproduct check" begin
+        # |0,0> = (sqrt(q)|+-> - inv(sqrt(q))|-+>)/sqrt([2]).
+        # Both Δ(E) and Δ(F) annihilate it, and its transpose norm is one.
+        for kw in ((; q = 0.8), (; q = 1.3), (; q = 0.7 + 0.4im), (; q = -0.8), (; k = 3), (; k = 8))
+            q = haskey(kw, :k) ? cispi(1 / (kw.k + 2)) : complex(kw.q)
+            r = sqrt(q); d = sqrt(q + inv(q))
+            a = qcg(1//2, 1//2, 1//2, -1//2, 0; kw...)
+            b = qcg(1//2, -1//2, 1//2, 1//2, 0; kw...)
+            @test a ≈ r / d atol = 1e-14
+            @test b ≈ -inv(r) / d atol = 1e-14
+            @test abs(a / r + b * r) < 1e-14
+            @test a^2 + b^2 ≈ 1 atol = 1e-14
+            @test q3j(1//2, 1//2, 0, 1//2, -1//2, 0; kw...) ≈ a atol = 1e-14
         end
     end
 

@@ -219,7 +219,7 @@ Sizing a pass from that number is what makes escalation overshoot.
 function _surviving_digits(value, bound, pessimism)
     # Logarithms in the value's own type: a BigFloat value below the Float64 range (e.g. 2e-344 at a large
     # level) must not read as zero, or the doubling loop that relies on this estimate never terminates.
-    (iszero(value) || !isfinite(bound)) && return -Inf
+    (iszero(value) || !isfinite(value) || !isfinite(bound) || bound < 0) && return -Inf
     iszero(bound) && return Inf
     return log10(pessimism) - Float64(log10(abs(bound)) - log10(abs(value)))
 end
@@ -350,12 +350,11 @@ _target_digits(::Type{T}) where {T} = T === BigFloat ? _decimal_digits(T) - 4 : 
 
 Value at q = e^{iπ/(k+2)}. Poles throw a `DomainError` and vanishing terms are skipped, both decided from
 valuations before any arithmetic. The sum runs in T and reports how many digits cancellation consumed.
-If that leaves fewer than `_target_digits(T)`, the modular test first decides whether the value is exactly
-zero; otherwise the sum is redone in BigFloat with enough bits for the loss (doubling until the digits
-are there). The digit count is an estimate from max|term|/|Σ|, so a `Float64` result that is accepted
-carries about 11 significant digits or better; escalated results carry the full target. `fallback()` 
-is used if a factorial falls outside the level tables. With `labels` (the doubled labels of a 6j), the 
-escalation first tries the column recurrence, which has no condition number at all.
+If too few digits survive, algebraic identities or exact confirmation of a modular candidate establish
+cancellation zeros. Nonzero values use wider arithmetic, doubling precision when necessary. Acceptance
+uses an error estimate rather than a rigorous enclosure. `fallback()` is used if a factorial falls
+outside the level tables. With `labels` (the doubled labels of a 6j), escalation first tries the column
+recurrence, subject to its own error estimate.
 """
 function value_at_level(s::FactorialSum, k::Int, ::Type{T}; fallback, labels = nothing, family = nothing, workspace = nothing) where {T}
     v, status, segs = level_pass1(s, k, qint_tables(T, k); family=family, workspace=workspace)
@@ -454,9 +453,9 @@ function _certified_value(s::FactorialSum, segs, k::Int, tab::QIntTables{T}, wor
     return vc, :escalate
 end
 
-"Does `bound` place `value` within a relative `rtol` of the exact value? A zero never certifies."
+"Does a finite, nonzero value satisfy the relative error estimate? Invalid bounds are rejected."
 @inline _certifies(value, bound, rtol) =
-    !iszero(value) && isfinite(bound) && bound <= rtol * abs(value)
+    !iszero(value) && isfinite(value) && isfinite(bound) && 0 <= bound <= rtol * abs(value)
 
 """
 Evaluation policy for `Float64` level and classical values:
@@ -480,22 +479,22 @@ const LAZY_MIN_STEPS = 2
 """
     level_escalate(s, segs, k, T, ztab) -> T
 
-Finishes an `:escalate` case: the modular test first decides whether the value is exactly zero, otherwise
-the sum is redone in `BigFloat` with enough bits for the loss, doubling until the digits are there. Changes
-the global `BigFloat` precision while it runs, so callers keep it off worker threads.
+Finishes an `:escalate` case: algebraic identities or exact confirmation of modular candidates resolve
+zeros; nonzero sums use multiword tiers and then `BigFloat`, doubling until the error estimate meets the
+target. Callers on runtimes with shared `BigFloat` precision keep this work off worker threads.
 """
 function level_escalate(s::FactorialSum, segs, k::Int, ::Type{T}, ztab::LevelZeroTable;
                         labels = nothing, workspace = nothing) where {T}
-    # The recurrence comes first: when it returns a value its own estimate has certified that the entry is
-    # far above the noise, so the entry cannot be an exact zero and the modular test (which costs a pass over
-    # every term) is not needed.
+    # The recurrence comes first when available; it accepts entries using its own error estimate.
     if T === Float64 && labels !== nothing       # the symbol as one entry of its column: O(distance), no κ
         v = sixj_entry(labels, k, _column_workspace(workspace))
         v === nothing || return T(v)
     end
     # the pairwise test is a proof and costs a few comparisons; the modular screen is a pass over every term
-    (pairwise_zero(s) || reflection_zero(s, segs, k) ||
-     is_cancellation_zero(s, segs, k, ztab) === true) && return zero(T)
+    (pairwise_zero(s) || reflection_zero(s, segs, k)) && return zero(T)
+    if is_cancellation_zero(s, segs, k, ztab) !== false
+        iszero(exact_x(s, k)) && return zero(T)
+    end
     target = _target_digits(T)
     if T === Float64                             # K-word tiers: κ up to ~1e30 (K = 3) and ~1e46 (K = 4)
         for tier in (Val(3), Val(4))

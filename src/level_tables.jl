@@ -1,13 +1,13 @@
 
 # ---------------------------------------------------------------------------------
-#  Per-level tables: exact zero tests, q-integer and split-factorial tables, ratio helpers 
+#  Per-level tables: modular zero screening, q-integer and split-factorial tables, ratio helpers
 #
 #  Everything a level needs before any symbol is evaluated. Tables are built once per level and read
 #  without a lock (`LevelCache`), which is what makes batches at one level cheap. 
 #  the tables are the expensive part and every symbol at the level shares them.
 # ---------------------------------------------------------------------------------
 
-# ---- exact zero test: two Galois conjugates modulo one prime ----
+# ---- modular zero screen: two Galois conjugates modulo one prime ----
 
 "[n]! and 1/[n]! at two conjugates q ↦ r^a of q = e^{iπ/(k+2)}, modulo a prime p ≡ 1 (mod 2(k+2))."
 struct LevelZeroTable
@@ -138,11 +138,18 @@ end
 is_zero_at_level(s::FactorialSum, k::Int) = is_zero_at_level(s, k, level_zero_table(k))
 
 function is_zero_at_level(s::FactorialSum, k::Int, tab::LevelZeroTable)
+    result = _level_zero_screen(s, k, tab)
+    return result === nothing ? iszero(exact_x(s, k)) : result
+end
+
+"Proved zero/nonzero, or `nothing` when exact confirmation is needed. No exact-field work here."
+function _level_zero_screen(s::FactorialSum, k::Int, tab::LevelZeroTable)
     st, segs = classify_at_level(s, k)
     (st === :empty || st === :zero) && return true
     st === :pole && return false
+    pairwise_zero(s) && return true
     reflection_zero(s, segs, k) && return true          # a proof, and cheaper than the screen
-    return is_cancellation_zero(s, segs, k, tab) === true
+    return is_cancellation_zero(s, segs, k, tab) === false ? false : nothing
 end
 
 """

@@ -5,7 +5,7 @@
 #  describes it classically: the same ratio loop runs over tables of n and log n!, with the same
 #  cancellation estimate and precision escalation. There are no valuations to track (Φ_h never divides
 #  an ordinary factorial), but cancellation zeros exist classically too — the "non-trivial zeros" of
-#  6j symbols — and are settled the same way, by evaluating the rational sum modulo large primes.
+#  6j symbols. Modular residues exclude nonzeros cheaply; candidates are checked by exact summation.
 #
 #  This replaces a floating-point projection of the expanded form that lost all accuracy at large spins
 #  (12% off at j = 100 for {j j j; j j j}).
@@ -74,7 +74,7 @@ function ClassicalModTable(p::UInt64, N::Int)
     return ClassicalModTable(m, fact, invf)
 end
 
-# Two independent word-size primes: a nonzero rational sum vanishes modulo both with probability ~2⁻¹²⁴.
+# Two fixed word-size primes filter out nonzeros. Vanishing residues still require exact confirmation.
 const CLASSICAL_PRIMES = (UInt64(4611686018427387847), UInt64(4611686018427387817))
 const CLASSICAL_MOD_TABLES = LevelCache{Tuple{ClassicalModTable,ClassicalModTable}}()
 
@@ -86,9 +86,17 @@ function classical_mod_tables(N::Int)
 end
 
 "Is the classical sum exactly zero? The prefactor is a nonzero square root, so only the sum matters."
-function is_classical_zero(s::FactorialSum)
+function is_classical_zero(s::FactorialSum, tabs = nothing)
     is_empty_sum(s) && return true
-    return _sum_vanishes_mod(s, classical_mod_tables(max_argument(s)))
+    tabs === nothing && (tabs = classical_mod_tables(max_argument(s)))
+    _sum_vanishes_mod(s, tabs) || return false
+    P, _ = try
+        _horner_sum(s)
+    catch e
+        e isa OverflowError || rethrow()
+        _horner_sum_big(s)
+    end
+    return iszero(P)
 end
 
 "Does the rule's sum vanish modulo every table in `tabs`? Each table holds [n]! and 1/[n]! at one point."
@@ -124,7 +132,7 @@ This is a proof, not a screen, and it holds at every q and every level (a term t
 has a mirror that vanishes with it). It is the column-exchange selection rule of the 3j symbol —
 `(j j j; m₁ m₂ m₁)` with `3j` odd, `(j₁ j₂ j₃; 0 0 0)` with `j₁ + j₂ + j₃` odd — read off the rule rather
 than enumerated, so it covers every symbol whose sum has that shape. A cancellation zero whose sum is not
-pairwise has to be found by one of the modular screens instead.
+pairwise can be screened modularly and then confirmed by exact arithmetic.
 """
 function pairwise_zero(s::FactorialSum)
     (is_empty_sum(s) || !s.alternating) && return false
@@ -145,14 +153,13 @@ function pairwise_zero(s::FactorialSum)
     return true
 end
 
-# ---- identically zero at generic q: a Schwartz–Zippel screen ----
+# ---- identically zero at generic q: modular filtering and polynomial confirmation ----
 #
 # At a level or at q = 1 the modular screens evaluate the sum where it is asked for. At generic q the
-# question is whether the sum is the zero *function*, and a nonzero Laurent polynomial of degree D vanishes
-# at a random point of F_p with probability at most D/p. Two 62-bit primes and two fixed points make a false
-# "zero" as unlikely as the classical screen's (~2⁻¹²⁴ for D ≲ 10⁶); a nonzero residue is a proof that the
-# sum is not identically zero. Without this, an identically vanishing sum at generic q had no bound to
-# certify and escalated until `analytic_value` gave up: `q3j_factorial(5, 5, 5, 1, -2, 1; q = 0.8)` threw.
+# question is whether the sum is the zero *function*. A nonzero residue proves that it is not. The fixed
+# evaluation points carry no universal false-positive probability, so vanishing residues are confirmed
+# by expanding the exact polynomial numerator. Without a zero decision, an identically vanishing sum
+# escalated until `analytic_value` gave up: `q3j_factorial(5, 5, 5, 1, -2, 1; q = 0.8)` threw.
 
 const _GENERIC_ZERO_SEEDS = (UInt64(0x1f3a9c2d7e4b5a61), UInt64(0x2b7e151628aed2a6))
 const GENERIC_MOD_TABLES = LevelCache{Tuple{ClassicalModTable,ClassicalModTable}}()
@@ -200,10 +207,11 @@ function generic_mod_tables(N::Int)
 end
 
 "Is the sum the zero function of q? Nonzero residues prove it is not; see the section comment above."
-function is_generic_zero(s::FactorialSum)
+function is_generic_zero(s::FactorialSum, tabs = nothing)
     is_empty_sum(s) && return true
     pairwise_zero(s) && return true
-    return _sum_vanishes_mod(s, generic_mod_tables(max_argument(s)))
+    tabs === nothing && (tabs = generic_mod_tables(max_argument(s)))
+    return _sum_vanishes_mod(s, tabs) && iszero(generic_value(s))
 end
 
 # ---- exact evaluation by Horner nesting (replaces BigFloat escalation for Float64 results) ----

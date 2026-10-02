@@ -283,6 +283,12 @@ coupling matrices, by a recurrence, much faster than entry by entry. At a level,
 j₁ + j₂ + j ≤ k give zero. `exact = true` and `Exact()` give the exact classical coefficient; exact level
 values and `Symbolic()` are not available yet.
 
+For generic complex q, square roots in the representation matrices must use the same balanced-factor
+convention as the coefficients: `[n] = Π_{d|n,d>1} Ψ_d(q)`, where `Ψ_d(q) = q^{−φ(d)} Φ_d(q²)`
+and each `Ψ_d` is rooted separately.
+Taking a principal root only after multiplying the factors can change the basis signs. The lowering
+generator uses the transpose of the raising matrix, and Δ(F) = F⊗K + K⁻¹⊗F in this convention.
+
 The value is a factorial rule with q-power weights: the 3j rule, with term z multiplied by q^{−z(j₁+j₂+j+1)}
 and the whole by q^{½(j₁+j₂−j)(j₁+j₂+j+1) + j₁m₂ − j₂m₁}, evaluated by the same scaled, compensated and
 escalating kernel as the other symbols. See also [`q3j`](@ref).

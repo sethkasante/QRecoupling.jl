@@ -831,11 +831,34 @@ function _analytic_pass(s::FactorialSum,tab::AnalyticRuleTable,w::Int=0,e2::Int=
     return v,cond,wrel,pw,nr,cut
 end
 
-function _analytic_close(a,b,tol)
-    iszero(a.m) && iszero(b.m) && return true
-    iszero(b.m) && return false
-    d=_asub(a,b)
-    iszero(d.m) || _avalue(_adiv(_aabs(d),_aabs(b))) <= tol
+"Exact zero decision for the sum at the supplied real/complex q, including an integer q-power weight."
+function _analytic_sum_iszero(s::FactorialSum, q::Number, w::Int)
+    is_empty_sum(s) && return true
+    # Finite binary floats have exact rational coordinates. The nonzero prefactor and first term
+    # do not affect the decision; Horner ratios avoid expanding a polynomial or choosing radical roots.
+    qr = Rational{BigInt}(real(q))
+    r = q isa Real ? qr : complex(qr, Rational{BigInt}(imag(q)))
+    x = r + inv(r)
+    N = max_argument(s)
+    qints = Vector{typeof(r)}(undef, N)
+    prev, cur = zero(r), one(r)
+    for n in 1:N
+        qints[n] = cur
+        prev, cur = cur, x * cur - prev
+    end
+    step = (s.alternating ? -one(r) : one(r)) * r^w
+    total = one(r)
+    for z in (s.zhi - 1):-1:s.zlo
+        ratio = step
+        for f in s.fac
+            lo, hi, c = _factor_step(f, z)
+            for n in lo:hi
+                ratio *= qints[n]^c
+            end
+        end
+        total = one(r) + ratio * total
+    end
+    return iszero(total)
 end
 
 function _analytic_q(q::Number)
@@ -996,26 +1019,30 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
     end
     # Every fixed-precision tier has failed. If the sum is the zero function of q there is no bound for
     # any precision to certify, and the ladder below would only double its bits until it gave up; the
-    # generic-q screen decides that first, as the modular screens do at a level and at q = 1.
+    # generic-q filter and exact polynomial check decide that first.
     !weighted && is_generic_zero(s) && return zero(T)
     # Rebuild from the supplied q at each precision, never from rounded table
     # entries. A tier that certifies its own bound is accepted on its own: the
     # machine-precision value is not a reliable witness, so requiring the two to
-    # agree only forced a second arbitrary-precision pass. An exactly cancelling
-    # sum carries no bound, and there two tiers must agree instead.
-    previous=v
+    # agree only forced a second arbitrary-precision pass. A rounded zero, or a sum
+    # still buried in rounding noise at two widths, triggers exact confirmation at the supplied q.
+    zero_checked=false
+    cancelled=false
     bits=max(128,precision(R)+32)
     for _ in 1:8
         next,condition,_,_,_,_=setprecision(BigFloat,bits) do
             qb=input_q isa Real ? BigFloat(input_q) : Complex{BigFloat}(input_q)
             _analytic_pass(s,_analytic_table(qb,N,workspace),w,e2)
         end
-        if iszero(next.m)
-            _analytic_close(previous,next,tol/4) && return T(_avalue(next))
-        elseif isfinite(condition) && ops*ldexp(one(condition),-bits)*condition < tol/4
+        if !iszero(next.m) && isfinite(condition) && ops*ldexp(one(condition),-bits)*condition < tol/4
             return T(_avalue(next))
         end
-        previous=next
+        small = !isfinite(condition) || exponent(condition) >= bits - 64
+        if !zero_checked && (iszero(next.m) || (small && cancelled))
+            _analytic_sum_iszero(s,input_q,w) && return zero(T)
+            zero_checked=true
+        end
+        cancelled=small
         bits*=2
     end
     throw(ErrorException("analytic evaluation did not converge; increase input precision or use an exact level target"))

@@ -1,9 +1,8 @@
 # --------------------------------------------
 #  Structural queries: zeros, poles and level spectra
 #
-#  These answer questions about a symbol without computing its value. Valuations give poles and
-#  all-terms-vanishing zeros in closed form; the modular test settles cancellation zeros. Microseconds
-#  either way, which is what makes sweeping whole families practical.
+#  Valuations give poles and all-terms-vanishing zeros in closed form. Modular residues filter
+#  cancellation candidates; definitive zero queries confirm unresolved candidates exactly.
 # --------------------------------------------
 
 # Both of these now dispatch through the symbol interface of `symbols.jl`, so a new symbol needs a
@@ -24,11 +23,12 @@ end
     iszero_at(symbol, k, labels...) -> Bool
     iszero_at(k, labels::AbstractVector) -> BitVector
 
-Screen whether a symbol vanishes at level `k`, including cancellation between finite terms. `symbol` is one of `q6j`, `QRecoupling.q3j_factorial`, `fsymbol`, `gsymbol` (default `q6j`). Given a collection of
+Decide whether a symbol vanishes at level `k`, including cancellation between finite terms. `symbol` is one of `q6j`, `QRecoupling.q3j_factorial`, `fsymbol`, `gsymbol` (default `q6j`). Given a collection of
 label tuples, the test runs over the batch with shared tables and threads.
 
-Structural vanishing is exact; cancellation uses modular screening and should be confirmed by exact
-arithmetic when a proof is needed. No universal false-positive probability is guaranteed.
+Structural identities prove zeros directly. Other candidates pass through modular screening and exact
+confirmation. In a batch, screening can use threads; exact confirmations run serially and can cost more
+at high degree. Use `level_spectrum` for screening without exact confirmation.
 
 ```julia
 iszero_at(20, 5, 5, 5, 5, 5, 5)          # true: a cancellation zero
@@ -54,11 +54,14 @@ function iszero_at(f::Function, k::Integer, labels::AbstractVector; threads = no
     # Packed bits share storage words. Parallel workers must own independently writable bytes;
     # preserve the compact public return type by packing only after every worker has joined.
     out = nw == 1 ? falses(n) : Vector{Bool}(undef, n)
+    pending = Vector{Bool}(undef, n)
     ztab = level_zero_table(k)                  # built once, read-only afterwards
     work = function (rng)
         for i in rng
             l = labels[i]
-            out[i] = !_admissible_at(f, k, l...) || is_zero_at_level(_rule_for(f, l...), k, ztab)
+            result = !_admissible_at(f, k, l...) ? true : _level_zero_screen(_rule_for(f, l...), k, ztab)
+            out[i] = result === true
+            pending[i] = result === nothing
         end
     end
     if nw == 1
@@ -67,6 +70,10 @@ function iszero_at(f::Function, k::Integer, labels::AbstractVector; threads = no
         @sync for c in _chunks(n, nw)
             Threads.@spawn work(c)
         end
+    end
+    # Exact polynomial caches and field arithmetic follow the serial exact-batch policy.
+    for i in eachindex(pending)
+        pending[i] && (out[i] = iszero(exact_x(_rule_for(f, labels[i]...), k)))
     end
     return out isa BitVector ? out : BitVector(out)
 end
