@@ -414,6 +414,10 @@ end
 
 One coefficient from its column, for the near-edge tier: returned only when its estimate meets the plain
 tier's promise with a factor of eight in hand, as `sixj_entry` is asked. `q` real and positive, or a level.
+
+The row in j through the entry (`_cg_row!`) is no shorter: a sector of the coupling matrix is square, so the
+column and the row both have one entry per j ≥ |m|. The column is kept because its coefficients can be reused
+from a workspace, and because a level's fusion rule never cuts it.
 """
 function _cg_entry(q, k, J1::Int, M1::Int, J2::Int, M2::Int, J::Int; workspace=nothing)
     T = _cg_tables(q, k, J1, J2)
@@ -523,8 +527,10 @@ promise.
 """
 function _qcg_sector_columns!(put::F, ::Type{E}, q, kk, J1::Int, J2::Int, M::Int, js, tw) where {F,E}
     j1 = J1 // 2; j2 = J2 // 2
+    # `::E`: without it the fallback's type is not inferred, the value handed to `put` is boxed, and every
+    # entry allocates — although no entry falls back (5,856 allocations per (30,30) sector, 1.3× the time)
     direct(M1, J) = E(kk === nothing ? qcg(j1, M1 // 2, j2, (M - M1) // 2, J // 2; q = q, T = real(E)) :
-                                       qcg(j1, M1 // 2, j2, (M - M1) // 2, J // 2; k = kk, T = real(E)))
+                                       qcg(j1, M1 // 2, j2, (M - M1) // 2, J // 2; k = kk, T = real(E)))::E
     lo = max(-J1, M - J2); hi = min(J1, M + J2)
     if tw === nothing
         for J in js, M1 in hi:-2:lo
@@ -567,8 +573,9 @@ function qcg_row(j1::Spin, m1::Spin, j2::Spin, m2::Spin; k = nothing, q = nothin
     E = _qcg_eltype(T, q, kk)
     c = Vector{E}(undef, length(js))
     isempty(js) && return c, js .// 2
+    # `::E` keeps the fallback inferred, so the row does not box every entry (as in `_qcg_sector_columns!`)
     direct(J) = E(kk === nothing ? qcg(j1, m1, j2, m2, J // 2; q = q, T = real(E)) :
-                                   qcg(j1, m1, j2, m2, J // 2; k = kk, T = real(E)))
+                                   qcg(j1, m1, j2, m2, J // 2; k = kk, T = real(E)))::E
     if _qcg_fast(E, q, kk)
         Tb = _cg_tables(q, kk, J1, J2)
         work = CGWork(Tb, length(js))

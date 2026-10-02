@@ -58,11 +58,11 @@ _level_q(::Type{T}, k::Int) where {T} = cispi(one(real(float(T))) / (k + 2))
 
 _weighted_exact_error(f) = ArgumentError(
     "$(f) at a level is complex, with values in ℚ(ζ_{4h}) up to a square root, and has no exact form yet. " *
-    "Use `Level(k)` for numerical values, or `q3j_factorial` for the real factorial-substitution symbol.")
+    "Use `Level(k)` for numerical values, or `QRecoupling.q3j_factorial` for the real factorial-substitution symbol.")
 
 _weighted_symbolic_error(f) = ArgumentError(
     "$(f) carries q-power weights that the factorial-rule display cannot hold yet. " *
-    "Use `At(q)` or `Level(k)` for numerical values, or `q3j_factorial(Symbolic(), ...)`.")
+    "Use `At(q)` or `Level(k)` for numerical values, or `QRecoupling.q3j_factorial(Symbolic(), ...)`.")
 
 """
     _level_half_phases(k) -> Vector{ComplexF64}
@@ -164,26 +164,85 @@ function _weighted_level_pass(s::FactorialSum, w::Int, e2::Int, k::Int, ::Type{R
 end
 
 """
-Level value of a weighted rule: the Float64 pass when its bound certifies it, then arbitrary precision at
-doubling widths. A sum that cancels to nothing at two successive widths is an exact zero.
+Prove that the weighted sum vanishes at a level. This is called only after two
+precision passes have been inconclusive. A nonzero residue modulo a prime
+excludes a zero cheaply; a zero residue needs confirmation in the cyclotomic
+field. The prefactor and overall phase are nonzero for admissible CG/3j labels,
+and every term factorial has argument below k + 2.
 """
-function _weighted_level_value(s::FactorialSum, w::Int, e2::Int, k::Int, ::Type{T}) where {T}
+function _weighted_level_zero(s::FactorialSum, w::Int, k::Int)
+    tab = level_zero_table(k)
+    m = tab.m; order = 2(k + 2)
+    r = to_mont(m, root_of_unity(m.p, order))
+    step = mont_pow(m, r, mod(w, order))
+    phase = mont_pow(m, r, mod(w * s.zlo, order))
+    acc = UInt64(0)
+    N = 0
+    for z in s.zlo:s.zhi
+        term = phase
+        for f in s.fac
+            n = _arg(f, z)
+            0 <= n <= k + 1 || return false
+            N = max(N, n)
+            b = f.c > 0 ? tab.fact[n+1, 1] : tab.invfact[n+1, 1]
+            for _ in 1:abs(f.c); term = mont_mul(m, term, b); end
+        end
+        acc = s.alternating && isodd(z) ? mont_sub(m, acc, term) : mont_add(m, acc, term)
+        phase = mont_mul(m, phase, step)
+    end
+    iszero(acc) || return false
+    # A modular zero alone is not a proof. This rare path uses exact arithmetic;
+    # the square-root prefactor is not needed for deciding whether the sum is zero.
+    _, ζ = cyclotomic_field(order, "ζ")
+    facts = Vector{typeof(ζ)}(undef, N + 1); facts[1] = one(ζ)
+    qi = inv(ζ); den = ζ - qi
+    for n in 1:N
+        facts[n+1] = facts[n] * divexact(ζ^n - qi^n, den)
+    end
+    step_exact = ζ^mod(w, order)
+    phase_exact = ζ^mod(w * s.zlo, order)
+    total = zero(ζ)
+    for z in s.zlo:s.zhi
+        term = phase_exact
+        for f in s.fac; term *= facts[_arg(f, z)+1]^Int(f.c); end
+        total += s.alternating && isodd(z) ? -term : term
+        phase_exact *= step_exact
+    end
+    return iszero(total)
+end
+
+"""
+Level value of a weighted rule: the Float64 pass when its bound certifies it,
+then arbitrary precision at doubling widths. Numerical cancellation triggers
+an algebraic zero test; agreement near zero at two widths is not a proof.
+"""
+function _weighted_level_value(s::FactorialSum, w::Int, e2::Int, k::Int, ::Type{T}; near_edge = nothing) where {T}
     R = real(float(T))
     if R !== BigFloat
         v, relb, _ = _weighted_level_pass(s, w, e2, k, R)
         isfinite(relb) && relb <= RTOL_PLAIN && return Complex{R}(_avalue(v))
+        # near-edge tier: the coefficient from its Casimir column, O(column) and free of the sum's cancellation
+        if near_edge !== nothing
+            vr = near_edge()
+            vr === nothing || return Complex{R}(vr)
+        end
     end
     tol = R === BigFloat ? eps(BigFloat) * 64 : RTOL_PLAIN / 8
     bits = R === BigFloat ? precision(BigFloat) + 32 : 128
     cancelled = false
+    zero_checked = false
     for _ in 1:8
         v, relb, κ = setprecision(BigFloat, bits) do
             _weighted_level_pass(s, w, e2, k, BigFloat)
         end
         isfinite(relb) && relb <= tol && return Complex{R}(_avalue(v))
-        # |Σ| at the noise floor of this width (κ = Σ|t|/|Σ|): zero, if the next width agrees
-        small = !isfinite(κ) || κ >= ldexp(1.0, bits - 64)
-        small && cancelled && return zero(Complex{R})
+        # A nonzero sum can stay below the noise floor at several widths. Never
+        # replace it by zero without an exact check of the q-weighted sum.
+        small = !isfinite(κ) || exponent(κ) >= bits - 64
+        if small && cancelled && !zero_checked
+            _weighted_level_zero(s, w, k) && return zero(Complex{R})
+            zero_checked = true
+        end
         cancelled = small
         bits *= 2
     end
@@ -192,18 +251,20 @@ end
 
 "Evaluate a weighted rule at the requested target; `admissible(k)` gives the level's fusion rule."
 @inline function _weighted_value(f, s::FactorialSum, weight::Tuple{Int,Int}, admissible::A, k, q, exact::Bool,
-                         ::Type{T}; workspace = nothing) where {A,T}
+                         ::Type{T}; workspace = nothing, near_edge::N = nothing) where {A,T,N}
     if !isnothing(k)
         exact && throw(_weighted_exact_error(f))
         kk = Int(k)
         qk = _level_q(T, kk)
         admissible(kk) || return zero(promote_type(T, typeof(qk)))
         is_empty_sum(s) && return zero(promote_type(T, typeof(qk)))
-        return _weighted_level_value(s, weight..., kk, T)
+        return _weighted_level_value(s, weight..., kk, T;
+                                     near_edge = near_edge === nothing ? nothing : () -> near_edge(nothing, kk))
     elseif _is_classical(q)
         return exact ? classical_exact(s) : classical_value(s, T; workspace = workspace)
     end
-    return analytic_value(s, q, T; workspace = workspace, weight = weight)
+    ne = (near_edge !== nothing && q isa Real && !(q isa BigFloat) && q > 0) ? () -> near_edge(q, nothing) : nothing
+    return analytic_value(s, q, T; workspace = workspace, weight = weight, near_edge = ne)
 end
 
 """
@@ -214,8 +275,11 @@ The quantum Clebsch–Gordan coefficient ⟨j₁m₁; j₂m₂|j m⟩_q of U_q(s
 argument order follows `clebschgordan` in WignerSymbols.jl.
 
 Use `q` for a real or complex parameter and `k` for the level, q = e^{iπ/(k+2)} (mutually exclusive). For
-real q the coefficients form an orthogonal matrix in (j, m₁) at fixed m; at complex q, including a level,
-they are complex and satisfy C Cᵀ = 1 rather than C C† = 1. At a level, labels outside the fusion rule
+real q > 0 the coefficients form an orthogonal matrix in (j, m₁) at fixed m. At complex q, including a level,
+orthogonality uses the transpose, not the adjoint: Cᵀ C = 1 for columns labelled by j. At a level the fusion
+rule may remove columns, so C Cᵀ = 1 holds only for a complete sector. Negative real q is evaluated as `complex(q)`,
+with the principal branch of q^{1/2}, so the values are complex there too. [`qcg_matrix`](@ref) builds whole
+coupling matrices, by a recurrence, much faster than entry by entry. At a level, labels outside the fusion rule
 j₁ + j₂ + j ≤ k give zero. `exact = true` and `Exact()` give the exact classical coefficient; exact level
 values and `Symbolic()` are not available yet.
 
@@ -230,7 +294,10 @@ function qcg(j1::Spin, m1::Spin, j2::Spin, m2::Spin, j::Spin, m::Spin = m1 + m2;
     k isa AbstractVector && return [qcg(j1, m1, j2, m2, j, m; k = kk, exact = exact, T = T) for kk in k]
     J1, M1, J2, M2, J, M = doubled(j1, m1, j2, m2, j, m)
     s, weight = qcg_rule(J1, M1, J2, M2, J, M)
-    return _weighted_value(qcg, s, weight, kk -> _qδ(J1, J2, J, kk), k, q, exact, T; workspace = workspace)
+    # a coupling coefficient is one entry of its Casimir column: the near-edge tier (`qcg_columns.jl`)
+    ne = is_empty_sum(s) ? nothing : (qq, kk) -> _cg_entry(qq, kk, J1, M1, J2, M2, J; workspace=workspace)
+    return _weighted_value(qcg, s, weight, kk -> _qδ(J1, J2, J, kk), k, q, exact, T;
+                           workspace = workspace, near_edge = ne)
 end
 
 """
@@ -247,7 +314,7 @@ relabellings by q-powers: (j₂ j₁ j₃; m₂ m₁ m₃)_q = (−1)^{j₁+j₂
 m → −m, and (j₂ j₃ j₁; m₂ m₃ m₁)_q = q^{m₂} (j₁ j₂ j₃; m₁ m₂ m₃)_q.
 
 Until v0.4.0 `q3j` was the classical formula with quantum factorials substituted and no q-power weights.
-That function is [`q3j_factorial`](@ref); the two agree at q = 1 and differ at every other q.
+That function is [`QRecoupling.q3j_factorial`](@ref), not exported; the two agree at q = 1 and differ at every other q.
 """
 function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = -m1 - m2;
              k = nothing, q = nothing, exact::Bool = false, T::Type{TT} = Float64,
@@ -256,7 +323,15 @@ function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = -m1 - 
     k isa AbstractVector && return [q3j(j1, j2, j3, m1, m2, m3; k = kk, exact = exact, T = T) for kk in k]
     J1, J2, J3, M1, M2, M3 = doubled(j1, j2, j3, m1, m2, m3)
     s, weight = q3j_rule(J1, J2, J3, M1, M2, M3)
-    return _weighted_value(q3j, s, weight, kk -> _qδ(J1, J2, J3, kk), k, q, exact, T; workspace = workspace)
+    # near-edge tier through the coupling coefficient: (−1)^{j1−j2−m3} [2j3+1]^{−1/2} ⟨j1m1; j2m2|j3, −m3⟩
+    ne = is_empty_sum(s) ? nothing : (qq, kk) -> begin
+        c = _cg_entry(qq, kk, J1, M1, J2, M2, J3; workspace=workspace)
+        c === nothing && return nothing
+        d = kk === nothing ? qint(J3 + 1; q = qq) : qint(J3 + 1; k = kk)
+        return (iseven((J1 - J2 - M3) ÷ 2) ? c : -c) / sqrt(d)
+    end
+    return _weighted_value(q3j, s, weight, kk -> _qδ(J1, J2, J3, kk), k, q, exact, T;
+                           workspace = workspace, near_edge = ne)
 end
 
 for f in (:q3j, :qcg)

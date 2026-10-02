@@ -377,7 +377,7 @@ function ComplexQ(q::Number, N::Int)
     # so the imaginary part is discarded and the branch fixed at +i√|Ψ_d| — the same rule, and the same
     # predicate, that `analytic_rules.jl` applies to the scalar path. A column and `q6j` must agree on it:
     # they disagreed by an exact sign on 8 of the suite's unit-circle entries before this was added.
-    circle = _on_unit_circle(qq)
+    circle = _on_unit_circle(qq) || _negative_real_axis(qq)
     spsi = Vector{CDWord}(undef, max(N, 1))
     @inbounds for d in 1:N
         spsi[d] = _dwsqrt(circle ? _re_only(psi[d]) : psi[d])
@@ -1224,7 +1224,8 @@ mentioned a level; what was missing was a table (`RealQ`/`ComplexQ` supply it) a
 """
 function sixj_entry(J::NTuple{6,Int}, q::Number, work::ColumnWork = ColumnWork(); rtol::Float64 = 1e-14)
     N = sum(J) ÷ 2 + 4                       # every q-integer index `_coefficients!` can reach
-    Q = q isa Real ? real_q_tables(float(q), N) : complex_q_tables(ComplexF64(q), N)
+    qq = _analytic_q(q)
+    Q = qq isa Real ? real_q_tables(qq, N) : complex_q_tables(ComplexF64(qq), N)
     return sixj_entry(J, Q, work; rtol = rtol)
 end
 
