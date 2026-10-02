@@ -67,23 +67,26 @@ function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
 end
 
 """
-    q3j(j1, j2, j3, m1, m2, m3; k=nothing, q=nothing, exact=false, T=Float64, workspace=nothing)
+    q3j_factorial(j1, j2, j3, m1, m2, m3; k=nothing, q=nothing, exact=false, T=Float64, workspace=nothing)
 
-Evaluate the Wigner 3j symbol; the default is its classical value.
+The classical Racah formula for the 3j symbol with every factorial replaced by a symmetric quantum
+factorial, and no q-power weights. It equals the Wigner 3j symbol at q = 1, and it is real at a level, but
+for q ≠ 1 it is *not* the U_q(sl₂) coupling coefficient: the quantum 3j symbol is [`q3j`](@ref). This is
+the function that was called `q3j` up to v0.4.0.
 Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
-`exact=true` requests an exact classical or level value. `q3j(Symbolic(), ...)`
+`exact=true` requests an exact classical or level value. `q3j_factorial(Symbolic(), ...)`
 retains a factorial rule with bounded x-form display; `.dcr` constructs a compatibility DCR lazily.
 Numerical classical/level calls evaluate the rule directly.
 `eager=true` is deprecated and uses the same evaluator.
 """
-function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin=-m1-m2;
+function q3j_factorial(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin=-m1-m2;
                   k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64,
                   workspace=nothing, eager::Bool=false) where {TT}
     q = _evaluation_q(k,q,exact)
     eager && _deprecated_eager()
     k isa AbstractVector && workspace !== nothing &&
         throw(ArgumentError("workspace is for scalar calls; level sweeps do not accept caller-owned scratch"))
-    k isa AbstractVector && return _sweep_levels(q3j, (j1, j2, j3, m1, m2, m3), k;
+    k isa AbstractVector && return _sweep_levels(q3j_factorial, (j1, j2, j3, m1, m2, m3), k;
                                                 q=q,exact=exact,T=T,threads=nothing)
     Js = doubled(j1, j2, j3, m1, m2, m3)
     s = threej_sum(Js...)
@@ -221,6 +224,7 @@ function clear_sieve_caches!()
     @lock ROU_TABLE_LOCK empty!(ROU_TABLE_CACHE)
     @lock QINT_TABLES_LOCK empty!(QINT_TABLES)
     empty!(QINT_F64_TABLES)
+    empty!(LEVEL_HALF_PHASES)   # qcg.jl
     empty!(LEVEL_ZERO_TABLES)
     empty!(CLASSICAL_F64_TABLES)
     empty!(CLASSICAL_MOD_TABLES)
