@@ -20,7 +20,7 @@
 #  single-term sum, from the level pass) sets it. Error per entry: relative n·u² on the forward stretch, and
 #  absolute against the largest entry the backward branch has passed beyond the meeting point.
 #
-#  Measured against 256-bit references (`dev/results/qcg_recurrences.md`): every entry to ≤ 4e−16, at
+#  In numerical checks against 256-bit references, every sampled entry agreed to ≤ 4e−16, at
 #  q = 0.5 … 2, q = 1 and levels, against ≤ 9e−13 promised by the direct sum.
 # ---------------------------------------------------------------------------------
 
@@ -301,7 +301,7 @@ end
 #  The entries are those of the q-Hahn polynomials' three-term recurrence (Koekoek–Swarttouw 14.6.3) in
 #  p = q², n = j1+j2−j, N = j1+j2−m, α = p^{−2j1−1}, β = p^{−2j2−1}, rewritten in q-numbers with the common
 #  factor q − q⁻¹ divided out — so nothing cancels against 1 near q = 1, and q → 1 is the classical recurrence.
-#  Matched against Cᵀ diag(q^{2m1}) C to 1e−15 at q = 0.8 and 1.3 (`dev/prototypes/qcg_jrec_hahn.jl`).
+#  Numerically matched against Cᵀ diag(q^{2m1}) C to 1e−15 at q = 0.8 and 1.3.
 # ---------------------------------------------------------------------------------
 
 """

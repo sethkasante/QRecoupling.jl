@@ -62,8 +62,8 @@ end
 # ---------------------------------------------------------------------------------
 #  Summation kernels for a factorial rule, with certified error bounds
 #
-#  The plain ratio loop with a running error bound (Theorem 1 of `dev/results/certified_compensated.md`),
-#  compensated Horner over double-word ratios (Theorem 2), the policy that decides which of them is kept,
+#  The plain ratio loop with a running error bound, compensated Horner over double-word ratios,
+#  the policy that decides which result satisfies the requested tolerance,
 #  and the escalation ladder above them: exact zero test, K-word tiers, BigFloat.
 # ---------------------------------------------------------------------------------
 
@@ -235,8 +235,9 @@ that are themselves products of double-word table entries:
 where every product r_i·y and sum 1 + p is split exactly by TwoProd/TwoSum, the low part of each ratio is
 tracked to first order, and the rounding errors are propagated in a correction c_i = r_i c_{i+1} + … in
 working precision. Prefactor, first terms, segment combination and the final product are double-word.
-The result is as accurate as the plain loop run in doubled precision: relative error ≤ u + O((c n u)²) κ
-(Theorem 2 of the write-up). `bound` is the a posteriori version of that estimate.
+The result is as accurate as the plain loop run in doubled precision: relative error ≤ u + O((c n u)²) κ,
+where u is unit roundoff, n the number of ratio steps, c their rounding-cost factor and κ the sum's
+condition number. `bound` is the a posteriori version of that estimate.
 """
 function _sum_compensated(s::FactorialSum, segs, k::Int, tab::QIntTables{T},
                           buf::B = nothing) where {T,B<:Union{Nothing,Vector}}
@@ -335,8 +336,8 @@ end
 Accuracy policy for `Float64` values. A plain-pass value is kept when its *certified* relative error bound is
 at most `RTOL_PLAIN`; otherwise the compensated pass runs and is kept when its certified bound is at most
 `RTOL_CERTIFIED`; only then does evaluation fall back to the exact zero test and higher precision. The plain
-bound is pessimistic by ~10–1000× (`dev/results/certified_compensated.md`), so kept plain values are in
-practice accurate to a few units in the last place.
+bound was pessimistic by ~10–1000× in numerical checks, where accepted plain values were typically
+accurate to a few units in the last place; the acceptance criterion remains the bound itself.
 """
 const RTOL_PLAIN = 2.0^-40          # ≈ 9.1e-13 certified
 const RTOL_CERTIFIED = 2.0^-44
@@ -458,7 +459,7 @@ end
     !iszero(value) && isfinite(bound) && bound <= rtol * abs(value)
 
 """
-Evaluation policy for `Float64` level and classical values (`dev/results/kfold_lazy_families.md`):
+Evaluation policy for `Float64` level and classical values:
 
 - `:lazy` (default): plain pass kept at a certified 2⁻⁴⁰; it stores each ratio's low part, so the
   compensated fallback reuses them (15–28% cheaper fallback, no cost on easy symbols).

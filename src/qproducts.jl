@@ -27,12 +27,10 @@ const _ZERO_PRODUCT_RULE = FactorialSum((), false, (), false, Int8(0), 0, -1)
 `Π [n]!^{c}` wherever the symbols evaluate. `pairs` may be empty, which is the value 1, and `nothing`
 stands for the empty product, which is 0 in whatever carrier the target names.
 
-**Numerics take the monomial route, not the rule.** Routing a bare product through the factorial-rule
-evaluator was tried and is 2–30× *slower*: a product has no sum to certify, so all the rule machinery
-adds is about 1.3 µs of fixed cost per call against 0.04–0.6 µs for a handful of table lookups
-(`dev/results/v04_cleanup.md`). What the rule is for here is the *other* answers — `Symbolic()` hands
-back the rule, and an exact level value is built from its q-factorial content in the real basis — so the
-interface is the one the symbols have while the arithmetic is the cheap one.
+Numeric products use direct monomial evaluation: there is no sum to certify, so table lookups avoid
+the fixed overhead of the factorial-rule summation machinery. `Symbolic()` returns the rule, while an
+exact level value is built from its q-factorial content in the real basis. The interface remains shared
+with the symbols, with arithmetic suited to each target.
 """
 function _product_value(pairs, k, q, exact::Bool, ::Type{T}; workspace = nothing) where {T}
     if exact && !isnothing(k)

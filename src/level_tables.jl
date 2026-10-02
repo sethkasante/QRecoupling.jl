@@ -163,7 +163,7 @@ sign (−1)^z and fixes the unsigned term, so the terms cancel in pairs.
 For the 6j symbol this is exactly the condition {β₁, β₂, β₃, k} = c − {α₁, …, α₄} with c odd, which
 forces k even; the equal-spin family {j j j; j j j} at k = 4j, j odd, is one case. Over every admissible
 6j symbol with k ≤ 22 (4.29 million) it flagged 9,739 symbols, every one an exact zero, and accounted for
-71% of all zeros — all of them at k = 4, 6, 8, 12, 14, 18 (`dev/results/level_reflection_zeros.md`).
+71% of all zeros — all of them at k = 4, 6, 8, 12, 14, 18 in that enumeration.
 """
 function reflection_zero(s::FactorialSum, segs, k::Int)
     (s.alternating && length(segs) == 1) || return false

@@ -5,8 +5,8 @@
 #  (TwoSum, FMA-based TwoProd) and a renormalisation by VecSum passes, so it allocates nothing. The
 #  summation kernel is generic in its number type, so the ratio loop run in `MW{K}` has relative error
 #  ≈ u_K·κ, u_K ≈ 2^(−53K) — the accuracy class of K-fold compensation. K = 3 gives full double output up
-#  to κ ≈ 1e30, K = 4 up to κ ≈ 1e46, 3.5–7× faster than the BigFloat fallback it precedes
-#  (`dev/results/kfold_lazy_families.md`).
+#  to κ ≈ 1e30, K = 4 up to κ ≈ 1e46. These fixed-size expansions provide intermediate precision tiers
+#  before the more expensive BigFloat fallback.
 # ---------------------------------------------------------------------------------
 
 struct MW{K} <: AbstractFloat

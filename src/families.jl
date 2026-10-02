@@ -11,7 +11,7 @@
 #    C     = [j3−l1−l2][j3+l1−l2+1],
 #
 #  the q-analogue of the Schulten–Gordon recurrence (found numerically against the package's certified
-#  values and verified to 1e-75; `dev/results/q_families.md`). The level truncation needs no special
+#  values and numerically verified to 1e-75). The level truncation needs no special
 #  case: E vanishes at the top of the level range because [h] = 0.
 #
 #  The Racah sum of a single symbol cancels (condition number κ, exponential in spin); the recurrence does
@@ -899,8 +899,8 @@ const SAMPLE = 8
 
 """
 Empirical term-count threshold for proposing an interior seed. Measurements found
-the compensated boundary at 60–82 terms over k = 1000–2000 and spins 100–250
-(`dev/prototypes/check_turning_points.jl`). This is a placement heuristic;
+the compensated boundary at 60–82 terms over k = 1000–2000 and spins 100–250.
+This is a placement heuristic;
 the actual seed error bound must still pass and be propagated to the target.
 """
 const SEED_TERMS = 48
@@ -1306,7 +1306,7 @@ function _sixj_entry_path(J::NTuple{6,Int},Q,work::ColumnWork=ColumnWork();
             # (measured: every column past j = 10 at `q = 0.8 + 0.3im`). At complex `q` the growth of an
             # unwanted solution is caught instead by `rise_log`, which measures the thing the guard is a
             # proxy for — how far the path rose above the target — and is checked below for every word
-            # type. Validated on a sweep: see `dev/results/generic_q_path.md`.
+            # type.
             discriminant_scale=4sqrt(max(0.0,e[j][1]*e[j+1][1]))
             if di[j][1]^2<=discriminant_scale
                 oscillatory=true

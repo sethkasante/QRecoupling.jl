@@ -22,7 +22,7 @@
 #     integer vector and equality is a vector comparison.
 #
 #  3. An identity proved here is proved for every q, hence for every level at once. The coherence identities
-#     are *polynomial* in x once a common radical is divided out (`dev/results/canonical_form.md`), so
+#     are *polynomial* in x once a common radical is divided out, so
 #     `prove_identity` is a genuine proof rather than a level-by-level check.
 #
 #  What this is not: a route for large spin at a fixed level. Degrees grow like ~10j², so the cleared form
@@ -60,9 +60,9 @@ const _QINT_X = Ref{Any}()         # [0], [1], [2], ...
 """
     cheb_x(n) -> ZZPolyRingElem
 
-`C_n(x)` with `C_n = qⁿ + q⁻ⁿ`: `C₀ = 2`, `C₁ = x`, `C_{n+1} = x C_n − C_{n−1}`. This is `2T_n(x/2)`, and it
-is the basis in which an exact level value is smallest — half the terms of the cyclotomic power basis with
-no growth in coefficient size (`dev/results/canonical_form.md` §2).
+`C_n(x)` with `C_n = qⁿ + q⁻ⁿ`: `C₀ = 2`, `C₁ = x`, `C_{n+1} = x C_n − C_{n−1}`. This is `2T_n(x/2)`.
+The basis combines each pair of reciprocal Laurent monomials into one term with the same coefficient,
+giving a compact representation of reciprocal expressions.
 """
 function cheb_x(n::Int)
     n >= 0 || throw(DomainError(n, "Chebyshev index must be nonnegative"))
@@ -593,8 +593,8 @@ end
     chebyshev(f) -> Vector{ZZRingElem}
 
 Coefficients of `f ∈ ℤ[x]` in the basis `C_n = qⁿ + q⁻ⁿ`, with the convention that the constant term is the
-coefficient of `1` rather than of `C₀ = 2`. This is the smallest of the three bases measured in
-`dev/results/canonical_form.md` and the one the display should use.
+coefficient of `1` rather than of `C₀ = 2`. Grouping reciprocal powers into one term gives a compact
+basis for displaying exact values.
 """
 function chebyshev(f::ZZPolyRingElem)
     d = degree(f)

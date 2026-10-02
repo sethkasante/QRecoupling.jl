@@ -24,8 +24,8 @@
 """
     QSymbol
 
-A recoupling symbol as a type, so that the rule, its admissibility and its recurrence family are dispatch
-rather than a lookup table. See `dev/DESIGN_SUITE.md` §3.
+A recoupling symbol represented by a type. Its factorial rule, admissibility checks and recurrence family
+are selected by method dispatch.
 """
 abstract type QSymbol end
 

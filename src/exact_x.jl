@@ -30,9 +30,8 @@
 #  terminates. The Galois action needs no number field: σ_j is the substitution x ↦ C_j(x), because
 #  `C_j(2cos(π/h)) = 2cos(jπ/h)` runs over the conjugates as j runs over the residues coprime to 2h.
 #
-#  Measured coverage (`dev/results/exact_display_ladder.md`): the radical form is the whole story at
-#  k ≤ 4, about half of it at k = 6–10, and 0.01% at k = 14. That is why the ladder falls through on
-#  length rather than promising radicals everywhere.
+#  Even when a radical form exists, it can be much longer than a polynomial in x. The display ladder
+#  therefore limits expression length and falls back to the polynomial representation when needed.
 # ---------------------------------------------------------------------------------
 
 const _QQX = Ref{Any}()

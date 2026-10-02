@@ -337,7 +337,7 @@ The plain tier's bound counts each table read as one rounding, which needs entri
 machine-precision recurrence above does not deliver that on the real axis: its `[n]` drift by up to 280 u and
 its `[n]!` by up to 88,000 u at n = 600 (measured near q = 0.95–0.999, where `[n+1] = (q + q⁻¹)[n] − [n−1]`
 is only weakly dominant), and the bound, which charged none of it, accepted values up to 2.3e−12 against a
-promise of 9.1e−13 (`q3j_factorial` at j ≤ 150, q = 0.999; `dev/results/qcg_recurrences.md` §5). Rounded
+promise of 9.1e−13 (measured for `q3j_factorial` at j ≤ 150, q = 0.999). Rounded
 from double words, every entry is within half an ulp and the bound holds as written. The table is cached per
 `q`, so the 6× longer build is paid once per parameter, not per symbol.
 """
@@ -432,11 +432,9 @@ end
 """
 Process-wide analytic tables, for callers that pass no workspace.
 
-Building the table is 20–35% of a generic-q symbol and it depends on `q` and the capacity alone, so a
-caller that sweeps labels at one `q` — which is what `q6j(js...; q = z)` in a loop is — was paying for it
-on every call. A workspace already avoided that; this gives the same saving to the scalar API, which is
-where most calls come from. Measured 1.4–2.2× on a cold scalar call, the whole of the gap between the
-`total` and `warm-ws` columns of `dev/results/analytic_path.md` §4.
+The table depends on `q`, the arithmetic type and precision, and the required capacity, rather than on
+the individual labels. Caching it avoids repeated construction when scalar calls sweep labels at a
+fixed `q`, as a caller-owned workspace does. A cache hit reuses any table with sufficient capacity.
 
 Entries are shared between tasks. They are only ever *extended* — `inverses`, `balanced` and `condmax` are
 built in a local and then assigned whole — so a task either sees the empty field and rebuilds it or sees a
@@ -579,8 +577,7 @@ function _analytic_prefactor(s,tab)
     # root of the product, the two sides of a coherence identity assemble different products and
     # their radicals no longer cancel; with one root per Ψ_d the choice depends only on the *set* of
     # factors, which both sides share, so the cancellation is exact. Measured over 40 label sets:
-    # Biedenharn–Elliott 40/40 on and off the unit circle, against 9–36/40 for a root of the product
-    # (`dev/results/user_facing_exact.md` §2, `dev/prototypes/branch_consistent_prefactor.jl`).
+    # Biedenharn–Elliott 40/40 on and off the unit circle, against 9–36/40 for a root of the product.
     # `rad` is square-free, so every exponent here is ±1.
     sv=_ascaled(one(q))
     sq=_table_roots(tab)
@@ -624,7 +621,7 @@ end
 Weight of the phase term `exp(P·log q)` in the plain tier's running bound. Three roundings reach the
 exponent — the logarithm, the multiplication by `P`, and the exponential's own argument reduction — and
 one more is allowed for the scaled representation, so four is the constant that makes the bound hold with
-margin; it is validated by measurement, not by the count alone (`dev/results/numeric_audit.md` §3).
+margin in numerical checks; the rounding count alone does not establish that margin.
 """
 const CPHASE = 4
 
@@ -789,7 +786,7 @@ function _analytic_pass(s::FactorialSum,tab::AnalyticRuleTable,w::Int=0,e2::Int=
     s.alternating && isodd(s.zlo) && (t=_aneg(t))
     acc=t; comp=_ascaled(zero(q)); mass=_aabs(t)
     # Σ_j j|t_j|, the index-weighted mass: term j has been through j ratio steps, so it carries j times
-    # the per-step rounding. This is the accumulator Theorem 1 needs, and it costs one add per term.
+    # the per-step rounding. This accumulator supplies the term-generation error in the running bound.
     wmass=AnalyticScaled(zero(abs(one(q))),0); jstep=0
     for z in s.zlo:s.zhi-1
         # The weight q^w seeds the ratio, so it costs no product of its own.
@@ -914,9 +911,9 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
         # charges every term the worst case: at j = 5 it is of order 10⁴ against an index-weighted
         # c·Σj|t_j|/|Σ| of order 50κ. Measured, it accepted a plain pass for *0 of 13* label sets in every
         # regime, so the plain tier was dead code and every generic-q call paid for double-word tables and
-        # arithmetic — 2.7–4.4× on the pass and 4.9–7.7× on the table (`dev/results/numeric_audit.md` §3).
+        # arithmetic — measured overheads of 2.7–4.4× on the pass and 4.9–7.7× on the table.
         #
-        # The bound here has the shape of Theorem 1: the term-generation error c·u·Σ j|t_j|, the
+        # The running bound combines the term-generation error c·u·Σ j|t_j|, the
         # summation error (the plain pass is compensated, so 2u·Σ|t_j| covers it), and the prefactor and
         # first-term roundings. Accepting at `RTOL_PLAIN` makes the contract the same one the level and
         # classical kernels already offer, rather than a second, stricter one that nothing could meet.
@@ -928,8 +925,7 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
         # multiplies the result by exp(δ), so the relative error is |P·log q|·u up to a small constant.
         # Charging `CPHASE·|P|·|log q|`, plus the individual square roots and balanced factors that the
         # operation count never saw (`nr`), makes the bound cover the complex path as well. On the
-        # positive real axis `pw` and `nr` are zero and this is exactly the bound measured before, so
-        # the real tier is unchanged. `dev/results/numeric_audit.md` §3.
+        # positive real axis `pw` and `nr` are zero, so these additional terms vanish.
         mode=POLICY[]
         if !(mode === :strict || mode === :strict_lazy || mode === :compensated_only)
             tabp=_analytic_table(qq,N,workspace)

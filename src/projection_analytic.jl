@@ -110,8 +110,8 @@ cosmetic: √ is not multiplicative across its branch cut, so a root of the prod
 of roots by a sign that depends on how the individual phases add. Two sides of a coherence identity then
 assemble different products and their radicals stop cancelling. Taking one root per factor makes the branch
 depend only on the *set* of factors, which both sides share. Measured: Biedenharn--Elliott 40/40 on and off
-the unit circle, against 9–36/40 for a root of the product
-(`dev/results/user_facing_exact.md` §2). Each `Ψ_d` is real on `|q| = 1`, and is snapped to the real axis
+the unit circle, against 9–36/40 for a root of the product.
+Each `Ψ_d` is real on `|q| = 1`, and is snapped to the real axis
 when its imaginary part is at rounding level so that the branch is reproducible.
 
 For positive real `q` the ordinary square root of the assembled value is kept.
@@ -149,7 +149,7 @@ function _eval_analytic_dcr(res::DCR, q::T, q_sq::T) where T
 
     # This evaluator multiplies cyclotomic values directly: there is no split-exponent scaling, no
     # compensation and no error bound, so its intermediates overflow or underflow well inside the range
-    # of ordinary inputs. Measured (`dev/results/dcr_numeric_role.md`): at j = 20 it returns NaN or a
+    # of ordinary inputs. In numerical checks, at j = 20 it returned NaN or a
     # spurious zero for five of eight sampled q, and at j = 30 for six of eight, while the factorial-rule
     # kernel is exact against a 512-bit reference throughout. Rather than hand back a silently wrong
     # number, say so and name the path that works. A *structurally* zero DCR is a different thing and

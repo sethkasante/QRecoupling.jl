@@ -10,13 +10,13 @@
 #   * the **denominator is always a product of Φ's**, because it divides a product of q-integers and every
 #     q-integer is a product of cyclotomics. It therefore needs no factoring at all.
 #
-#  Only the numerator can carry something else, and measurement says it carries at most one irreducible
-#  non-cyclotomic factor (`dev/results/user_facing_exact.md` §4). So the rendering is
+#  Only the numerator can carry non-cyclotomic factors. These are retained in the remainder, giving
 #
 #      √(…) · (sign) q^a Φ… (remainder) / (Φ…)
 #
 #  which is level-independent: one expression valid at every k, and strictly more informative than a
-#  cyclotomic field element. `dev/results/canonical_form.md` has the square-class theory this uses.
+#  cyclotomic field element. The radical records the parity of the irreducible-factor exponents;
+#  even powers are extracted into the rational part.
 # ---------------------------------------------------------------------------------
 
 const _PHIQ = Dict{Int,Any}()          # Φ_e(q), e ≥ 1, as elements of ℤ[q]
@@ -353,8 +353,9 @@ Base.show(io::IO, ::MIME"text/plain", dcr::DCR) = show(io, dcr)
 
 Evaluate a rendered closed form at a numeric `q`. This exists so that what is *displayed* can be checked
 against what is *computed*: the two go through different code, and the test suite compares them. The square
-root uses the principal branch, which for real `q > 0` is the package's convention; at complex `q` see
-`dev/results/user_facing_exact.md` §2 on why a per-factor root is the branch-consistent choice.
+root uses the principal branch of the assembled radical, which for real `q > 0` is the package's
+convention. At complex `q` this can differ by a sign from the numerical evaluator's product of principal
+roots of balanced factors: a principal square root is not multiplicative across its branch cut.
 """
 function evaluate_phi_form(f::PhiForm, qv::Number)
     f.sign == 0 && return zero(qv) * 0

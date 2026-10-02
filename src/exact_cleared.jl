@@ -19,7 +19,7 @@
 #  factor counts match, so P(1/q) = ±P(q) with a parity that the recursion tracks. Only the coefficients of
 #  q⁰ … q^h are stored.
 #
-#  Measured (`dev/results/exact_level_cleared_form.md`), {30 30 30 30 30 30} at k = 200: the nesting costs
+#  In a benchmark of {30 30 30 30 30 30} at k = 200, the nesting cost
 #  1.4 ms here against 14.3 ms for the same Horner over field elements and 286 ms for the term-by-term
 #  projector. What remains expensive is the *final division* of two field elements (19 ms), which only
 #  canonicalises; a cleared result that is divided lazily keeps the whole factor.
@@ -209,9 +209,9 @@ function _cleared_nesting(s::FactorialSum, k::Int)
     nsteps == 0 && return nothing                        # a one-term sum has nothing to nest
     # Route by length against field size. The cleared Horner costs O(primes · steps · 2h) word operations
     # whatever the coefficients do, while the term-by-term walk's field elements grow denser with every
-    # step; so the cleared form wins once the sum is long relative to the field. Measured over 20 cases
-    # (`dev/results/exact_level_cleared_form.md`): the crossover sits at nsteps ≈ √(2h/6), and this gate
-    # classifies all of them without ever choosing the slower route.
+    # step; so the cleared form wins once the sum is long relative to the field. Measurements over
+    # 20 cases placed the crossover at nsteps ≈ √(2h/6); this heuristic selected the faster route in
+    # all of those cases.
     6 * nsteps^2 >= 2h || return nothing
     np = cld(bits + 2, 61)
     np <= length(CLEARED_PRIMES) || return nothing
