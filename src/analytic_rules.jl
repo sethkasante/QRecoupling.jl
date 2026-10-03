@@ -831,15 +831,100 @@ function _analytic_pass(s::FactorialSum,tab::AnalyticRuleTable,w::Int=0,e2::Int=
     return v,cond,wrel,pw,nr,cut
 end
 
-"Exact zero decision for the sum at the supplied real/complex q, including an integer q-power weight."
-function _analytic_sum_iszero(s::FactorialSum, q::Number, w::Int)
+# A split prime admits i ↦ ι in F_p, so real and complex inputs share word arithmetic.
+# One nonzero image is a proof; a vanishing or undefined image still needs exact confirmation.
+const ANALYTIC_ZERO_MODULUS = Montgomery(CLASSICAL_PRIMES[2]) # p ≡ 1 mod 4
+const ANALYTIC_ZERO_IOTA = to_mont(ANALYTIC_ZERO_MODULUS,
+                                  root_of_unity(ANALYTIC_ZERO_MODULUS.p, 4))
+
+"Largest term factorial argument; a common prefactor does not enter the sum's zero decision."
+function _sum_max_argument(s::FactorialSum)
+    N = 0
+    for f in s.fac
+        N = max(N, _arg(f, s.zlo), _arg(f, s.zhi))
+    end
+    return N
+end
+
+function _analytic_rational_q(q::Number)
+    a = Rational{BigInt}(real(q))
+    return iszero(imag(q)) ? a : complex(a, Rational{BigInt}(imag(q)))
+end
+
+"Exact rational residue in Montgomery form, or nothing if its denominator vanishes."
+function _analytic_residue(m::Montgomery, q::Rational{BigInt})
+    a = to_mont(m, UInt64(mod(numerator(q), m.p)))
+    b = to_mont(m, UInt64(mod(denominator(q), m.p)))
+    iszero(b) && return nothing
+    return b == m.one ? a : mont_mul(m, a, mont_inv(m, b))
+end
+
+"Prove a regular weighted sum nonzero at the supplied rational q; false means inconclusive."
+function _analytic_sum_nonzero_mod(s::FactorialSum, q::Number, w::Int,
+                                  m::Montgomery, iota::UInt64)
+    is_empty_sum(s) && return false
+    r = _analytic_residue(m, real(q))
+    r === nothing && return false
+    if !iszero(imag(q))
+        b = _analytic_residue(m, imag(q))
+        b === nothing && return false
+        r = mont_add(m, r, mont_mul(m, b, iota))
+    end
+    iszero(r) && return false
+    ri = mont_inv(m, r)
+    x = mont_add(m, r, ri)
+    qints = Vector{UInt64}(undef, _sum_max_argument(s))
+    prev, cur = UInt64(0), m.one
+    for n in eachindex(qints)
+        # Never perturb q to escape a bad image: that would test a different value.
+        iszero(cur) && return false
+        qints[n] = cur
+        prev, cur = cur, mont_sub(m, mont_mul(m, x, cur), prev)
+    end
+    # r is nonzero, so exponents may be reduced modulo p-1, including negative w.
+    step = mont_pow(m, r, mod(w, Int(m.p - 1)))
+    s.alternating && (step = mont_sub(m, UInt64(0), step))
+    # With term ratio A/B, Horner gives H_z = 1 + (A/B)H_{z+1}.
+    # Store H=P/Q: P ← BQ+AP, Q ← BQ. The checked q-integers keep Q and the
+    # omitted first term nonzero, so P alone decides whether this image vanishes.
+    P = Q = m.one
+    for z in (s.zhi - 1):-1:s.zlo
+        A, B = step, m.one
+        for f in s.fac
+            lo, hi, c = _factor_step(f, z)
+            for n in lo:hi
+                v = abs(c) == 1 ? qints[n] : mont_pow(m, qints[n], abs(c))
+                c > 0 ? (A = mont_mul(m, A, v)) : (B = mont_mul(m, B, v))
+            end
+        end
+        BQ = mont_mul(m, B, Q)
+        P = mont_add(m, BQ, mont_mul(m, A, P))
+        Q = BQ
+    end
+    return !iszero(P)
+end
+
+"Exact zero decision at the supplied q; modular nonzeros skip the rational fallback."
+_analytic_sum_iszero(s::FactorialSum, q::Number, w::Int) =
+    _analytic_sum_iszero(s, q, w, ANALYTIC_ZERO_MODULUS, ANALYTIC_ZERO_IOTA)
+
+function _analytic_sum_iszero(s::FactorialSum, q::Number, w::Int,
+                             m::Montgomery, iota::UInt64)
+    is_empty_sum(s) && return true
+    iszero(w) && pairwise_zero(s) && return true
+    r = _analytic_rational_q(q)
+    _analytic_sum_nonzero_mod(s, r, w, m, iota) && return false
+    return _analytic_sum_iszero_exact(s, r, w)
+end
+
+"Rational fallback for a regular sum, including an integer q-power weight."
+function _analytic_sum_iszero_exact(s::FactorialSum, q::Number, w::Int)
     is_empty_sum(s) && return true
     # Finite binary floats have exact rational coordinates. The nonzero prefactor and first term
     # do not affect the decision; Horner ratios avoid expanding a polynomial or choosing radical roots.
-    qr = Rational{BigInt}(real(q))
-    r = q isa Real ? qr : complex(qr, Rational{BigInt}(imag(q)))
+    r = _analytic_rational_q(q)
     x = r + inv(r)
-    N = max_argument(s)
+    N = _sum_max_argument(s)
     qints = Vector{typeof(r)}(undef, N)
     prev, cur = zero(r), one(r)
     for n in 1:N
