@@ -1,36 +1,13 @@
 # ---------------------------------------------------------------------------------
 #  Exact level values without field arithmetic
 #
-#  A ratio of consecutive Racah terms is a ratio of products of q-integers, and for the standard symbols
-#  it has as many factors up as down, so the (q − q⁻¹) powers cancel identically:
-#
-#      t_{z+1}/t_z  =  ∏ (q^{a_i} − q^{-a_i}) / ∏ (q^{b_i} − q^{-b_i}).
-#
-#  Work in ℤ[q]/(q^{2h} − 1) rather than in ℚ(ζ_{2h}). There, multiplying by (qⁿ − q⁻ⁿ) is
-#
-#      out[i] = c[i−n] − c[i+n],
-#
-#  two shifted subtractions: no multiplication, no rational coefficients, and no reduction modulo the
-#  cyclotomic polynomial. The cleared Horner P ← B·Q + A·P, Q ← B·Q therefore runs in machine words modulo
-#  a few primes, and the CRT is *exact* — P and Q are integer polynomials, so there is no denominator to
-#  reconstruct and the number of primes follows from a closed-form coefficient bound.
-#
-#  Both are palindromic: each ratio multiplies by an even total number of antisymmetric binomials when the
-#  factor counts match, so P(1/q) = ±P(q) with a parity that the recursion tracks. Only the coefficients of
-#  q⁰ … q^h are stored.
-#
-#  In a benchmark of {30 30 30 30 30 30} at k = 200, the nesting cost
-#  1.4 ms here against 14.3 ms for the same Horner over field elements and 286 ms for the term-by-term
-#  projector. What remains expensive is the *final division* of two field elements (19 ms), which only
-#  canonicalises; a cleared result that is divided lazily keeps the whole factor.
+#  A balanced term ratio t_{z+1}/t_z = ∏(q^{a_i} − q^{−a_i}) / ∏(q^{b_i} − q^{−b_i}) has no (q − q⁻¹) left.
+#  In ℤ[q]/(q^{2h} − 1), multiplying by (qⁿ − q⁻ⁿ) is two shifted subtractions, so the cleared Horner
+#  P ← B·Q + A·P, Q ← B·Q runs in machine words modulo a few primes; P and Q are integer polynomials, so the
+#  CRT is exact. Both are (anti)palindromic, and only q⁰ … q^h is stored.
 # ---------------------------------------------------------------------------------
 
-"""
-Distinct primes just below 2^62 for the multimodular Horner. Unlike the zero test these need no root of
-unity — only primality, because the reconstruction is of *integer* polynomials — but they must really be
-prime: Garner inverts each modulo the others. Generated with the package's own Miller–Rabin rather than
-written down.
-"""
+"Primes just below 2^62 for the multimodular Horner (Garner needs true primes; checked by Miller–Rabin)."
 const CLEARED_PRIMES = let ps = UInt64[], n = (UInt64(1) << 62) - UInt64(1)
     while length(ps) < 16
         is_prime_u64(n) && push!(ps, n)
@@ -72,13 +49,8 @@ end
 """
     _cleared_plan(s, h) -> (bits, nsteps) or nothing
 
-Checks the preconditions and returns the coefficient bound. The ratios must be *balanced* (equally many
-factors up and down, so the (q - q⁻¹) powers cancel) and no denominator index may be a multiple of `h`,
-where the q-integer vanishes: the cleared Horner would then carry a zero denominator. A vanishing
-*numerator* is fine — it truncates the sum, exactly as the level does.
-
-`bits` bounds log₂ of any coefficient of P or Q: each step multiplies by at most `max(nnum, nden)`
-binomials with unit coefficients and then adds once.
+Preconditions and coefficient bound: every ratio balanced, and no denominator index a multiple of `h`
+(a vanishing numerator just truncates the sum). `bits` bounds log₂ of any coefficient of P or Q.
 """
 function _cleared_plan(s::FactorialSum, h::Int)
     num = Vector{Int}(undef, CLEARED_MAX_FACTORS)
@@ -197,9 +169,8 @@ end
 """
     _cleared_nesting(s, k) -> (P, Q, sigma) or nothing
 
-Σ/t_first as a pair of exact integer polynomials in ℤ[q]/(q^{2h} − 1), folded to indices 0…h with parity
-`sigma`. The number of primes comes from the coefficient bound, so the reconstruction is exact rather than
-probabilistic.
+Σ/t_first as exact integer polynomials in ℤ[q]/(q^{2h} − 1), folded to 0…h with parity `sigma`. The prime
+count follows from the coefficient bound, so the reconstruction is exact.
 """
 function _cleared_nesting(s::FactorialSum, k::Int)
     h = k + 2
@@ -207,11 +178,7 @@ function _cleared_nesting(s::FactorialSum, k::Int)
     plan === nothing && return nothing
     bits, nsteps = plan
     nsteps == 0 && return nothing                        # a one-term sum has nothing to nest
-    # Route by length against field size. The cleared Horner costs O(primes · steps · 2h) word operations
-    # whatever the coefficients do, while the term-by-term walk's field elements grow denser with every
-    # step; so the cleared form wins once the sum is long relative to the field. Measurements over
-    # 20 cases placed the crossover at nsteps ≈ √(2h/6); this heuristic selected the faster route in
-    # all of those cases.
+    # The cleared form wins once the sum is long relative to the field: measured crossover nsteps ≈ √(2h/6).
     6 * nsteps^2 >= 2h || return nothing
     np = cld(bits + 2, 61)
     np <= length(CLEARED_PRIMES) || return nothing
@@ -247,10 +214,8 @@ function _cleared_content(c::Vector{BigInt})
 end
 
 """
-Unfold a parity-`sigma` vector on 0…h to the full 2h coefficients, dividing by `g`.
-
-`g` must be the content **common to the numerator and the denominator**: scaling them by different
-constants would change the quotient they represent.
+Unfold a parity-`sigma` vector on 0…h to all 2h coefficients, dividing by `g`, the content common to the
+numerator and denominator (different factors would change the quotient).
 """
 function _cleared_unfold(c::Vector{BigInt}, sigma::Int, m::Int, h::Int, g::BigInt)
     out = zeros(BigInt, m)
@@ -267,9 +232,8 @@ end
 """
     _cleared_exact_sum(s, dcr, k, V_exact, V_inv, ζ, h) -> field element or nothing
 
-The exact Racah sum Σ_z project(root·base·∏ratios) with the ratio walk replaced by the cleared Horner: the
-first monomial is projected once, and the nesting comes from two integer polynomials. `nothing` when the
-preconditions of `_cleared_nesting` do not hold, so the caller keeps its term-by-term projector.
+The exact Racah sum by the cleared Horner: the first monomial is projected once, the nesting is two integer
+polynomials. `nothing` when `_cleared_nesting` declines, and the caller walks term by term.
 """
 function _cleared_exact_sum(s::FactorialSum, dcr::DCR, k::Int, V_exact, V_inv, ζ, h::Int)
     nest = _cleared_nesting(s, k)
@@ -290,8 +254,7 @@ function _cleared_exact_sum(s::FactorialSum, dcr::DCR, k::Int, V_exact, V_inv, �
     e_rad = _phi_exponent(dcr.radical, h)
     v2 = e_rad + 2 * _phi_exponent(first_mono, h)
     v2 < 0 && throw(DomainError(k, "Topological pole at level k=$k."))
-    # With no vanishing denominator the valuations only increase along the sum, so a finite first term
-    # guarantees the rest: the nesting cannot introduce a pole.
+    # with no vanishing denominator, a finite first term means no pole anywhere in the sum
     v2 > 0 && return zero(ζ)
     first_val = _project_monomial_nemo_internal(first_mono, V_exact, V_inv, ζ, h)
     return first_val * (pv // qv)

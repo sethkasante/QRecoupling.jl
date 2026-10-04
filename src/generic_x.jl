@@ -1,33 +1,13 @@
 # ---------------------------------------------------------------------------------
 #  Exact values in the reciprocal variable x = q + q⁻¹
 #
-#  Every q-integer is a polynomial in x with integer coefficients, [n] = U_{n−1}(x/2), so a factorial rule
-#  evaluates exactly in ℤ[x] with no root of unity, no level and no number field. Three things make this the
-#  right carrier rather than one more backend.
-#
-#  1. ℤ[x] is a UFD, so a *square class* is canonical. Better: the irreducible factors of the q-integers are
-#     explicit. Writing ψ_e for the fold of Φ_e (the minimal polynomial of 2cos(2π/e), monic of degree
-#     φ(e)/2),
-#
-#         [n] = ∏_{e | 2n, e ≥ 3} ψ_e(x) ,
-#
-#     verified here for n = 1..24. So the multiplicity of each ψ_e in any product of q-factorials is a
-#     divisor count, and a radical class is an 𝔽₂ exponent vector over an explicit basis — no polynomial
-#     factoring, no number-field square testing, and none of the formal-key trouble of `CyclotomicMonomial`
-#     (where Φ₃(q²) = q² at q = ζ₈ collapses a formal radical into the base field).
-#
-#  2. A level is a quotient: Ψ_h := ψ_{2h} is the minimal polynomial of 2cos(π/h) = x at q = e^{iπ/h}, monic
-#     over ℤ of degree exactly φ(2h)/2 — half the cyclotomic field's degree. Reducing an integer polynomial
-#     modulo a monic integer polynomial stays integral, so a level value's canonical form is a primitive
-#     integer vector and equality is a vector comparison.
-#
-#  3. An identity proved here is proved for every q, hence for every level at once. The coherence identities
-#     are *polynomial* in x once a common radical is divided out, so
-#     `prove_identity` is a genuine proof rather than a level-by-level check.
-#
-#  What this is not: a route for large spin at a fixed level. Degrees grow like ~10j², so the cleared form
-#  over ℤ[q]/(q^{2h}−1) stays the computational kernel there, with this module above it for comparison,
-#  proof and display.
+#  Every q-integer is a polynomial in x over ℤ, [n] = U_{n−1}(x/2), so a factorial rule is exact in ℤ[x]
+#  with no root of unity or number field.
+#   1. [n] = ∏_{e | 2n, e ≥ 3} ψ_e(x), ψ_e the fold of Φ_e (minimal polynomial of 2cos(2π/e)): ψ multiplicities
+#      are divisor counts, and a square class is an 𝔽₂ vector over an explicit basis.
+#   2. A level is the quotient by the monic Ψ_h = ψ_{2h} (degree φ(2h)/2), so level values stay integral.
+#   3. An identity proved in ℤ[x] holds for every q, hence every level: `prove_identity` is a proof.
+#  Degrees grow like ~10j², so large spins at a fixed level use the cleared kernel of `exact_cleared.jl`.
 # ---------------------------------------------------------------------------------
 
 const X_LOCK = ReentrantLock()
@@ -182,21 +162,14 @@ function psi_exponents(pairs)
 end
 
 """
-Reduce modulo a monic `Ψ` when one is supplied. Every step of the ℤ[x] arithmetic below is a ring
-operation, so reducing as it goes gives the same element of ℤ[x]/(Ψ) as reducing at the end, at a degree
-that stays below `φ(2h)/2` instead of growing with the labels.
+Reduce modulo a monic `Ψ` when one is supplied; reducing at each ring operation equals reducing at the end,
+at bounded degree.
 """
 _rx(f, m) = m === nothing ? f : mod(f, m)
 
 # ---- reduced building blocks, cached per level ------------------------------------------------
-#
-# The operands of the reduced recursion do not have to be the full ℤ[x] polynomials. `[n]` has degree
-# n−1, which at j = 20, k = 60 reaches 80 against a modulus of degree 30 — so two thirds of every such
-# multiplication is thrown away by the reduction that follows it. Reducing each `[n]` and each `ψ_e`
-# once per level and caching them makes every product a degree-<d by degree-<d one.
-#
-# The cache is keyed by the level, not by the modulus polynomial, so that a caller cannot silently share
-# entries between different Ψ; `generic_value` only consults it when it is told the level.
+# Each [n] and ψ_e is reduced once per level, so every product is degree-<d by degree-<d. Keyed by the
+# level, not the modulus, so different Ψ never share entries.
 
 const _RED_CACHE = LRU{Tuple{Symbol,Int,Int},Any}(maxsize = 8192)
 
@@ -221,10 +194,7 @@ end
 @inline _qint_at(n::Int, level) = level === nothing ? qint_x(n) : _qint_red(n, level)
 
 """
-`∏ ψ_e^{v_e}` with the work grouped by exponent: the factors sharing an exponent are multiplied once and
-the result raised by binary powering, instead of one reduced multiplication per unit of exponent. At
-j = 20, k = 60 the prefactor's exponents sum to 392 and there are 76 distinct factors, so the grouping is
-most of the cost of building it.
+`∏ ψ_e^{v_e}`, grouping factors that share an exponent and raising each group by binary powering.
 """
 function _psi_pow_group(pairs, modulus, level)
     R, _ = xring()
@@ -258,9 +228,8 @@ function _powmod_x(f, n::Int, modulus)
 end
 
 """
-Halve a ψ exponent vector, returning the square part's exponents and the odd-multiplicity indices — the
-two halves of `√(∏ ψ_e^{E_e})`, without building any polynomial yet. Keeping it symbolic is the point:
-the square part then merges with the first term's exponents before either is expanded.
+Halve a ψ exponent vector into square-part exponents and odd-multiplicity indices, still symbolic, so the
+square part can merge with the first term before anything is expanded.
 """
 function _halve_exponents(E::Dict{Int,Int})
     half = Dict{Int,Int}(); rad = Int[]
@@ -316,14 +285,10 @@ end
 """
     XValue
 
-The exact value `√(∏_{e ∈ rad} ψ_e(x)) · num/den` with `num, den ∈ ℤ[x]`. Build one with `xvalue(rad, num, den)`,
-which normalises: `rad` is a sorted list of distinct `e ≥ 3` — an 𝔽₂ exponent vector over the ψ basis, and
-therefore a genuine square class in ℚ(x), not a formal key — `gcd(num, den) = 1`, `den` has positive
-leading coefficient, and the pair is primitive. Normalised values are equal as numbers exactly when they are
-equal as structs, so `==` is a decision procedure.
-
-The branch of the square root is whichever the caller's construction fixes; `prove_identity` compares
-expressions built the same way and is therefore branch-independent.
+The exact value `√(∏_{e ∈ rad} ψ_e(x)) · num/den` with `num, den ∈ ℤ[x]`, built by `xvalue(rad, num, den)`,
+which normalises (sorted distinct `rad`, `gcd(num, den) = 1`, primitive with positive leading coefficient).
+Normalised values are equal exactly when the structs are, so `==` decides equality. The square-root branch
+is fixed by the construction; `prove_identity` compares like with like.
 """
 struct XValue
     rad::Vector{Int}
@@ -493,24 +458,16 @@ Base.:*(a::XValue, b::XSum) = XSum(a) * b
 """
     generic_value(s::FactorialSum) -> XValue
 
-The exact value of a factorial rule as an element of `ℚ(x)` times one square root, `x = q + q⁻¹`.
-
-The prefactor and the first term are products of q-factorials, so they never need polynomial arithmetic:
-their ψ multiplicities are divisor counts ([`psi_exponents`](@ref)), and the square root of the prefactor
-splits into a ψ-monomial times the odd-multiplicity class. Only the sum itself is a genuine polynomial
-computation, done by the cleared ratio recursion
-
-    P ← B·Q ± A·P,   Q ← B·Q,
-
-with `A/B` the adjacent-term ratio as a product of q-integers — the same recursion as the level kernel in
-`exact_cleared.jl`, over ℤ[x] instead of ℤ[q]/(q^{2h}−1). There is no level, no root of unity and no
-number field anywhere in this path.
+The exact value of a factorial rule as an element of `ℚ(x)` times one square root, `x = q + q⁻¹`. Prefactor
+and first term are ψ exponents (divisor counts); the sum is the cleared recursion P ← B·Q ± A·P, Q ← B·Q over
+ℤ[x], as in `exact_cleared.jl`.
 """
 function generic_value(s::FactorialSum; modulus = nothing, level = nothing)
     R, _ = xring()
     is_empty_sum(s) && return zero(XValue)
 
     # --- prefactor: √(∏[n]!^c) or ∏[n]!^c, as ψ exponents and a square class ---
+    # merged with the first term's exponents before expanding (a third of the multiplications)
     #
     # The exponents of the prefactor and of the first term are merged *before* either becomes a
     # polynomial. They overlap heavily — measured, the separate expansions need three times as many
@@ -569,14 +526,9 @@ generic_sixj(J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int) =
 """
     at_level(v::XValue, k) -> (rad, num, den)
 
-Reduce a generic value modulo `Ψ_{k+2}`, i.e. specialise `x` to `2cos(π/(k+2))`. All three parts stay in
-ℤ[x] because `Ψ_h` is monic, and the result is the canonical form of the level value: `num` and `den` are
-integer vectors of length at most `φ(2h)/2`, half the cyclotomic field's degree.
-
-A vanishing `den` means the rule is singular at this level; `iszero(num)` with a nonzero `den` is an exact
-zero. The square class may *degenerate* under the specialisation (a `rad` that is squarefree in ℤ[x] can
-become a square modulo `Ψ_h`), which is why two values with different `rad` must not be declared distinct
-at a fixed level without checking that.
+Reduce a generic value modulo `Ψ_{k+2}` (specialise `x = 2cos(π/(k+2))`); all parts stay in ℤ[x]. A
+vanishing `den` means the rule is singular; `iszero(num)` is an exact zero. A class squarefree in ℤ[x] can
+become a square at a level, so different `rad` do not prove two level values distinct.
 """
 function at_level(v::XValue, k::Integer)
     h = Int(k) + 2
@@ -612,13 +564,8 @@ function chebyshev(f::ZZPolyRingElem)
 end
 
 """
-Numerical value of `f ∈ ℤ[x]` at the level `k`, i.e. at `x = 2cos(π/(k+2))`.
-
-**This is the one ill-conditioned operation in the module.** The exact algebra is cancellation-free, but a
-high-degree integer polynomial evaluated near `x = 2` cancels catastrophically — the conditioning that the
-Racah sum has in the *terms* reappears here in the *coefficients*. Use `BigFloat` with enough precision
-(degree × coefficient bits is the right scale) whenever the degree is more than a few dozen; `Float64` is
-adequate only for small labels, and is provided for spot checks.
+Numerical value of `f ∈ ℤ[x]` at `x = 2cos(π/(k+2))`. Ill-conditioned: a high-degree polynomial near `x = 2`
+cancels badly, so use `BigFloat` (degree × coefficient bits) beyond small labels.
 """
 function evaluate_at_level(f::ZZPolyRingElem, k::Integer, ::Type{T} = Float64) where {T}
     xv = 2 * cos(T(π) / T(Int(k) + 2))
@@ -647,10 +594,8 @@ end
 """
     exceptional_levels(v::XValue; kmax = 4096) -> Vector{Int}
 
-Levels `k ≤ kmax` at which the value's denominator vanishes, so that the generic expression says nothing
-there. Because `Ψ_h = ψ_{2h}` is irreducible, `h` is exceptional exactly when `ψ_{2h}` divides the
-denominator; the candidates are the `e = 2h` that occur in the denominator's ψ-content, so the search is a
-short exact divisibility test rather than a scan.
+Levels `k ≤ kmax` at which the value's denominator vanishes: those with `ψ_{2h}` dividing it, found by exact
+divisibility tests on the denominator's ψ-content.
 """
 function exceptional_levels(v::XValue; kmax::Int = 4096)
     out = Int[]
@@ -680,9 +625,8 @@ Returned fields:
   * `exceptional` — levels at which a denominator vanishes, where the identity is silent rather than false
   * `witness`   — for `:refuted`, the nonzero difference
 
-Equality of two normalised `XValue`s is a struct comparison, so no tolerance, prime or bound enters. For
-`XSum` the difference is taken termwise; the keys are genuine square classes and distinct classes give
-linearly independent roots over ℚ(x), so an empty difference is a proof.
+No tolerance, prime or bound enters: normalised `XValue`s compare structurally, and for `XSum` distinct classes
+are independent over ℚ(x), so an empty difference is a proof.
 """
 function prove_identity(lhs::XValue, rhs::XValue; kmax::Int = 4096)
     d = nothing

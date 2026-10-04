@@ -76,9 +76,7 @@ function _xpoly_str(f)
 end
 
 """
-Longest polynomial the display writes out in full. Past it the line is a size, not a formula: at k = 420
-the value is a degree-208 polynomial with 240-bit coefficients, and printing it is three screens of
-digits that tell a reader nothing `xpolynomial(v)` would not tell them better.
+Longest polynomial the display writes out in full; past it the line shows the shape and sizes instead.
 """
 const XPOLY_MAX_DEGREE = 24
 const XPOLY_MAX_CHARS = 240
@@ -149,10 +147,8 @@ function _xform_dims(v::ExactX)
 end
 
 """
-The `P(x)·√(R(x))` line: what printing a value shows, always available and never computing anything —
-no minimal polynomial, no Lagrange descent, nothing that can fail or take unbounded time. A radicand that
-reduced to a bare constant keeps its class (it is not a rational square, or the constructor would have
-folded it) and is written `√2` rather than `√(2)`.
+The `P(x)·√(R(x))` line printing shows: always available, computes nothing. A constant radicand is written
+`√2`, not `√(2)`.
 """
 function _xform_str(v::ExactX)
     iszero(v.p) && return "0"
@@ -180,9 +176,8 @@ _cheap_degree(u, h::Int, d::Int) = d <= RADICAL_MINPOLY_MAX_DEGREE ? _value_degr
 """
     _radical_view(v; maxlen, degree_limit, allowed) -> (kind, expr, degree)
 
-What [`radical`](@ref) can say about this value, decided in one place so that the answer and the sentence
-explaining it cannot disagree. `:zero` and `:ok` carry an expression; `:none`, `:untried`, `:long` and
-`:failed` become a [`NoRadical`](@ref) and are documented there.
+What [`radical`](@ref) can say about this value, decided in one place so answer and explanation agree.
+`:zero` and `:ok` carry an expression; the other kinds become a [`NoRadical`](@ref).
 """
 function _radical_view(v::ExactX; maxlen::Int = 80,
                       degree_limit::Int = RADICAL_DESCENT_MAX_DEGREE, allowed::Bool = true)
@@ -199,7 +194,8 @@ function _radical_view(v::ExactX; maxlen::Int = 80,
     end
     allowed || return (:untried, nothing, 0)
     vd = d
-    # Three questions, in increasing cost, and none of them asked unless the answer is needed:
+    # Cheapest first: does a radical exist (G_odd ⊆ Stab(v²)), is the degree affordable (orbit, stopped at
+    # the limit), and only then what the degree is.
     #   1. does a radical exist?     `G_odd ⊆ Stab(v²)` — a couple of conjugations
     #   2. is the degree affordable? the orbit, stopped as soon as it passes the limit
     #   3. what is the degree?       the whole orbit, and only when it is small enough to be cheap
@@ -222,14 +218,8 @@ function _radical_view(v::ExactX; maxlen::Int = 80,
 end
 
 """
-Printing an `ExactX` does no arithmetic of any kind.
-
-The stored `P(x)·√(R(x))` is exact at every level and free to produce; the radical form is a question
-the reader asks (`radical(v)`, which prints the number with it), and the certified `≈` is a Horner pass
-this display used to pay for at every value — `IOContext(io, :approximate => true)` asks for it back,
-and `Float64(v)` was always the direct way. Past the length budget the line becomes the *shape* of the
-value with its sizes underneath, which is what a degree-208 polynomial has to say for itself. Nothing
-else is printed: the display is the value, and the rest is what the reader calls for.
+Printing an `ExactX` does no arithmetic: it shows the stored `P(x)·√(R(x))`, or its shape and sizes past
+the length budget. `radical(v)`, `Float64(v)`, or `IOContext(io, :approximate => true)` give more.
 """
 function Base.show(io::IO, ::MIME"text/plain", v::ExactX)
     h = v.k + 2

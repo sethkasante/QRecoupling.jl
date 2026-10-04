@@ -1,37 +1,14 @@
 # ---------------------------------------------------------------------------------
 #  Exact level values in x = q + q⁻¹, and the display ladder
 #
-#  A level-k value is real, but ℚ(ζ₂ₕ) does not show that: `−2/3 ζ⁶ + 4/3 ζ² − 1` is a real number whose
-#  display contains an `i` (ζ₂₄⁶ = i). The real subfield does show it. Writing `x = q + q⁻¹ = 2cos(π/h)`,
-#  `h = k+2`, every value of the package is
+#  A level value is real, so it is stored in the real subfield: v = P(x)·√(R(x)) with x = 2cos(π/h),
+#  h = k + 2, and P, R ∈ ℚ[x] reduced modulo Ψ_h (degree φ(2h)/2, half the cyclotomic degree). This is the
+#  generic `XValue` of `generic_x.jl` reduced modulo Ψ_h as the sum is formed.
 #
-#      v = P(x) · √(R(x)),      P, R ∈ ℚ[x] reduced modulo Ψ_h,
-#
-#  with `Ψ_h` the minimal polynomial of `2cos(π/h)` — degree `φ(2h)/2`, **half** the cyclotomic degree.
-#  This is the same shape as the generic `XValue` of `generic_x.jl`, so a level is not a second
-#  architecture: it is *reduction modulo Ψ_h*, applied while the Racah sum is formed rather than after.
-#
-#  On top of that sits a display ladder, tried in order and stopping at the first form that is short:
-#
-#      rational  →  single surd  →  nested radical  →  polynomial in x  →  (the generic Φ-form in q)
-#
-#  How far the radicals go is not a matter of effort. `v²` lies in the real cyclotomic field, which is
-#  abelian of degree `φ(2h)/2`; an abelian field is a tower of quadratic extensions **iff its degree is a
-#  power of two**. So a nested-square-root form exists exactly when `φ(2k+4)/2` is a power of 2 —
-#  k = 0,1,2,3,4,6,8,10,13,14,15,18,22,… — and for k = 5,7,9,11,12,16,17,19,… the degree carries an odd
-#  prime factor and no real radical form exists at all (casus irreducibilis). `has_radical_form` decides
-#  this in one line, and the display says so rather than failing quietly.
-#
-#  The descent itself is Lagrange's, not a general solver: with σ an automorphism whose square fixes u,
-#
-#      u = (u + σu)/2 + √( ((u − σu)/2)² ),
-#
-#  and both parts lie in the fixed field of ⟨Stab(u), σ⟩, which is strictly larger — so the recursion
-#  terminates. The Galois action needs no number field: σ_j is the substitution x ↦ C_j(x), because
-#  `C_j(2cos(π/h)) = 2cos(jπ/h)` runs over the conjugates as j runs over the residues coprime to 2h.
-#
-#  Even when a radical form exists, it can be much longer than a polynomial in x. The display ladder
-#  therefore limits expression length and falls back to the polynomial representation when needed.
+#  Display ladder: rational → single surd → nested radical → polynomial in x. A nested-radical form exists
+#  iff φ(2h)/2 is a power of 2 (the real cyclotomic field is abelian); it is found by Lagrange's descent
+#  u = (u + σu)/2 + √(((u − σu)/2)²), with σ_j: x ↦ C_j(x) the Galois action. Long radical forms fall back
+#  to the polynomial.
 # ---------------------------------------------------------------------------------
 
 const _QQX = Ref{Any}()
@@ -62,10 +39,7 @@ end
 
 _redq(f, Ψ) = mod(f, Ψ)
 
-"""
-Word-sized primes for the modular division below. Sixty bits each, so two of them already carry more than
-the answers ever need; the list is long only so that a run of unlucky primes cannot exhaust it.
-"""
+"60-bit primes for the modular division below (more than needed, so unlucky primes cannot exhaust them)."
 const _MM_PRIMES = let out = UInt[], p = ZZ(2)^60
     for _ in 1:40
         p = next_prime(p)
@@ -89,17 +63,9 @@ end
 """
     _divmod_psi(num, den, h) -> QQPoly or nothing
 
-`num · den⁻¹ mod Ψ_h`, from images modulo word-sized primes, or `nothing` if the primes run out.
-
-Why not simply invert. The inputs are enormous and the answer is not: at j = 20, k = 60 the denominator
-carries 273-bit coefficients and the result 23-bit ones, and at j = 30, k = 100 it is 501 against 42. A
-Euclidean inversion over ℚ[x] does all its work at the input's size — 1.4 ms there, and 3.2 ms at
-j = 25, k = 80 — while the modular route works at 60 bits per prime and needs only enough primes to
-reconstruct the *output*. Measured, that is **13–23× faster** at those sizes and a wash at small ones.
-
-It is not a heuristic. Each pass adds a prime, CRTs, attempts rational reconstruction, and then **checks
-`p·den ≡ num (mod Ψ)` exactly**; nothing is returned until that holds, so a wrong reconstruction cannot
-escape and no coefficient bound has to be proved in advance.
+`num · den⁻¹ mod Ψ_h`, from images modulo word-sized primes, or `nothing` if the primes run out. The answer
+is far smaller than the inputs, so this beats Euclidean inversion over ℚ[x] (13–23× at large labels). Each
+reconstruction is checked exactly, `p·den ≡ num (mod Ψ)`, before it is returned.
 """
 function _divmod_psi(num, den, h::Int)
     Ψ = _psiq(h)
@@ -160,24 +126,18 @@ An exact value at level `k`, written in the real variable `x = q + q⁻¹ = 2cos
 
     v = P(x) · √(R(x)),     P, R ∈ ℚ[x] reduced modulo Ψ_h.
 
-`sqclass` lists the ψ indices under the root — an 𝔽₂ square class over the ψ basis of `generic_x.jl`,
-empty when the value needs no root at all, in which case `v = P(x)` outright. It is normalised at
-construction: a class whose product collapses to a rational square at this level is folded into `P` and
-cleared. Degrees are below `φ(2h)/2`, half the degree of the cyclotomic field the same value occupies in
-`Exact(k; form = :canonical)`.
+`sqclass` lists the ψ indices under the root (empty when `v = P(x)`); a class that is a rational square at
+this level is folded into `P`. Degrees are below `φ(2h)/2`.
 
-**Printing shows `P(x)·√(R(x))`**, the form the value is stored in, which costs nothing to produce and
-is available at every level. [`radical`](@ref) rewrites it in nested square roots on request, and says
-why there is none when there is none. Two properties reach past the display:
+Printing shows the stored `P(x)·√(R(x))`. [`radical`](@ref) gives nested square roots on request, or says
+why there are none. Properties:
 
 | | |
 |---|---|
 | `v.x_value` | the pair `(P, R)`, the value being `P(x)·√(R(x))` |
 | `v.rad` | shorthand for `radical(v)` |
 
-[`radical_form`](@ref) is [`radical`](@ref) with a length budget and `nothing` in place of the
-explanation, [`xpolynomial`](@ref) and [`radicand`](@ref) give `P` and `R` as coefficient vectors, and
-[`has_radical_form`](@ref) answers the existence question without computing the expression.
+Lower-level accessors (not exported): `radical_form`, `xpolynomial`, `radicand`, `has_radical_form`.
 """
 struct ExactX
     k::Int
@@ -188,12 +148,8 @@ struct ExactX
     function ExactX(k::Integer, p::QQPolyRingElem, cls::Vector{Int}, r::QQPolyRingElem)
         kk = Int(k)
         S, _ = _qqx()
-        # A square class is symbolic over the ψ basis of ℚ(x); *at a level* the product can collapse to a
-        # rational square, and then there is no root left to carry. Measured on 885 exact 6j values to
-        # k = 16, **63** had a non-empty class whose radicand reduced to a constant — every one of them
-        # printed `· √(1)`, compared unequal to the same number with an empty class, and propagated the
-        # phantom class through every product it entered. Normalising here is the only place that cannot
-        # be bypassed.
+        # At a level the radicand can reduce to a rational square: fold it into P, so equal values compare
+        # equal and no `√(1)` is carried.
         iszero(p) && return new(kk, p, Int[], S(1))
         if !isempty(cls) && degree(r) <= 0
             s = _rat_sqrt(Rational{BigInt}(coeff(r, 0)))
@@ -214,15 +170,8 @@ function _rat_sqrt(c::Rational{BigInt})
 end
 
 """
-Properties beyond the stored fields.
-
-`v.x_value` is the whole stored form as the pair `(P, R)`, so that `P, R = v.x_value` and
-`v.x_value.P`, `v.x_value.R` both work: the value is `P(x)·√(R(x))` at `x = 2cos(π/(k+2))`, with `R = 1`
-exactly when `v.sqclass` is empty. It used to be `P` alone, which silently dropped the root from every
-value that had one.
-
-`v.rad` is shorthand for [`radical(v)`](@ref radical): the value in **nested square roots**, computed on
-demand and with no length limit, or a [`NoRadical`](@ref) saying why there is none.
+`v.x_value` is the named pair `(P, R)`, the value being `P(x)·√(R(x))` (`R = 1` when the class is empty).
+`v.rad` is [`radical(v)`](@ref radical): nested square roots, or a [`NoRadical`](@ref) saying why not.
 """
 function Base.getproperty(v::ExactX, s::Symbol)
     s === :rad && return radical(v)
@@ -272,10 +221,8 @@ function exact_x(s::FactorialSum, k::Integer)
     h = kk + 2
     Ψ = _psiq(h)
     S, _ = _qqx()
-    # Reduce as the sum is formed. Cancellation in ℤ[x] can hide behind the reduction — a numerator and
-    # denominator sharing a factor that vanishes at this level reduce to 0/0 — so a vanishing denominator
-    # is not a verdict: fall back to the unreduced generic value, where the factor cancels exactly, and
-    # only then call the rule singular.
+    # Reduce as the sum is formed. A reduced 0/0 is not a verdict: retry unreduced, where a shared factor
+    # cancels exactly, before calling the rule singular.
     v = nothing
     try
         v = generic_value(s; modulus = psi_level(h), level = h)
@@ -320,10 +267,8 @@ function _evalq(f, x0::T) where {T}
 end
 
 """
-Horner, carrying the running mass `Σ|cᵢ||x|ⁱ` alongside the value. The mass bounds the relative error of
-the result — `(2d+1)·u·mass/|value|` — which is the same shape of certificate the numeric kernels use, and
-here it is essential rather than decorative: an exact value in `x` is evaluated near `x = 2` where the
-polynomial cancels, and the cancellation grows with the level.
+Horner with the running mass `Σ|cᵢ||x|ⁱ`, which bounds the relative error, `(2d+1)·u·mass/|value|`. Needed:
+near `x = 2` the polynomial cancels, more so at higher levels.
 """
 function _horner_mass(f, x0::T) where {T}
     acc = zero(T); mass = zero(T); ax = abs(x0)
@@ -339,67 +284,43 @@ end
 const EVAL_MAX_BITS = 1 << 17
 
 """
-And the much lower cap the Lagrange descent uses. It needs a *sign*, not a value, so `rtol = 1e-8` is
-generous; and it asks for one at every node of a recursion that runs thousands of times inside a sweep, so
-letting it climb to `EVAL_MAX_BITS` on a badly cancelling intermediate would cost seconds for an answer
-worth a bit. A node that cannot be signed at 4096 bits abandons the descent, which reports no radical form
-— the same conservative outcome as a field that has none.
+The lower cap for the Lagrange descent, which needs only signs, at every node. A node that cannot be
+signed at 4096 bits abandons the descent (no radical form reported).
 """
 const DESCENT_MAX_BITS = 4096
 
 """
-Largest degree `radical_form` will descend on when it has a length budget.
-
-The descent produces one rational leaf per degree, and the leaves grow as it squares its intermediates,
-so past a handful of them the expression cannot fit in `maxlen` however it is written — and running the
-descent to find that out is pure cost. Degree 8 is where the line sits in practice: the deepest form the
-package has ever displayed is the four-radical nest at k = 14, which is degree 8 and 44 characters, while
-at k = 100 a degree-16 value took **8.5 s** to build and render and was then thrown away for being far
-past 80. `radical_form(v; maxlen = 0)` ignores the cap and computes it anyway.
+Largest degree `radical_form` descends on under a length budget; beyond it the form cannot fit `maxlen`
+(degree 16 took 8.5 s at k = 100). `radical_form(v; maxlen = 0)` ignores the cap.
 """
 const RADICAL_MAX_DEGREE = 8
 
 """
-Largest field degree at which [`radical_levels`](@ref) examines a level the sufficient condition rejects.
-Deciding a value's own degree is cheap per level and ruinous per sweep — 11.7 s to `kmax = 400` without a
-bound — and what lies past it is, in every case measured, a rational value, which is recognised for free.
+Largest field degree at which `radical_levels` refines a level the sufficient condition rejects (an
+unbounded sweep to kmax = 400 took 11.7 s).
 """
 const REFINE_MAX_DEGREE = 64
 
 """
-Largest degree of the *value* that [`radical`](@ref) will run the descent on unasked.
-
-The descent is exponential in that degree — one rational leaf per degree, and the leaves grow as it
-squares its intermediates. Measured: degree 8 is microseconds, degree 32 is `0.13` s at k = 94, and
-`q6j(Exact(254), 45, 45, 45, 30, 30, 30)` — field degree 128, *value* degree 64 — exhausted memory and
-took the session down with it. A default that can do that is not a default. Past the cap `radical`
-returns a [`NoRadical`](@ref) naming the degree, and `radical(v; degree_limit = …)` is the way to say
-that the wait is wanted.
+Largest value degree [`radical`](@ref) descends on by default. The descent is exponential in it (degree 64
+exhausted memory); past the cap `radical` returns a [`NoRadical`](@ref), and `radical(v; degree_limit = …)`
+lifts it.
 """
 const RADICAL_DESCENT_MAX_DEGREE = 32
 
 
 """
-Largest field degree at which the *exact* degree of a value is computed.
-
-Deciding whether a radical exists is cheap at any size (a modular conjugation), but the degree itself is
-a minimal polynomial over ℚ: 1 ms at field degree 32, 12 ms at 64, 168 ms at 128 measured. Past this
-the question is declined rather than paid for, since a value in a field that large is past the descent
-budget anyway and the exact number would only be for the sentence.
+Largest field degree at which a value's exact degree (a minimal polynomial over ℚ) is computed; beyond it
+the cost grows quickly and the value is past the descent budget anyway.
 """
 const RADICAL_MINPOLY_MAX_DEGREE = 64
 
 """
     _eval_at_x(f, h; rtol) -> BigFloat or nothing
 
-`f(2cos(π/h))`, at whatever precision it takes to certify `rtol`, or `nothing` when `EVAL_MAX_BITS` is not
-enough. The precision is not guessed twice: the first pass measures the actual cancellation and the second
-is made wide enough for it.
-
-This exists because a fixed precision is wrong. At `k = 420` the value of `{1 1 1; 1 1 1}` is a degree-208
-polynomial in `x = 2cos(π/422) = 1.99989…`, where 256 bits print **−64.011** for a symbol whose value is
-**0.16666**. The expression was exact; only the number under it was not. An exact value that cannot say
-what its number is should say nothing, not something.
+`f(2cos(π/h))` at the precision that certifies `rtol`, or `nothing` past `EVAL_MAX_BITS`. The first pass
+measures the cancellation and the second is wide enough for it (a fixed 256 bits gave −64.0 for 1/6 at
+k = 420).
 """
 function _eval_at_x(f, h::Int; rtol::Real = 1e-16, maxbits::Int = EVAL_MAX_BITS,
                     minbits::Int = 256)
@@ -426,9 +347,8 @@ end
 """
     float(v::ExactX, T = Float64)
 
-The number, evaluated by [`_eval_at_x`](@ref) at whatever precision certifies it and rounded once. Throws
-when no reachable precision certifies it — see [`numeric_value`](@ref) for the form that returns `nothing`
-instead, which is what the display uses.
+The number, at whatever precision certifies it, rounded once. Throws when none does; [`numeric_value`](@ref)
+returns `nothing` instead.
 """
 function Base.float(v::ExactX, ::Type{T} = Float64) where {T<:AbstractFloat}
     r = numeric_value(v; bits=precision(T))
@@ -444,9 +364,7 @@ Base.BigFloat(v::ExactX) = float(v, BigFloat)
 """
     evaluate_exact(v, T = ComplexF64)
 
-The number an exact value denotes, in `T`. Named for the cyclotomic carrier this replaces so that code
-asking an exact value for its number does not have to know which carrier produced it — the real basis
-answers to the same call, and `real(evaluate_exact(v))` keeps meaning what it meant.
+The number an exact value denotes, in `T` (the same call as for the cyclotomic carrier).
 """
 evaluate_exact(v::ExactX, ::Type{T} = ComplexF64) where {T} =
     T(float(v, typeof(real(zero(T)))))

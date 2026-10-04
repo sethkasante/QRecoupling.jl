@@ -3,25 +3,10 @@
 # ---------------------------------------------------------------------------------
 #  Arithmetic
 #
-#  A value is `P(x)·√(R(x))` with `R = ∏_{e ∈ rad} ψ_e` reduced modulo `Ψ_h`, and the convention that
-#  `√` is the **positive** root — which is forced, since the value is real and `P` is.
-#
-#  Multiplication is where the square classes do their work. With `A = ∏_S ψ` and `B = ∏_T ψ`,
-#
-#      A·B = G²·D,     G = ∏_{S ∩ T} ψ,     D = ∏_{S △ T} ψ,
-#
-#  so `√A·√B = √(G²D) = |G|·√D`: the shared factors leave the root, the symmetric difference stays, and
-#  the class arithmetic is 𝔽₂ over the ψ basis exactly as in `generic_x.jl`. The one thing that is *not*
-#  inherited from the generic case is the absolute value — over ℚ(x) there is no sign to take, but at a
-#  level `G` is a number and `|G|` is `±G` according to it. Getting that wrong is a sign error in every
-#  product, so the sign is taken from a certified evaluation rather than assumed.
-#
-#  Addition cannot fuse classes, so a sum is kept keyed by class, like `XSum` upstream and
-#  `CompositeExactResult` in the cyclotomic layer. Unlike `XSum`, the keys here are **not** guaranteed
-#  independent: a class that is squarefree in ℚ(x) can become a square modulo `Ψ_h`, so an empty term
-#  list proves zero but a surviving coefficient proves nothing. `iszero` therefore asks for a proof —
-#  the norm over all sign choices of the roots, which lands in the base field — exactly as
-#  `types_projection.jl` does, and at half the degree.
+#  A value is P(x)·√(R(x)), R = ∏_{e ∈ rad} ψ_e mod Ψ_h, with the positive root. A product fuses square
+#  classes: A·B = G²·D with G = ∏_{S ∩ T} ψ and D = ∏_{S △ T} ψ, so √A·√B = |G|·√D; at a level |G| needs the
+#  sign of G, taken from a certified evaluation. Sums cannot fuse classes and are kept keyed by class; a
+#  class squarefree over ℚ(x) can become a square modulo Ψ_h, so `iszero` asks for a proof.
 # ---------------------------------------------------------------------------------
 
 const _PSIQ_RED = Dict{Tuple{Int,Int},Any}()
@@ -48,9 +33,7 @@ function _psi_prod(idx, h::Int)
 end
 
 """
-Sign of a nonzero field element at `x = 2cos(π/h)`, from a certified evaluation. A product of two values
-needs `|G|`, and `G` is an exact nonzero element, so this is a decision and not an estimate — it throws
-rather than guess if the evaluation cannot be certified.
+Sign of a nonzero field element at `x = 2cos(π/h)`, from a certified evaluation; throws rather than guess.
 """
 function _field_sign(f, h::Int)
     iszero(f) && return 0
@@ -64,13 +47,8 @@ end
 const _PSI_SIGN = Dict{Tuple{Int,Int},Int}()
 
 """
-Sign of `ψ_e(2cos(π/h))`, cached. `sign(G) = ∏ sign(ψ_e)` for a product, so the per-multiplication cost
-of `|G|` is a dictionary lookup rather than a certified evaluation.
-
-Measured, this is insurance and not a fix: over every radical class of every admissible symbol at
-k = 6, 8, 10, 12 — 18 distinct ψ indices and 191,514 pairs sharing a class — **no** `ψ_e` was negative and
-no shared factor was. That is not an accident (the indices that occur divide `2n` for factorial arguments
-`n < h`), but it is also not a theorem anyone has written down here, so the absolute value stays.
+Sign of `ψ_e(2cos(π/h))`, cached, so `sign(G) = ∏ sign(ψ_e)` is a lookup. (No negative ψ_e has been seen in
+any measured class, but that is not proved, so the absolute value stays.)
 """
 function _psi_sign(e::Int, h::Int)
     lock(X_LOCK) do
@@ -90,10 +68,8 @@ Base.one(::Type{ExactX}, k::Integer) = _one_exactx(k)
 """
     _qfact_exactx(pairs, k; sgn = 1) -> ExactX
 
-`sgn · ∏ₙ [n]!^{cₙ}` at level `k`, from a collection of `n => c`. This is the whole content of every
-value in the package that has no sum — a quantum dimension, a theta net, any `CyclotomicMonomial` whose
-q-power cancels — so those reach the real basis by the same route the prefactor of a Racah sum does,
-through the ψ exponents, with no cyclotomic field anywhere.
+`sgn · ∏ₙ [n]!^{cₙ}` at level `k` through the ψ exponents: every sum-free value (a quantum dimension, a theta
+net, a prefactor).
 """
 function _qfact_exactx(pairs, k::Integer; sgn::Int = 1)
     kk = Int(k)
@@ -115,8 +91,7 @@ end
 """
     _qint_exactx(k, n) -> ExactX
 
-The q-integer `[n]` at level `k` as an exact value. Identities carry these as coefficients — the
-`[x+1]` of Biedenharn–Elliott, say — and they belong in the same arithmetic as the symbols they multiply.
+The q-integer `[n]` at level `k` as an exact value, e.g. for coefficients in identities.
 """
 function _qint_exactx(k::Integer, n::Integer)
     S, _ = _qqx()
@@ -161,8 +136,7 @@ end
 """
     inv(v)
 
-`1/(P√R) = (1/(P·R))·√R`: the root moves to the numerator against itself, so the class is unchanged and
-no sign decision is needed.
+`1/(P√R) = (1/(P·R))·√R`: same class, no sign decision.
 """
 function Base.inv(v::ExactX)
     iszero(v.p) && throw(DivideError())
@@ -181,9 +155,7 @@ Base.:/(c::Union{Integer,Rational}, v::ExactX) = c * inv(v)
 """
     is_provably_nonzero(v::ExactX) -> Bool
 
-Whether the value is nonzero by an exact argument. A single value carries one square class, so its
-coefficient decides — there is nothing here for the norm of [`is_provably_nonzero(::ExactXSum)`](@ref)
-to do, and that is the whole difference between a value and a sum of them.
+Whether the value is nonzero by an exact argument; a single value has one class, so its coefficient decides.
 """
 is_provably_nonzero(v::ExactX) =
     !iszero(v.p) && (isempty(v.sqclass) || !iszero(v.r))
@@ -208,10 +180,8 @@ end
 A sum `Σ_S c_S(x)·√(∏_{e ∈ S} ψ_e(x))` at one level, keyed by the square class `S`. Products fuse classes
 and stay exact; sums cannot, so they are kept apart.
 
-The keys are the classes of `generic_x.jl`, squarefree over ℚ(x) — but a class that is squarefree there
-can become a **square** modulo `Ψ_h`, so two keys may denote the same root and `isempty(terms)` is the only
-immediate proof of vanishing. `iszero` first uses the structural and norm tests, then resolves
-dependent specialized classes with exact algebraic numbers when necessary.
+Two keys may denote the same root at a level, so only an empty sum is immediately zero; `iszero` uses the
+structural and norm tests, then exact algebraic numbers.
 """
 struct ExactXSum
     k::Int
@@ -274,12 +244,8 @@ for op in (:+, :-, :*)
     @eval Base.$op(a::ExactXSum, b::ExactX) = $op(a, ExactXSum(b))
 end
 """
-A sum that carries one square class **is** a value, and is handed back as one.
-
-Without this, `v * 2` returns an `ExactX` and `v + 2` an `ExactXSum` — the same number in two types,
-differing by which method the user happened to call. Adding two values whose classes genuinely differ
-still gives an [`ExactXSum`](@ref), because that is a thing the value type cannot hold; and arithmetic
-that starts in `ExactXSum` stays there, so the sum type is never taken away from code that asked for it.
+A sum with one square class is handed back as an [`ExactX`](@ref), so `v * 2` and `v + 2` share a type; sums of
+different classes stay [`ExactXSum`](@ref).
 """
 _collapse(s::ExactXSum) = isempty(s.terms) ? zero(ExactX, s.k) :
                           length(s.terms) == 1 ? _term(s, first(keys(s.terms))) : s
@@ -292,9 +258,7 @@ Base.:-(a::ExactX, b::ExactX) = _collapse(ExactXSum(a) - ExactXSum(b))
 # ---------------------------------------------------------------------------------
 
 """
-A rational as an exact value at a level: the constant polynomial, no class, no root. This is what lets
-`v + 1` mean what it says — a scalar is a value like any other, and refusing to add one was an accident
-of which methods happened to be written.
+A rational as an exact value at a level, so `v + 1` works.
 """
 function _const_exactx(c::Union{Integer,Rational}, k::Integer)
     S, _ = _qqx()
@@ -312,12 +276,8 @@ for T in (:ExactX, :ExactXSum)
 end
 
 """
-Floats do not mix with exact values, and the error says what to do instead.
-
-Accepting one would be worse than refusing: `Float64` is exactly a dyadic rational, so `v + 0.1` would
-silently commit to `3602879701896397//36028797018963968` and print as though it were the value the user
-meant. Either the scalar is exact, and `1//10` says so, or the computation is numerical, and `Float64(v)`
-says that.
+Floats do not mix with exact values (`v + 0.1` would silently mean a dyadic rational): use `1//10`, or
+`Float64(v)` for numerics.
 """
 function _inexact_mix(x)
     throw(ArgumentError(
@@ -339,9 +299,7 @@ Base.isone(s::ExactXSum) = length(s.terms) == 1 && isone(_term(s, first(keys(s.t
 """
     radical_norm(s::ExactXSum) -> field element or nothing
 
-`∏` over all sign choices of the roots, which lies in ℚ[x]/Ψ_h because every root then appears to an even
-total power. `nothing` when the elimination has not closed after a few steps, which callers must treat as
-undecided rather than as an answer.
+`∏` over all sign choices of the roots, which lies in ℚ[x]/Ψ_h. `nothing` means undecided.
 """
 function radical_norm(s::ExactXSum)
     isempty(s.terms) && return nothing
@@ -363,9 +321,8 @@ end
 """
     is_provably_nonzero(s::ExactXSum) -> Bool
 
-Whether the value is nonzero **by an exact argument**, never by assuming that distinct class keys are
-independent. One term is nonzero when its coefficient and its radical are; otherwise a nonzero
-[`radical_norm`](@ref) is the proof. `false` means undecided as well as zero, so it is safe to branch on.
+Whether the value is nonzero by an exact argument: one term with nonzero coefficient and radical, or a
+nonzero [`radical_norm`](@ref). `false` means zero or undecided.
 """
 function is_provably_nonzero(s::ExactXSum)
     isempty(s.terms) && return false
@@ -379,10 +336,8 @@ function is_provably_nonzero(s::ExactXSum)
 end
 
 """
-Whether the sum is exactly zero. Structural zeros and a nonzero radical norm settle the common cases.
-When specialized classes are dependent, Nemo's algebraic numbers select the real embedding
-`x = 2cos(π/(k+2))` and the nonnegative square roots exactly. No numerical tolerance decides equality.
-This fallback can cost more for large algebraic degrees; numerical symbol evaluation never uses it.
+Whether the sum is exactly zero: structural zeros and the radical norm first, then exact algebraic numbers
+for dependent classes. No numerical tolerance decides equality.
 """
 function Base.iszero(s::ExactXSum)
     isempty(s.terms) && return true
@@ -455,10 +410,7 @@ function Base.show(io::IO, s::ExactXSum)
 end
 
 """
-The same display an [`ExactX`](@ref) gets, one line per square class: no arithmetic, the shape of a term
-that is too long to write out, and the `≈` only when `IOContext(io, :approximate => true)` asks for it.
-A sum and a value differ in how many classes they carry, not in how they are read — and a sum of one
-class is read exactly like the value it is.
+Displayed like an [`ExactX`](@ref), one line per square class.
 """
 function Base.show(io::IO, ::MIME"text/plain", s::ExactXSum)
     h = s.k + 2
@@ -494,10 +446,7 @@ function Base.show(io::IO, ::MIME"text/plain", s::ExactXSum)
 end
 
 """
-Properties beyond the stored fields, the same two an [`ExactX`](@ref) has.
-
-`s.x_value` is the vector of `(P, R)` pairs, one per square class, in the order the display lists them;
-`s.rad` is [`radical(s)`](@ref radical).
+`s.x_value`: the `(P, R)` pairs, one per class, in display order. `s.rad`: [`radical(s)`](@ref radical).
 """
 function Base.getproperty(s::ExactXSum, f::Symbol)
     if f === :x_value
@@ -513,8 +462,7 @@ Base.propertynames(::ExactXSum, private::Bool = false) =
 """
     radical(s::ExactXSum; maxlen = 0, degree_limit = 32) -> RadExpr or NoRadical
 
-Term by term, added up. A sum of square classes has a radical form exactly when each of its terms does,
-and the first term that does not is the answer — with the *sum's* number under it, not the term's.
+Term by term, added up; the first term without a radical form is the answer, with the sum's number.
 """
 function radical(s::ExactXSum; maxlen::Int = 0, degree_limit::Int = RADICAL_DESCENT_MAX_DEGREE)
     isempty(s.terms) && return RadExpr(0)

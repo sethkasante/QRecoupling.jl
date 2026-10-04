@@ -56,9 +56,8 @@ function _classical_square_factors(s::FactorialSum)
 end
 
 """
-Reduced factorial product via Legendre valuations; cancellation precedes BigInt products. Prime powers
-are gathered in a machine word and multiplied into the BigInt only when the word is full, instead of one
-`big(p)^e` per prime. `num` and `den` have disjoint prime supports, so they are coprime by construction.
+Reduced factorial product from Legendre valuations: primes cancel before any BigInt product, and prime
+powers are batched in a machine word. `num` and `den` share no prime, so they are coprime.
 """
 function _classical_factorial_ratio(pairs)
     num = big(1); den = big(1)

@@ -64,16 +64,8 @@ _issq(r::Rational{BigInt}) = r >= 0 && isqrt(numerator(r))^2 == numerator(r) &&
 _rsqrt(r::Rational{BigInt}) = Rational{BigInt}(isqrt(numerator(r)), isqrt(denominator(r)))
 
 """
-How far `_split_surd` trial-divides before leaving the rest under the root.
-
-Without a bound this is a hang, not a slowdown. The Lagrange descent squares its intermediates, so the
-leaf integers grow with the level: 29 digits at k = 94, **41** at k = 100 for the same labels — and
-trial division runs to `√n`, i.e. 10¹⁴ steps against 10²⁰. That is exactly the difference the levels
-showed, one printing "too long to be useful" in a couple of seconds and the other never returning.
-
-The bound costs nothing mathematically. A factor left inside the root makes the surd less tidy, never
-wrong, and the one case worth catching past small primes — the whole cofactor being a perfect square — is
-one integer square root away.
+How far `_split_surd` trial-divides before leaving the rest under the root. Unbounded, it hangs: descent
+leaves grow with the level (41 digits at k = 100). A factor left under the root is untidy, never wrong.
 """
 const SURD_TRIAL_LIMIT = 10_000
 
@@ -208,11 +200,8 @@ const _ODD_GENS = Dict{Int,Vector{Int}}()
 _powrep(a::Int, e::Int, h::Int) = _rep(Int(powermod(a, e, 2h)), h)
 
 """
-A generating set for the odd part of the Galois group `G = (ℤ/2h)*/±1`, empty when `G` is a 2-group.
-
-`G` is abelian, so `G ≅ G₂ × G_odd` and raising to the 2-part of `|G|` kills `G₂` and permutes `G_odd`:
-the image of that map *is* `G_odd`. A generating set of it is then a couple of elements, found by
-closure over the integers — no field arithmetic anywhere in here.
+A generating set of the odd part `G_odd` of `G = (ℤ/2h)*/±1` (empty when `G` is a 2-group): the image of
+raising to the 2-part of `|G|`, found by closure over the integers.
 """
 function _odd_gens(h::Int)
     lock(X_LOCK) do
@@ -236,12 +225,8 @@ function _odd_gens(h::Int)
 end
 
 """
-Is `[ℚ(u):ℚ]` a power of two — the whole radical question — without computing the degree?
-
-`[G : Stab(u)]` is a power of two exactly when `G_odd ⊆ Stab(u)`: one direction because the index then
-divides `|G/G_odd|`, the other because an odd-order group has no nontrivial image in a 2-group. So the
-answer is a couple of conjugations, against a minimal polynomial of degree `φ(2h)/2`. Measured at
-k = 420: **12 ms against 164 ms**, and the gap grows with the level.
+Is `[ℚ(u):ℚ]` a power of two? Exactly when `G_odd ⊆ Stab(u)`: a couple of conjugations instead of a
+minimal polynomial (12 ms against 164 ms at k = 420).
 """
 function _degree_is_2power(u, h::Int)
     degree(u) <= 0 && return true
@@ -262,9 +247,7 @@ end
 
 """
 Do `σ_j(u)` and `u` differ? `true` is a proof; `false` means only that this prime saw no difference.
-
-Composition modulo `Ψ_h` over `𝔽_p` is machine-word arithmetic where the exact route carries the
-value's own coefficients — 144 bits at k = 420 — through 208 polynomial multiplications.
+Composition modulo `Ψ_h` over `𝔽_p`, in machine words.
 """
 function _sigma_differs_mod(u, j::Int, h::Int, Ψ)
     j == 1 && return false
@@ -293,16 +276,10 @@ end
 """
     has_radical_form(k) -> Bool
 
-Whether every exact value at level `k` admits a closed form in real nested square roots. True exactly when
-`φ(2k+4)/2` is a power of two, because the real cyclotomic field is then a tower of quadratic extensions;
-false when the degree carries an odd prime factor, where no real radical expression exists at all.
-
-Equivalently, and more memorably: **the levels with radicals are the ones where the regular `(k+2)`-gon is
-constructible with ruler and compass** — `k+2` a power of two times distinct Fermat primes. Up to 30 that
-is `k = 0,1,2,3,4,6,8,10,13,14,15,18,22,28,30`; Gauss's 17-gon is `k = 15`.
-
-A *particular* symbol can still be a radical at a level this rejects, if its value falls into a 2-power
-subfield — see [`has_radical_form(::ExactX)`](@ref) and [`radical_levels`](@ref).
+Whether every exact value at level `k` has a closed form in real nested square roots: exactly when
+`φ(2k+4)/2` is a power of two, i.e. when the regular `(k+2)`-gon is constructible (up to 30:
+`k = 0,1,2,3,4,6,8,10,13,14,15,18,22,28,30`). A particular value can still be radical at other levels; see
+[`has_radical_form(::ExactX)`](@ref) and [`radical_levels`](@ref).
 
 ```julia
 has_radical_form.(0:15)   # false only at k = 5, 7, 9, 11, 12
@@ -329,12 +306,8 @@ end
 """
     _value_degree(u, h) -> Int
 
-Degree of a field element of `ℚ(2cos(π/h))` over ℚ, from its minimal polynomial.
-
-The obvious route — count the conjugates that fix it, orbit–stabiliser — is one polynomial composition
-modulo `Ψ_h` per conjugate, and that is quadratic in a degree that is itself the field's: **6 s** at
-k = 420, where the field has degree 210, against **0.12 s** for Nemo's `minpoly` in the number field. The
-predicate is called from `show`, so the difference is the difference between a display and a hang.
+Degree of a field element of `ℚ(2cos(π/h))` over ℚ, from Nemo's minimal polynomial (orbit–stabiliser by
+composition took 6 s at k = 420, against 0.12 s; this is called from `show`).
 """
 function _value_degree(u, h::Int)
     degree(u) <= 0 && return 1
@@ -345,13 +318,9 @@ end
 """
     has_radical_form(v::ExactX) -> Bool
 
-Whether **this** value has a closed form in real nested square roots — a weaker question than
-[`has_radical_form(k)`](@ref), which asks it of every value at the level.
-
-`v²` lies in the real cyclotomic field, so `ℚ(v²)` is abelian whatever the level, and an abelian field is
-a tower of quadratic extensions exactly when its degree is a power of two. The value can therefore land in
-a 2-power *subfield* of a field that has none: at `k = 5` the whole field has degree 3, but a symbol whose
-value happens to be rational there is still a radical expression.
+Whether **this** value has a closed form in real nested square roots. Weaker than
+[`has_radical_form(k)`](@ref): the value can lie in a 2-power subfield of a field that has none (a rational
+value at `k = 5`, say).
 
 ```julia
 has_radical_form(q6j(Exact(5; form = :x), 1, 1, 1, 1, 1, 1))
@@ -373,25 +342,12 @@ end
 """
     radical_levels(f, labels...; kmax = 64) -> Vector{Int}
 
-The levels `k ≤ kmax` at which this symbol is admissible **and** its exact value can be written in real
-nested square roots.
-
-Two things put a level in the list. Most come for free: when `φ(2k+4)/2` is a power of two *every* value
-at that level is a radical expression, and no symbol needs to be computed. The rest are levels where the
-field itself has an odd prime in its degree but this particular value falls into a 2-power subfield, and
-those are found by computing the value.
-
-Inadmissible levels are left out; a level where the symbol vanishes is included, since `0` is as closed a
-form as there is. This answers "for which k can I see this symbol in radicals?", which is not the same
-question as [`has_radical_form(k)`](@ref).
-
-**Cost.** The second kind of level is the expensive one, and it gets more expensive with `k`: an unbounded
-sweep took 0.56 s to `kmax = 200`, 3.3 s to 300 and 11.7 s to 400. So the refinement is only attempted
-while the field degree is at most `refine_max_degree` (default `REFINE_MAX_DEGREE`), and
-`refine = false` turns it off entirely, leaving the sufficient condition — instant, and every level it
-lists is certain. What a bounded sweep can miss is a level where the value lies in a 2-power *subfield*
-of a field that has none; measured across k = 5, 7, 9, 11, 12, 16, 17, every such value was **rational**,
-and rational values are recognised for free at any degree.
+The levels `k ≤ kmax` at which the symbol is admissible and its exact value has a nested-square-root form
+(a vanishing symbol counts). Levels where `φ(2k+4)/2` is a power of two are listed without computing
+anything; the others are refined by computing the value, only while the field degree is at most
+`refine_max_degree` (default `REFINE_MAX_DEGREE`), and not at all with `refine = false`. Every listed level is
+certain; a bounded sweep may miss a value in a 2-power subfield (in every measured case those were rational,
+which are always found).
 
 ```julia
 radical_levels(q6j, 1, 1, 1, 1, 1, 1; kmax = 24)
@@ -440,9 +396,8 @@ function _close_group(gens, h::Int)
 end
 
 """
-One representative per coset of the subgroup `fixed`. Everything in a coset acts the same way on an
-element `fixed` already fixes — `G` is abelian, so `σ_{af}(u) = σ_a(σ_f(u)) = σ_a(u)` — so conjugating by
-more than one of them is pure repetition.
+One representative per coset of `fixed`: conjugates within a coset agree on anything `fixed` already
+fixes (`G` is abelian).
 """
 function _coset_reps(reps::Vector{Int}, fixed::Set{Int}, h::Int)
     length(fixed) <= 1 && return reps
@@ -464,7 +419,8 @@ sign could not be certified. `u` is reduced modulo `Ψ_h`.
 """
 function _descend(u, h::Int, Ψ, reps::Vector{Int}, fixed::Set{Int} = Set{Int}(1))
     degree(u) <= 0 && return RadExpr(Rational{BigInt}(degree(u) < 0 ? 0 : coeff(u, 0)))
-    # Conjugation is 94% of this recursion — 112 calls and 4.18 ms of 4.46 at j = 8, k = 30 — and most of
+    # Conjugation dominates the descent; the stabiliser only grows going down, so each node conjugates by
+    # one representative per coset of its parent's, and reuses the images.
     # them say nothing. The group fixing the value only *grows* as the descent goes down, so a node need
     # only conjugate by one representative per coset of what its parent already fixes: 16 at the root,
     # then 8, 4, 2. The images are then reused three times over, for the stabiliser, for the search for
@@ -500,13 +456,9 @@ end
 """
     radical_form(v::ExactX; maxlen = 80) -> RadExpr or nothing
 
-The exact value as real nested square roots, or `nothing` when there is none to give: either the level
-fails [`has_radical_form`](@ref) — in which case no such expression exists, for any amount of effort — or
-the expression exists but is longer than `maxlen` characters, which happens as soon as the descent needs
-three levels, or the value's degree is past `degree_limit`, where the descent stops being affordable
-(`degree_limit = 0` removes that cap and accepts the cost). [`radical`](@ref) is the same thing with an
-unbounded length, a sentence in place of the `nothing`, and the number under it; this is the form to
-call when the caller wants to branch on the answer rather than read it.
+The exact value as real nested square roots, or `nothing`: none exists, or it is longer than `maxlen`, or
+the value's degree is past `degree_limit` (`degree_limit = 0` lifts that cap). [`radical`](@ref) is the same
+without a length limit, with a reason instead of `nothing`.
 
 ```julia
 radical_form(q6j(Exact(3; form = :x), 1, 1, 1, 1, 1, 1))   # −(3 − √5)/2, the Fibonacci level
@@ -528,7 +480,8 @@ function radical_form(v::ExactX; maxlen::Int = 80,
     # sampled values were rational at k = 5, 7, 9 and were being told no radical form existed.
     has_radical_form(v) || return nothing
     h = v.k + 2
-    # Two caps, one minimal polynomial. A degree-2ᵐ value descends to 2ᵐ rational leaves, so with a
+    # With a length budget, a degree past a handful of leaves cannot fit; without one, the cap is the cost
+    # (exponential in the degree). `degree_limit = 0` accepts whatever it costs.
     # length budget anything past a handful of them is already far longer than `maxlen` and the descent
     # would only be paying to be thrown away. Without one the cap is the cost itself: the descent is
     # exponential in that degree, and at 64 it exhausts memory. `degree_limit = 0` says the caller has
@@ -562,17 +515,12 @@ end
 """
     NoRadical
 
-What [`radical`](@ref) gives back when there is no nested-radical expression to give, carrying the reason
-in `kind`, so that "there is none" and "I did not look" are different answers and not one sentence doing
-duty for both:
+What [`radical`](@ref) returns when there is no nested-radical expression, with the reason in `kind`:
 
-* `:none` — none exists. `v²` lies in an abelian field, and an abelian field is a tower of quadratic
-  extensions exactly when its degree is a power of two, so this is decided, not merely unattempted.
-* `:untried` — the field degree is past `degree_limit` and the minimal polynomial that would settle it
-  was not computed.
-* `:long` — one exists but is longer than the `maxlen` asked for. Only `radical(v; maxlen = n)` with
-  `n > 0` can produce this; the default budget is unbounded.
-* `:failed` — the descent ran and could not certify a sign within `DESCENT_MAX_BITS`.
+* `:none` — none exists (the degree of `v²` is not a power of two).
+* `:untried` — the field degree is past `degree_limit`; not decided.
+* `:long` — one exists but exceeds `maxlen` (only with `maxlen > 0`).
+* `:failed` — the descent could not certify a sign within `DESCENT_MAX_BITS`.
 
 Printing it prints the reason. `float` is deliberately not defined: there is no number here.
 """
@@ -635,17 +583,9 @@ end
 """
     radical(v::ExactX; maxlen = 0, degree_limit = 32) -> RadExpr or NoRadical
 
-The value written in real nested square roots — `(√5 − 3)/2` rather than the polynomial in `x` that
-printing an [`ExactX`](@ref) shows. Most values have no such form: only a level whose field degree
-`φ(2h)/2` is a power of two puts every one of its values in a tower of square roots, and at the other
-levels a particular value may still land in a 2-power subfield. When there is none the answer is a
-[`NoRadical`](@ref) that says which of those it is, rather than a bare `nothing`.
-
-There is no *length* budget by default: asking for the radical is asking for all of it. There is a
-**degree** budget, because the descent is exponential in the degree of the value and at degree 64 it
-exhausts memory and takes the session with it. Past `degree_limit` the answer names the degree it found
-and the call that would run it, and gives the number meanwhile. `maxlen > 0` additionally declines an
-expression longer than that many characters.
+The value in real nested square roots, e.g. `(√5 − 3)/2`, or a [`NoRadical`](@ref) saying why there is
+none. No length limit by default (`maxlen > 0` adds one); the descent is exponential in the value's
+degree, so past `degree_limit` it is not attempted and the number is given instead.
 
 ```julia
 radical(q6j(Exact(3), 1, 1, 1, 1, 1, 1))    # (√5 − 3)/2, the Fibonacci level

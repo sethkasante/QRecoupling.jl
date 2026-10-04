@@ -1,22 +1,10 @@
 # ---------------------------------------------------------------------------------
-#  The closed form a user should see: Φ factors in q
+#  The closed form in Φ factors of q
 #
-#  A DCR is already the exact symbolic value for generic q — it is a radical times a sum of monomials
-#  σ q^P ∏_d Φ_d(q²)^{e_d}. What it *shows* is the recipe; what a reader wants is the value. Summing those
-#  monomials over ℤ[q] and factoring gives the closed form, and two facts make it compact:
-#
-#   * every Φ_d(q²) splits into irreducible cyclotomics over ℤ[q] — Φ_d(q)Φ_{2d}(q) for odd d, Φ_{2d}(q)
-#     for even d — so the exponent bookkeeping is over an explicit basis of irreducibles;
-#   * the **denominator is always a product of Φ's**, because it divides a product of q-integers and every
-#     q-integer is a product of cyclotomics. It therefore needs no factoring at all.
-#
-#  Only the numerator can carry non-cyclotomic factors. These are retained in the remainder, giving
-#
-#      √(…) · (sign) q^a Φ… (remainder) / (Φ…)
-#
-#  which is level-independent: one expression valid at every k, and strictly more informative than a
-#  cyclotomic field element. The radical records the parity of the irreducible-factor exponents;
-#  even powers are extracted into the rational part.
+#  Summing a DCR's monomials over ℤ[q] and factoring gives √(…) · sign · q^a Φ… · remainder / Φ…, valid at
+#  every level. Each Φ_d(q²) splits into cyclotomics over ℤ[q], and the denominator divides a product of
+#  q-integers, so it is a product of Φ's and needs no factoring; only the numerator can leave a
+#  non-cyclotomic remainder. Even exponents leave the radical.
 # ---------------------------------------------------------------------------------
 
 const _PHIQ = Dict{Int,Any}()          # Φ_e(q), e ≥ 1, as elements of ℤ[q]
@@ -80,12 +68,9 @@ end
 """
     _dcr_ratio(dcr) -> (N, Dexp, qmin) or nothing
 
-The deferred sum, carried out: the numerator `N ∈ ℤ[q]` over the common Φ denominator `Dexp`, with `qmin`
-the q-shift that made every term a polynomial. `nothing` for a structural zero.
-
-This is the part of the closed form that costs only the sum — no factoring — and both views below are
-built on it. Separating it is what makes the cheap view cheap: at j = 8 the whole of `phi_form` is 33.7 ms
-and essentially all of that is `factor(N)`.
+The deferred sum, carried out: numerator `N ∈ ℤ[q]` over the common Φ denominator `Dexp`, `qmin` the shift
+that made every term a polynomial; `nothing` for a structural zero. No factoring (that is nearly all of
+`phi_form`'s cost).
 """
 function _dcr_ratio(dcr::DCR)
     Rq, q = _qring()
@@ -128,29 +113,11 @@ end
 """
     phi_form(dcr::DCR; maxdeg = 400, basis = :q) -> PhiForm
 
-The exact closed form of a DCR in q, as Φ factors times at most one irreducible remainder. Works entirely
-from the DCR, so it is available for any symbolic value the package builds, and it is independent of the
-level.
-
-**This is the expensive expansion**, and [`x_form`](@ref) is the cheap one. Both carry out the same
-deferred sum; `phi_form` then *factors* the numerator over ℤ[q], and that factorisation is essentially the
-whole cost — measured on `{6 6 6; 6 6 6}`, 10.1 ms in total of which the sum is 0.07 ms. Against
-`x_form`'s 0.26 ms on the same symbol that is **38×**, and the two reasons are the two differences: `q`
-has twice the degree of `x` (the numerator here is degree 228 where the x-form is 82), and `x_form` never
-factors anything.
-
-`maxdeg` caps the degree at which the numerator is factored; above it the numerator is reported by size
-rather than expanded, because a degree-800 polynomial is not a closed form anyone reads. **A truncated
-call is not a cheaper closed form, it is a different answer**, and it is why `phi_form` can look faster
-than `x_form` on large symbols: at `{9 9 9; 9 9 9}` the numerator reaches degree 504, the default
-`maxdeg = 400` skips the factorisation, and the call returns in 0.40 ms against `x_form`'s 3.0 ms. Ask for
-the factors it declined (`maxdeg = 3000`) and the same call takes 52.8 ms. `truncated` records which
-happened.
-
-`basis = :x` renders the irreducible remainder in `x = q + q⁻¹`, which halves *its* degree. This is not
-what `x_form` returns: the Φ factors stay in `q` either way and only the remainder moves, whereas `x_form`
-puts the whole value in `x` over a ψ radical. Everything else is unchanged and the display says what `x`
-is; the default `:q` needs no such explanation, so it is the default.
+The exact closed form of a DCR in q, as Φ factors times at most one irreducible remainder, valid at every
+level. **The expensive expansion**: it factors the numerator over ℤ[q] (about 38× [`x_form`](@ref) on
+`{6 6 6; 6 6 6}`). Above `maxdeg` the numerator is reported by size, not factored; that is a different
+answer, recorded in `truncated`, not a cheaper one. `basis = :x` writes the remainder in `x = q + q⁻¹`
+(the Φ factors stay in q).
 """
 function phi_form(dcr::DCR; maxdeg::Int = 400, basis::Symbol = :q)
     basis in (:q, :x) || throw(ArgumentError("basis must be :q or :x, got :$basis"))
@@ -351,11 +318,9 @@ Base.show(io::IO, ::MIME"text/plain", dcr::DCR) = show(io, dcr)
 """
     evaluate_phi_form(f::PhiForm, q) -> number
 
-Evaluate a rendered closed form at a numeric `q`. This exists so that what is *displayed* can be checked
-against what is *computed*: the two go through different code, and the test suite compares them. The square
-root uses the principal branch of the assembled radical, which for real `q > 0` is the package's
-convention. At complex `q` this can differ by a sign from the numerical evaluator's product of principal
-roots of balanced factors: a principal square root is not multiplicative across its branch cut.
+Evaluate a rendered closed form at a numeric `q`, so the display can be checked against the evaluators.
+Uses the principal root of the assembled radical: the package's convention for real `q > 0`, but possibly
+a sign off the factor-by-factor convention at complex `q`.
 """
 function evaluate_phi_form(f::PhiForm, qv::Number)
     f.sign == 0 && return zero(qv) * 0
