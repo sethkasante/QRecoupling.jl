@@ -106,24 +106,35 @@ function issingular_at(f::Function, k::Integer, args::Spin...)
 end
 
 """
-    level_spectrum(j1, ..., j6; k = 2:100, cancellation = true) -> Vector{Symbol}
-    level_spectrum(symbol, labels...; k, cancellation) -> Vector{Symbol}
+    level_spectrum(j1, ..., j6; k = 2:100, cancellation = true, prove = false) -> Vector{Symbol}
+    level_spectrum(symbol, labels...; k, cancellation, prove) -> Vector{Symbol}
 
 How one symbol behaves as the level varies, one entry per level in `k`: `:inadmissible` (the labels are not
 in the theory at that level, so the symbol is zero by convention), `:pole`, `:zero` (every term vanishes),
-`:cancels` (a modular cancellation-zero candidate) or `:finite`. Cheap because the valuations are
-closed-form in the level; pass `cancellation = false` to skip the modular test and report `:finite`
-wherever terms contribute.
+`:cancels` (the finite terms cancel) or `:finite`. Cheap because the valuations are closed-form in the
+level; pass `cancellation = false` to skip the cancellation test and report `:finite` wherever terms
+contribute.
+
+By default `:cancels` is a modular *candidate*, not a proof. With `prove = true` every candidate is settled:
+by the structural identities (pairwise or reflection cancellation) or, failing those, by exact arithmetic
+at the level, so `:cancels` then means a proved zero and an unconfirmed candidate is reported as `:finite`.
+Screening runs on threads; exact confirmations run serially afterwards, as in [`iszero_at`](@ref), and
+can cost milliseconds each at high degree.
 
 ```julia
-level_spectrum(5, 5, 5, 5, 5, 5; k = 2:60)
+level_spectrum(5, 5, 5, 5, 5, 5; k = 2:60)                 # screen
+level_spectrum(5, 5, 5, 5, 5, 5; k = 2:60, prove = true)   # every :cancels proved
 ```
 """
 level_spectrum(args::Spin...; kw...) = level_spectrum(q6j, args...; kw...)
 
-function level_spectrum(f::Function, args::Spin...; k = 2:100, cancellation::Bool = true, threads = nothing)
+function level_spectrum(f::Function, args::Spin...; k = 2:100, cancellation::Bool = true,
+                        prove::Bool = false, threads = nothing)
     K = k isa AbstractVector ? collect(k) : [k]
     out = Vector{Symbol}(undef, length(K))
+    # entries left for exact confirmation: a candidate, or a screen that could not decide (`nothing`);
+    # one byte per entry, so threaded workers never write neighbouring bits of a shared word
+    pending = fill(false, length(K))
     work = function (rng)
         for i in rng
             kk = Int(K[i])
@@ -137,8 +148,17 @@ function level_spectrum(f::Function, args::Spin...; k = 2:100, cancellation::Boo
                 :pole
             elseif st === :empty || st === :zero
                 :zero
-            elseif cancellation && is_cancellation_zero(s, segs, kk) === true
-                :cancels
+            elseif cancellation
+                c = is_cancellation_zero(s, segs, kk)
+                if prove && c !== false
+                    if pairwise_zero(s) || reflection_zero(s, segs, kk)
+                        :cancels                          # a structural proof, cheap enough for the worker
+                    else
+                        pending[i] = true; :finite        # settled exactly below
+                    end
+                else
+                    c === true ? :cancels : :finite
+                end
             else
                 :finite
             end
@@ -151,6 +171,11 @@ function level_spectrum(f::Function, args::Spin...; k = 2:100, cancellation::Boo
         @sync for c in _chunks(length(K), nw)
             Threads.@spawn work(c)
         end
+    end
+    # exact confirmations, serially (exact polynomial caches and field arithmetic follow the serial policy)
+    for i in eachindex(K)
+        pending[i] || continue
+        iszero(exact_x(_rule_for(f, args...), Int(K[i]))) && (out[i] = :cancels)
     end
     return out
 end

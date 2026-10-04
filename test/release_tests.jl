@@ -68,6 +68,19 @@
         end
     end
 
+    @testset "level_spectrum: screened candidates, and proofs on request" begin
+        for l in ((5,5,5,5,5,5), (1,1,1,5//2,5//2,5//2), (2,3//2,3//2,9//2,4,5)), nw in (1,4)
+            screen = level_spectrum(l...; k=2:40, threads=nw)
+            proved = level_spectrum(l...; k=2:40, prove=true, threads=nw)
+            # proving changes only :cancels entries, and a proved :cancels is an exact zero
+            @test all(screen[i] === proved[i] || screen[i] === :cancels for i in eachindex(screen))
+            for (i, kk) in enumerate(2:40)
+                proved[i] === :cancels && @test iszero(q6j(Exact(kk), l...))
+                proved[i] === :finite && @test !iszero_at(kk, l...)
+            end
+        end
+    end
+
     @testset "exact equality survives small rational scaling" begin
         a = q6j(Exact(4),0,0,0,1//2,1//2,1//2)
         b = q6j(Exact(4),0,0,0,3//2,3//2,3//2)

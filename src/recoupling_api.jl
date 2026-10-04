@@ -26,7 +26,7 @@ end
 
 
 "Warn once: eager is now a compatibility alias for the standard evaluator."
-_deprecated_eager() = @warn("`eager=true` is deprecated and now uses the standard factorial-rule evaluator; remove the keyword. It will be removed in v0.5.", maxlog=1)
+_deprecated_eager() = @warn("`eager=true` is deprecated and now uses the standard factorial-rule evaluator; remove the keyword. It will be removed in later version", maxlog=1)
 
 "Evaluate one symbol rule, constructing its DCR only for projections that need it."
 @inline function _symbol_value(s::FactorialSum, admissible::A, k, q, exact, ::Type{T};
