@@ -50,10 +50,11 @@ grid = q6j(Level(15:20), labels)  # labels × levels
 
 At generic complex q, F matrices are complex orthogonal, not generally unitary: use `transpose(F)`, not the adjoint, in the algebraic identity.
 
-Quantum Clebsch–Gordan coefficients of U_q(sl₂) take the argument order of WignerSymbols.jl's `clebschgordan`, and equal the ordinary coefficients at q = 1:
+`qcg(j1, m1, j2, m2, j, m)` is the quantum Clebsch–Gordan coefficient ⟨j₁m₁; j₂m₂|j m⟩ of U_q(sl₂), with `m = m1 + m2` by default; at q = 1 it is the ordinary coefficient:
 
 ```julia
 qcg(1//2, 1//2, 1//2, -1//2, 1, 0)            # 1/√2
+qcg((1//2, 1//2), (1//2, -1//2), (1, 0))      # the same, as (j, m) pairs
 qcg(At(0.8), 1//2, 1//2, 1//2, -1//2, 1, 0)   # quantum value at q = 0.8
 C, rows, cols = qcg_matrix(1, 1; q=0.8)       # whole coupling matrix, by recurrence
 @assert C * transpose(C) ≈ I

@@ -2,14 +2,9 @@
 
 **Quantum recoupling, from fast numerical coefficients to readable exact formulas.**
 
-QRecoupling evaluates classical and quantum 3j and 6j symbols, fusion and braiding data,
-and finite sums of symmetric q-factorials. Use the same labels at the classical limit,
-at a root of unity, or at a real or complex deformation parameter. Request exact level
-values in `x = q + q⁻¹`, or retain a factorial rule for symbolic exploration.
+QRecoupling evaluates classical and quantum Clebsch–Gordan coefficients, 3j and 6j symbols, fusion and braiding data, and finite sums of symmetric q-factorials. Use the same labels at the classical limit, at a root of unity, or at a real or complex deformation parameter. Request exact level values in `x = q + q⁻¹`, or retain a factorial rule for symbolic exploration.
 
-The package supplies local coefficients and change-of-basis matrices for angular-momentum
-calculations, spin networks, Turaev–Viro models, and fusion-based tensor networks. It does
-not assemble a triangulation or contract a complete tensor network for you.
+The package supplies local coefficients and change-of-basis matrices for angular-momentum calculations, spin networks, Turaev–Viro models, and fusion-based tensor networks. It does not assemble a triangulation or contract a complete tensor network for you.
 
 ## Start with one symbol
 
@@ -23,16 +18,14 @@ exact = q6j(Exact(10), 1, 1, 1, 1, 1, 1)
 exact
 ```
 
-At level 10 this is `(2√3 − 3)/3`, also represented exactly by
-`(2x² − 7)/3` with `x = 2cos(π/12)`.
+At level 10 this is `(2√3 − 3)/3`, also represented exactly by `(2x² − 7)/3` with `x = 2cos(π/12)`.
 
 ```@example home
 symbolic = q6j(Symbolic(), 1, 1, 1, 1, 1, 1)
 x_form(symbolic)
 ```
 
-Symbolic construction and display retain the factorial rule without carrying out its sum.
-`x_form(symbolic)` explicitly expands it in x; large expanded formulas have a bounded display.
+Symbolic construction and display retain the factorial rule without carrying out its sum. `x_form(symbolic)` explicitly expands it in x; large expanded formulas have a bounded display.
 
 ## Choose the calculation
 
@@ -49,17 +42,12 @@ Symbolic construction and display retain the factorial rule without carrying out
 
 ## Why use it?
 
-- **One mathematical rule, several evaluations.** Compact factorial rules feed direct
-  numerical and exact calculations, avoiding large symbolic expansions on the numerical path.
-- **Shared work for related symbols.** Batches reuse tables; F matrices share recurrence
-  coefficients across columns instead of evaluating every entry as an independent sum.
-- **Exact formulas you can inspect.** Generic expressions use x and ψ radical factors;
-  level values reduce modulo the minimal polynomial of `2cos(π/(k+2))` using Nemo.
-- **Control over expensive work.** Reuse workspaces, choose numerical precision, and
-  request symbolic expansion or radical extraction explicitly.
+- **One mathematical rule, several evaluations.** Compact factorial rules feed direct numerical and exact calculations, avoiding large symbolic expansions on the numerical path.
+- **Shared work for related symbols.** Batches reuse tables; F matrices share recurrence coefficients across columns instead of evaluating every entry as an independent sum.
+- **Exact formulas you can inspect.** Generic expressions use x and ψ radical factors; level values reduce modulo the minimal polynomial of `2cos(π/(k+2))` using Nemo.
+- **Control over expensive work.** Reuse workspaces, choose numerical precision, and request symbolic expansion or radical extraction explicitly.
 
-See [Accuracy and performance](performance.md) for the numerical contracts and current
-limitations, including the distinction between approximate checks and exact proofs.
+See [Accuracy and performance](performance.md) for the numerical contracts and current limitations, including the distinction between approximate checks and exact proofs.
 
 ## Install and learn
 
@@ -69,9 +57,7 @@ Julia 1.10 or later is supported. In Julia's package manager:
 pkg> add QRecoupling
 ```
 
-To update an existing installation to the latest release, use `pkg> up QRecoupling`, and check the
-installed version with `pkg> status QRecoupling`. This documentation describes v0.4; see
-[Migrating to v0.4](migration.md) for changed defaults.
+To update an existing installation to the latest release, use `pkg> up QRecoupling`, and check the installed version with `pkg> status QRecoupling`. This documentation describes v0.4; see [Migrating to v0.4](migration.md) for changed defaults.
 
 - [Getting started](getting_started.md): labels, targets, and first calculations.
 - [Recoupling symbols](tqft.md): normalization, dimensions, and phases.
@@ -82,9 +68,7 @@ installed version with `pkg> status QRecoupling`. This documentation describes v
 
 ## Citation
 
-The original cyclotomic framework is described in Seth K. Asante,
-[Deferred Cyclotomic Representation for Stable and Exact Evaluation of q-Hypergeometric Series](https://doi.org/10.21468/SciPostPhysCore.9.3.059), SciPost Phys. Core **9**, 059 (2026).
-The v0.4 factorial-rule kernels and x-form interface extend that framework.
+The original cyclotomic framework is described in Seth K. Asante, [Deferred Cyclotomic Representation for Stable and Exact Evaluation of q-Hypergeometric Series](https://doi.org/10.21468/SciPostPhysCore.9.3.059), SciPost Phys. Core **9**, 059 (2026). The v0.4 factorial-rule kernels and x-form interface extend that framework.
 
 ```bibtex
 @article{Asante2026dcr,

@@ -1,7 +1,6 @@
 # Finite factorial and hypergeometric series
 
-The compact rule interface can evaluate finite sums of symmetric q-factorials directly.
-It does not require constructing a DCR for numerical evaluation.
+The compact rule interface can evaluate finite sums of symmetric q-factorials directly. It does not require constructing a DCR for numerical evaluation.
 
 ## A terminating hypergeometric example
 
@@ -34,13 +33,11 @@ d = qseries(j -> QRecoupling.qbinomial_mono(n, j)^2, 0:n)
 @assert isapprox(qeval(s), binomial(2n,n)) # hide
 ```
 
-The q-deformed sum above is not generally `qbinomial(2n,n)`. The classical identity
-does not transfer to q without the appropriate weights.
+The q-deformed sum above is not generally `qbinomial(2n,n)`. The classical identity does not transfer to q without the appropriate weights.
 
 ## The finite q-binomial theorem
 
-Standard basic hypergeometric notation usually uses the base `Q`, whereas this package uses
-the symmetric integer `[n] = (q^n-q^(-n))/(q-q^(-1))`. With `Q=q^2`,
+Standard basic hypergeometric notation usually uses the base `Q`, whereas this package uses the symmetric integer `[n] = (q^n-q^(-n))/(q-q^(-1))`. With `Q=q^2`,
 
 ```math
 [n]!=q^{-n(n-1)/2}\frac{(Q;Q)_n}{(1-Q)^n},\qquad
@@ -68,19 +65,10 @@ rhs = prod(1 + q^(2r) for r in 0:n-1)
 (lhs, rhs)
 ```
 
-The callback constructs a DCR here because the compact factorial rule currently has
-no field for a summation-dependent q-power. See the [DLMF definition of basic
-hypergeometric series](https://dlmf.nist.gov/17.4) and the
-[q-binomial theorem](https://dlmf.nist.gov/17.2#iii) for the standard conventions.
+The callback constructs a DCR here because the compact factorial rule currently has no field for a summation-dependent q-power. See the [DLMF definition of basic hypergeometric series](https://dlmf.nist.gov/17.4) and the [q-binomial theorem](https://dlmf.nist.gov/17.2#iii) for the standard conventions.
 
 ## Scope and possible extensions
 
-These are finite sums. Arbitrary parameter factors `(a;Q)_j`, an arbitrary series
-argument `z^j`, and infinite-series convergence are not currently part of `FactorialSum`.
-Terminating q-Chu–Vandermonde and q-Racah examples would be natural next tutorials
-once parameterized q-Pochhammer factors and explicit q-power weights have a supported interface.
+These are finite sums. Arbitrary parameter factors `(a;Q)_j`, an arbitrary series argument `z^j`, and infinite-series convergence are not currently part of `FactorialSum`. Terminating q-Chu–Vandermonde and q-Racah examples would be natural next tutorials once parameterized q-Pochhammer factors and explicit q-power weights have a supported interface.
 
-At a root of unity, distinguish a well-defined finite expression from individual terms
-with poles. Cancellation of poles between summands is not generally supported by the
-numerical factorial-rule evaluator. For the examples above, choosing `k=20` and `n=5`
-keeps denominator factorials away from zeros.
+At a root of unity, distinguish a well-defined finite expression from individual terms with poles. Cancellation of poles between summands is not generally supported by the numerical factorial-rule evaluator. For the examples above, choosing `k=20` and `n=5` keeps denominator factorials away from zeros.
