@@ -19,9 +19,8 @@ end
 
 #empty 
 """
-Coefficient of a `CompositeExactResult` in whatever carrier it is parameterised by. The identity is all
-that is left now that the deferred fraction carrier is gone; the hook stays because the canonical route
-is still generic in its coefficient type until the cyclotomic layer goes in v0.5.
+Coefficient of a `CompositeExactResult` stays because the canonical route
+is still generic in its coefficient type until the cyclotomic layer goes in later version.
 """
 _exact_coefficient(::Type{T}, x) where {T} = x
 

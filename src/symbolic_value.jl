@@ -78,7 +78,7 @@ unless the cyclotomic factors are what you are after.
 
 It was called `xvalue`, one letter from `ExactX`'s `v.x_value` and meaning something else — that one is
 the stored `(P, R)` of a value at a level, this one is an expansion of a generic-`q` rule. The old name
-still works and warns; it goes in v0.5.
+still works and warns; it goes in later version.
 
 Expansion is explicit and may still be expensive at large labels; nothing about displaying `v` triggers
 it. The result is cached on the symbolic value, so asking twice is free; callers receive an owned copy, so
@@ -91,7 +91,7 @@ x_form(s::FactorialSum) = generic_value(_validate_rule(s))
 "Warn once: the expansion is `x_form`, and `xvalue` is the `XValue` constructor it was confused with."
 _deprecated_xvalue() = @warn("`xvalue(v)` is deprecated; the expansion in x is `x_form(v)` " *
                              "(`v.x_value` is a different thing: the stored (P, R) of an `Exact(k)` " *
-                             "value). It will be removed in v0.5.", maxlog = 1)
+                             "value). It will be removed later.", maxlog = 1)
 xvalue(v::SymbolicValue) = (_deprecated_xvalue(); x_form(v))
 xvalue(s::FactorialSum) = (_deprecated_xvalue(); x_form(s))
 

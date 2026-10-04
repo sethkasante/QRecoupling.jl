@@ -46,8 +46,7 @@ result types without constructing a DCR or a level field. Use `Symbolic()` to re
   in `x` it is stored as. [`radical`](@ref) rewrites it in nested square roots where they exist. It is
   closed under `*`, `inv` and `^`, and sums of it are [`ExactXSum`](@ref).
 * `form=:canonical` returns canonical cyclotomic coefficients in ℚ(ζ₂ₕ). This was the default before the
-  real basis existed, and it is deprecated: it will be removed with the rest of the cyclotomic layer in
-  v0.5.
+  real basis existed, and it is deprecated: it will be removed later.
 
 Both use deterministic arithmetic; modular screening alone never establishes an exact zero. Exact
 braiding phases retain their `QPhase` form in either.
@@ -182,11 +181,11 @@ Warn once. The cyclotomic carrier ℚ(ζ₂ₕ) is no longer what the package me
 `Exact(k)` and `exact = true` both give the real basis ℚ[x]/Ψ_h now. `form = :canonical` and
 still works, and still returns exactly what it did, so that anything reading
 `CompositeExactResult` keeps working while it migrates; it is scheduled for
-removal in v0.5, on the same footing as `eager = true`.
+removal later.
 """
 _deprecated_cyclotomic() = @warn(
     "the cyclotomic exact form `Exact(k; form = :canonical)` is deprecated; " *
-    "`Exact(k)` and `exact = true` return the real basis ℚ[x]/Ψ_h. They will be removed in v0.5.",
+    "`Exact(k)` and `exact = true` return the real basis ℚ[x]/Ψ_h. They will be removed in v0.6.",
     maxlog = 1)
 
 # The cyclotomic target, kept reachable under its own name while it is deprecated. It goes straight to
