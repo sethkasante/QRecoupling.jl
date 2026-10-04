@@ -59,8 +59,8 @@ size; their exact coefficients remain available.
 
 ```@example exact_forms
 v.x_value               # named pair (P, R) of stored polynomials
-xpolynomial(v)          # P coefficients, in ascending powers of x
-radicand(v)             # R coefficients, in ascending powers of x
+QRecoupling.xpolynomial(v)          # P coefficients, in ascending powers of x
+QRecoupling.radicand(v)             # R coefficients, in ascending powers of x
 radical(v)              # explicitly request a nested-square-root expression
 ```
 
@@ -88,7 +88,7 @@ Here “radical” means **nested square roots**, not arbitrary nth roots. A `:n
 is not a claim that no representation using more general radicals exists.
 The default `degree_limit` is 32; `maxlen=0` imposes no expression-length cap.
 Increasing the degree limit can be very expensive in both time and memory.
-The older `radical_form` API remains available but returns `nothing` instead of a
+The older `QRecoupling.radical_form` API remains available but returns `nothing` instead of a
 reasoned failure object.
 
 To request an approximate value alongside the stored x-form:
@@ -126,7 +126,7 @@ use an empty exact residual or a generic polynomial certificate as described in
 ```@docs
 SymbolicValue
 x_form
-xvalue
+QRecoupling.xvalue
 XValue
 ExactX
 ExactXSum

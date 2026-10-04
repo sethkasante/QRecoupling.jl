@@ -18,6 +18,10 @@ q6j(labels; k=30, threads=1)
 ```
 
 One workspace can be reused sequentially. Do not share it across concurrent tasks.
+For repeated `qcg` or `q3j` calls, it also retains the CG recurrence coefficients
+for the current `(j1,j2,m1+m2)` sector and reuses scratch arrays. Changing the
+target or sector refreshes the coefficients automatically. For an entire row or
+sector, prefer `qcg_row` or `qcg_matrix` so that work is shared across entries.
 Batches own worker scratch and reuse tables. On Julia before 1.12, batches run serially
 because BigFloat precision scopes are shared. Exact batches also remain serial.
 Avoid clearing caches while evaluations are running.
@@ -54,6 +58,14 @@ Near a singularity even a one-ulp input change can matter. Adaptive agreement is
 universal interval certificate, and a small numerical result is not proof of an exact zero.
 Final conversion can still overflow or underflow the output type.
 
+When generic-q evaluation needs an exact zero decision, it first evaluates the sum modulo
+a prime at the exact stored real or complex parameter, including any integer q-power
+weights. A nonzero residue proves the sum is nonzero and avoids growing rational
+arithmetic. A zero residue or an unusable modular image still requires exact confirmation.
+This speeds up exceptional zero checks; ordinary scalar calls may never need the filter.
+Run `julia --project=. benchmark/analytic_zero_filter.jl` from the repository root to measure
+these checks separately from ordinary calls; add `--exact` to time the rational fallback.
+
 ## Current limits to account for
 
 - **F-matrix precision:** Float64/ComplexF64 matrices use the shared column recurrence.
@@ -63,10 +75,11 @@ Final conversion can still overflow or underflow the output type.
   dependent radical classes. The algebraic fallback can be expensive at high degree; see
   [Identity checks](tutorials/identities.md). Numerical conversion of a sum is a separate
   operation and does not yet adapt precision to cancellation between its terms.
-- **Zero screening:** `iszero_at` and cancellation entries of `level_spectrum` can rely on
-  modular screening. Treat cancellation zeros as candidates for exact confirmation rather
-  than as a general proof. Threaded batch queries pack their Boolean results after the
-  workers finish, so individual flags do not share writable storage.
+- **Zero queries:** `iszero_at` uses structural proofs and modular filters, then confirms
+  unresolved candidates exactly. Exact confirmation can cost more at high degree and runs
+  serially after threaded screening. Workers use independently writable Boolean storage.
+  The `:cancels` entries of `level_spectrum` remain candidates; confirm them with `iszero_at`
+  or `Exact(k)` when a proof is needed.
 - **Custom series at singular targets:** cancellation of poles between separate summands is
   not generally regularized. Keep denominator factorials away from roots when possible.
 - **Caches:** modular sine tables distinguish numeric type and precision. Broader concurrent

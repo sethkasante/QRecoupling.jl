@@ -88,7 +88,7 @@ complex numerical evaluation must retain consistent square-root branches. The re
 visible denominator zeros than the original summands, so this list is not a substitute for
 checking their admissibility or singularities.
 
-`generic_sixj` is a lower-level alternative that takes **doubled integer labels**. Prefer
+`QRecoupling.generic_sixj` is a lower-level alternative that takes **doubled integer labels**. Prefer
 `x_form(q6j(Symbolic(), ...))` when working with physical spins consistently.
 
 ## When a zero test is a certificate
@@ -101,5 +101,6 @@ or rational rescaling. The fallback can be more expensive for high-degree values
 
 An empty residual is the cheapest certificate. A nonempty residual can also vanish after
 specialization; use `iszero` to resolve it. Generic polynomial certificates instead prove
-an identity before specialization. `iszero_at` remains a modular screening interface,
-so a cancellation candidate from that query still needs exact confirmation.
+an identity before specialization. `iszero_at` performs exact confirmation of unresolved
+modular candidates itself. The `:cancels` entries of `level_spectrum` remain screening
+results and can be confirmed with `iszero_at` or `Exact(k)`.

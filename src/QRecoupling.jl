@@ -56,7 +56,7 @@ include("qcg_columns.jl") # coupling columns by the Casimir recurrence: qcg_matr
 
 # Export physics tqft and recoupling symbols api
 export q6j, q3j, qcg, qcg_matrix, qcg_row, fsymbol, gsymbol, rmatrix, qdim
-export fmatrix
+export fmatrix, fmatrix_labels
 export smatrix, tmatrix, bmatrix, twist
 export qint, qfact, qbinomial, qseries, qeval
 

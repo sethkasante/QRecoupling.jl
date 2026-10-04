@@ -46,7 +46,7 @@ outside the current interface.
 
 | Question | Starting point | Useful validation |
 |:--|:--|:--|
-| How do fusion spaces grow with k? | `fmatrix_labels`, `level_labels` | Check channel admissibility |
+| How do fusion spaces grow with k? | `fmatrix_labels`, `QRecoupling.level_labels` | Check channel admissibility |
 | Are my tensor phases consistent? | F/R matrices and scalar symbols | Orthogonality and local identities |
 | Does a relation hold beyond sampled levels? | `x_form`, `prove_identity` | Exact polynomial residual and exceptional levels |
 | Is a small numerical coefficient really zero? | Exact level or generic formula | Exact cancellation, not only a tolerance |

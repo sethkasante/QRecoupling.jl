@@ -93,8 +93,9 @@ prove_identity
 
 ## Structural queries
 
-Cancellation queries use modular screening. They are useful for exploration but should not be presented as universal exact-zero certificates. Confirm cancellation candidates with
-exact arithmetic. See [Accuracy and performance](performance.md).
+`iszero_at` confirms unresolved cancellation candidates with exact arithmetic. The
+`:cancels` entries of `level_spectrum` are modular screening results; confirm them with
+`iszero_at` or `Exact(k)`. See [Accuracy and performance](performance.md).
 
 ```@docs
 iszero_at

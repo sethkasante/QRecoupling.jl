@@ -56,12 +56,12 @@ T, labels_T = tmatrix(3)
 @assert labels == labels_T # hide
 @assert S*S ≈ I # hide
 @assert (S*T)^3 ≈ S*S # hide
-(S, T, total_qdim(3))
+(S, T, QRecoupling.total_qdim(3))
 ```
 
 `tmatrix` includes the central-charge anomaly by default; `anomaly=false` retains only
-the twists. `level_labels`, `twist`, `central_charge`, `gauss_sum`, `monodromy`, and
-`verlinde` expose the related data. `verlinde` computes and rounds a numerical fusion
+the twists. `QRecoupling.level_labels`, `twist`, `QRecoupling.central_charge`, `QRecoupling.gauss_sum`, `QRecoupling.monodromy`, and
+`QRecoupling.verlinde` expose the related data. `QRecoupling.verlinde` computes and rounds a numerical fusion
 coefficient with a consistency check; it is not an exact symbolic summation routine.
 
 ## From local data to an application

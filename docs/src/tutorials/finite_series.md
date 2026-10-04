@@ -58,7 +58,7 @@ The extra q-power can be represented by a cyclotomic monomial:
 
 ```@example finite_series
 n = 5
-qpower(m) = CyclotomicMonomial(1, m, Pair{Int,Int}[], 0)
+qpower(m) = QRecoupling.CyclotomicMonomial(1, m, Pair{Int,Int}[], 0)
 b = qseries(j -> qpower(j*(n-1)) * QRecoupling.qbinomial_mono(n,j), 0:n)
 
 q = 0.8 + 0.2im

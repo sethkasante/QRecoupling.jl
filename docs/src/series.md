@@ -56,7 +56,7 @@ callback series with explicit q powers. It is no longer the main user-facing sym
 
 ```@example rules
 d = symbolic.dcr
-@assert d isa DCR # hide
+@assert d isa QRecoupling.DCR # hide
 d
 ```
 
@@ -80,10 +80,10 @@ with an interior zero term cannot in general supply the next ratio and is reject
 
 ## Extending the symbol interface
 
-`symbol_rule(SixJ(), labels...)` exposes a symbol's rule using physical spins.
-A new `QSymbol` subtype supplies `symbol_rule`, `nlabels`, and `level_admissible`;
-`symbol_family` and `symbol_of` connect optional recurrence and function dispatch.
+`QRecoupling.symbol_rule(QRecoupling.SixJ(), labels...)` exposes a symbol's rule using physical spins.
+A new `QRecoupling.QSymbol` subtype supplies `QRecoupling.symbol_rule`, `QRecoupling.nlabels`, and `QRecoupling.level_admissible`;
+`QRecoupling.symbol_family` and `QRecoupling.symbol_of` connect optional recurrence and function dispatch.
 Implementing a new formula this way lets it reuse the existing rule evaluators.
 
-`build_dcr!` and `CycloBuffer` remain advanced compatibility tools. Reusing the buffer
+`QRecoupling.build_dcr!` and `CycloBuffer` remain advanced compatibility tools. Reusing the buffer
 reduces scratch allocation, but constructing and storing the returned DCR still allocates.
