@@ -31,7 +31,7 @@ makedocs(;
         "Factorial Rules & Architecture" => "series.md",
         "Accuracy & Performance" => "performance.md",
         "API Reference" => "api.md",
-        "Migrating to v0.4" => "migration.md"
+        "Migration" => "migration.md"
     ],
     checkdocs = :exports
 )

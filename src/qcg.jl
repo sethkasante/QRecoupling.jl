@@ -252,8 +252,8 @@ end
 """
     qcg(j1, m1, j2, m2, j, m = m1 + m2; k=nothing, q=nothing, exact=false, T=Float64, workspace=nothing)
 
-The quantum Clebsch–Gordan coefficient ⟨j₁m₁; j₂m₂|j m⟩_q of U_q(sl₂), with K|m⟩ = q^m|m⟩ and coproduct
-Δ(E) = E⊗K + K⁻¹⊗E; the default is its classical value, the ordinary Clebsch–Gordan coefficient. The
+The quantum Clebsch-Gordan coefficient ⟨j₁m₁; j₂m₂|j m⟩_q of U_q(sl₂), with K|m⟩ = q^m|m⟩ and coproduct
+Δ(E) = E⊗K + K⁻¹⊗E; the default is its classical value, the ordinary Clebsch-Gordan coefficient. The
 argument order follows `clebschgordan` in WignerSymbols.jl.
 
 Use `q` for a real or complex parameter and `k` for the level, q = e^{iπ/(k+2)} (mutually exclusive). At real
@@ -266,8 +266,8 @@ orthogonality is bilinear, Cᵀ C = 1 (at a level, for complete sectors). Negati
 Square roots follow the balanced-factor convention: `[n] = Π_{d|n,d>1} Ψ_d(q)`, `Ψ_d(q) = q^{−φ(d)} Φ_d(q²)`,
 each `Ψ_d` rooted separately; Δ(F) = F⊗K + K⁻¹⊗F, with F the transpose of E.
 
-The value is the 3j rule with term z weighted by q^{−z(j₁+j₂+j+1)} and the whole by
-q^{½(j₁+j₂−j)(j₁+j₂+j+1) + j₁m₂ − j₂m₁}, evaluated by the same scaled, escalating kernel. See also [`q3j`](@ref).
+The value is the 3j rule with term z weighted by q^{-z(j₁+j₂+j+1)} and the whole by
+q^{½(j₁+j₂-j)(j₁+j₂+j+1) + j₁m₂ - j₂m₁}, evaluated by the same scaled, escalating kernel. See also [`q3j`](@ref).
 """
 function qcg(j1::Spin, m1::Spin, j2::Spin, m2::Spin, j::Spin, m::Spin = m1 + m2;
              k = nothing, q = nothing, exact::Bool = false, T::Type{TT} = Float64,
