@@ -27,9 +27,7 @@ end
 """
     qcg_rule(J1, M1, J2, M2, J, M) -> (rule, (w, e2))
 
-The quantum Clebsch–Gordan coefficient as a factorial rule with its q-power weights, from doubled labels.
-The rule is the 3j rule with the dimension [2j+1] under the root and without the Wigner phase; inadmissible
-labels, including `M ≠ M1 + M2`, give an empty rule.
+The quantum Clebsch–Gordan coefficient as a factorial rule with its q-power weights, from doubled labels. The rule is the 3j rule with the dimension [2j+1] under the root and without the Wigner phase; inadmissible labels, including `M ≠ M1 + M2`, give an empty rule.
 """
 function qcg_rule(J1::Int, M1::Int, J2::Int, M2::Int, J::Int, M::Int)
     s = with_dimensions(threej_sum(J1, J2, J, M1, M2, -M), J)
@@ -41,8 +39,7 @@ end
 """
     q3j_rule(J1, J2, J3, M1, M2, M3) -> (rule, (w, e2))
 
-The quantum 3j symbol, (−1)^{j₁−j₂−m₃} [2j₃+1]^{−1/2} ⟨j₁m₁; j₂m₂|j₃, −m₃⟩_q, as the 3j rule (which already
-carries the phase) with the Clebsch–Gordan weights.
+The quantum 3j symbol, (−1)^{j₁−j₂−m₃} [2j₃+1]^{−1/2} ⟨j₁m₁; j₂m₂|j₃, −m₃⟩_q, as the 3j rule (which already carries the phase) with the Clebsch–Gordan weights.
 """
 q3j_rule(J1::Int, J2::Int, J3::Int, M1::Int, M2::Int, M3::Int) =
     (threej_sum(J1, J2, J3, M1, M2, M3), _cg_weights(J1, J2, J3, M1, M2))
@@ -61,8 +58,7 @@ _weighted_symbolic_error(f) = ArgumentError(
 """
     _level_half_phases(k) -> Vector{ComplexF64}
 
-e^{iπr/(2h)} for r = 0, …, 4h − 1, h = k + 2, each correctly rounded: integer powers of q = e^{iπ/h} at
-even r, and q^{e2/2} at any r. Built once per level, from 128-bit values.
+e^{iπr/(2h)} for r = 0, …, 4h − 1, h = k + 2, each correctly rounded: integer powers of q = e^{iπ/h} at even r, and q^{e2/2} at any r. Built once per level, from 128-bit values.
 """
 const LEVEL_HALF_PHASES = LevelCache{Vector{ComplexF64}}()
 _level_half_phases(k::Int) = get_level!(LEVEL_HALF_PHASES, k) do
@@ -97,10 +93,7 @@ end
 """
     _weighted_level_pass(s, w, e2, k, R) -> (value, relbound, κ)
 
-One pass over a weighted rule at q = e^{iπ/h}, h = k + 2, for labels inside the level's fusion rule. Every
-number is taken at the root itself (a rounded `cispi(1/h)` is amplified by q^{E₀}, |E₀| ~ j²): real level
-q-integers, exact phases ζ^r with r = w·z mod 2h, and each term built directly from split factorials in a
-double word, so the bound is a fixed multiple of κ = Σ|t_z|/|Σ| (about 4u·κ, charged at 6u·κ).
+One pass over a weighted rule at q = e^{iπ/h}, h = k + 2, for labels inside the level's fusion rule. Every number is taken at the root itself (a rounded `cispi(1/h)` is amplified by q^{E₀}, |E₀| ~ j²): real level q-integers, exact phases ζ^r with r = w·z mod 2h, and each term built directly from split factorials in a double word, so the bound is a fixed multiple of κ = Σ|t_z|/|Σ| (about 4u·κ, charged at 6u·κ).
 """
 function _weighted_level_pass(s::FactorialSum, w::Int, e2::Int, k::Int, ::Type{R}) where {R}
     tab = qint_tables(R, k)
@@ -149,8 +142,7 @@ function _weighted_level_pass(s::FactorialSum, w::Int, e2::Int, k::Int, ::Type{R
 end
 
 """
-Prove that the weighted sum vanishes at a level, after two inconclusive precision passes: a nonzero residue
-modulo a prime excludes a zero; a zero residue is confirmed in the cyclotomic field.
+Prove that the weighted sum vanishes at a level, after two inconclusive precision passes: a nonzero residue modulo a prime excludes a zero; a zero residue is confirmed in the cyclotomic field.
 """
 function _weighted_level_zero(s::FactorialSum, w::Int, k::Int)
     tab = level_zero_table(k)
@@ -194,9 +186,7 @@ function _weighted_level_zero(s::FactorialSum, w::Int, k::Int)
 end
 
 """
-Level value of a weighted rule: the Float64 pass when its bound certifies it,
-then arbitrary precision at doubling widths. Numerical cancellation triggers
-an algebraic zero test; agreement near zero at two widths is not a proof.
+Level value of a weighted rule: the Float64 pass when its bound certifies it, then arbitrary precision at doubling widths. Numerical cancellation triggers an algebraic zero test; agreement near zero at two widths is not a proof.
 """
 function _weighted_level_value(s::FactorialSum, w::Int, e2::Int, k::Int, ::Type{T}; near_edge = nothing) where {T}
     R = real(float(T))
@@ -251,23 +241,16 @@ end
 
 """
     qcg(j1, m1, j2, m2, j, m = m1 + m2; k=nothing, q=nothing, exact=false, T=Float64, workspace=nothing)
+    qcg((j1, m1), (j2, m2), (j, m); kwargs...)
 
-The quantum Clebsch-Gordan coefficient ⟨j₁m₁; j₂m₂|j m⟩_q of U_q(sl₂), with K|m⟩ = q^m|m⟩ and coproduct
-Δ(E) = E⊗K + K⁻¹⊗E; the default is its classical value, the ordinary Clebsch-Gordan coefficient. The
-argument order follows `clebschgordan` in WignerSymbols.jl.
+The quantum Clebsch-Gordan coefficient ⟨j₁m₁; j₂m₂|j m⟩_q of U_q(sl₂), with K|m⟩ = q^m|m⟩ and coproduct Δ(E) = E⊗K + K⁻¹⊗E; the default is its classical value, the ordinary Clebsch-Gordan coefficient. The arguments are the (jᵢ, mᵢ) pairs in the order of ⟨j₁m₁; j₂m₂|j m⟩, with m = m₁ + m₂ by default, or as three `(j, m)` tuples.
 
-Use `q` for a real or complex parameter and `k` for the level, q = e^{iπ/(k+2)} (mutually exclusive). At real
-q > 0 the coefficients form an orthogonal matrix in (j, m₁) at fixed m; at complex q, including a level,
-orthogonality is bilinear, Cᵀ C = 1 (at a level, for complete sectors). Negative real q is evaluated as
-`complex(q)`. At a level, labels outside the fusion rule j₁ + j₂ + j ≤ k give zero. `exact = true` and
-`Exact()` give the exact classical value; exact level values and `Symbolic()` are not available yet.
+Use `q` for a real or complex parameter and `k` for the level, q = e^{iπ/(k+2)} (mutually exclusive). At real q > 0 the coefficients form an orthogonal matrix in (j, m₁) at fixed m; at complex q, including a level, orthogonality is bilinear, Cᵀ C = 1 (at a level, for complete sectors). Negative real q is evaluated as `complex(q)`. At a level, labels outside the fusion rule j₁ + j₂ + j ≤ k give zero. `exact = true` and `Exact()` give the exact classical value; exact level values and `Symbolic()` are not available yet.
 [`qcg_matrix`](@ref) and [`qcg_row`](@ref) build whole matrices and rows by recurrence.
 
-Square roots follow the balanced-factor convention: `[n] = Π_{d|n,d>1} Ψ_d(q)`, `Ψ_d(q) = q^{−φ(d)} Φ_d(q²)`,
-each `Ψ_d` rooted separately; Δ(F) = F⊗K + K⁻¹⊗F, with F the transpose of E.
+Square roots follow the balanced-factor convention: `[n] = Π_{d|n,d>1} Ψ_d(q)`, `Ψ_d(q) = q^{−φ(d)} Φ_d(q²)`, each `Ψ_d` rooted separately; Δ(F) = F⊗K + K⁻¹⊗F, with F the transpose of E.
 
-The value is the 3j rule with term z weighted by q^{-z(j₁+j₂+j+1)} and the whole by
-q^{½(j₁+j₂-j)(j₁+j₂+j+1) + j₁m₂ - j₂m₁}, evaluated by the same scaled, escalating kernel. See also [`q3j`](@ref).
+The value is the 3j rule with term z weighted by q^{-z(j₁+j₂+j+1)} and the whole by q^{½(j₁+j₂-j)(j₁+j₂+j+1) + j₁m₂ - j₂m₁}, evaluated by the same scaled, escalating kernel. See also [`q3j`](@ref).
 """
 function qcg(j1::Spin, m1::Spin, j2::Spin, m2::Spin, j::Spin, m::Spin = m1 + m2;
              k = nothing, q = nothing, exact::Bool = false, T::Type{TT} = Float64,
@@ -282,6 +265,8 @@ function qcg(j1::Spin, m1::Spin, j2::Spin, m2::Spin, j::Spin, m::Spin = m1 + m2;
                            workspace = workspace, near_edge = ne)
 end
 
+qcg(a::Tuple{Spin,Spin}, b::Tuple{Spin,Spin}, c::Tuple{Spin,Spin}; kw...) = qcg(a..., b..., c...; kw...)
+
 """
     q3j(j1, j2, j3, m1, m2, m3 = -m1-m2; k=nothing, q=nothing, exact=false, T=Float64, workspace=nothing)
 
@@ -289,14 +274,9 @@ The quantum 3j symbol of U_q(sl₂),
 
     (j₁ j₂ j₃; m₁ m₂ m₃)_q = (−1)^{j₁−j₂−m₃} [2j₃+1]^{−1/2} ⟨j₁m₁; j₂m₂|j₃, −m₃⟩_q,
 
-with the Clebsch–Gordan coefficient of [`qcg`](@ref). The default is its classical value, the Wigner 3j
-symbol, which it reproduces bit for bit. Use `q` for a real or complex parameter and `k` for the level
-q = e^{iπ/(k+2)} (mutually exclusive). At q ≠ 1 the symbol is complex in general and is related to its
-relabellings by q-powers: (j₂ j₁ j₃; m₂ m₁ m₃)_q = (−1)^{j₁+j₂+j₃} (j₁ j₂ j₃; m₁ m₂ m₃)_{1/q}, the same for
-m → −m, and (j₂ j₃ j₁; m₂ m₃ m₁)_q = q^{m₂} (j₁ j₂ j₃; m₁ m₂ m₃)_q.
+with the Clebsch–Gordan coefficient of [`qcg`](@ref). The default is its classical value, the Wigner 3j symbol, which it reproduces bit for bit. Use `q` for a real or complex parameter and `k` for the level q = e^{iπ/(k+2)} (mutually exclusive). At q ≠ 1 the symbol is complex in general and is related to its relabellings by q-powers: (j₂ j₁ j₃; m₂ m₁ m₃)_q = (−1)^{j₁+j₂+j₃} (j₁ j₂ j₃; m₁ m₂ m₃)_{1/q}, the same for m → −m, and (j₂ j₃ j₁; m₂ m₃ m₁)_q = q^{m₂} (j₁ j₂ j₃; m₁ m₂ m₃)_q.
 
-Until v0.4.0 `q3j` was the classical formula with quantum factorials substituted and no q-power weights.
-That function is [`QRecoupling.q3j_factorial`](@ref), not exported; the two agree at q = 1 and differ at every other q.
+Until v0.4.0 `q3j` was the classical formula with quantum factorials substituted and no q-power weights. That function is [`QRecoupling.q3j_factorial`](@ref), not exported; the two agree at q = 1 and differ at every other q.
 """
 function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = -m1 - m2;
              k = nothing, q = nothing, exact::Bool = false, T::Type{TT} = Float64,
