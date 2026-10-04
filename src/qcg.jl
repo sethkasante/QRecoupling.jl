@@ -10,17 +10,11 @@
 #  E₀ = ½(j₁+j₂−j)(j₁+j₂+j+1) + j₁m₂ − j₂m₁, Δ² = [j₁+j₂−j]![j₁−j₂+j]![−j₁+j₂+j]!/[j₁+j₂+j+1]!.
 #  (Kirillov–Reshetikhin 1989; written in the package's q, whose [n] = (qⁿ − q⁻ⁿ)/(q − q⁻¹).)
 #
-#  The factorials are exactly those of the 3j rule. What is new is the q-power weights, which no symmetric
-#  factorial rule carries, and without which the coefficients are not orthogonal at q ≠ 1: substituting
-#  quantum factorials into the classical formula (`q3j_factorial`) gives a matrix that is 0.76 away from
-#  orthogonal at q = 0.8 for j₁ = j₂ = 3. The weights are kept beside the rule as two integers — a weight
-#  `w` per summation step and a doubled overall power `e2` — and the analytic kernel applies them inside
-#  its scaled representation (`_analytic_pass`), where q^{E₀} ~ q^{j²} cannot overflow.
-#
-#  At q = 1 the weights are 1 and the rule is the classical one, so classical values, in Float64 and
-#  exact, come from the existing kernels bit for bit. At a level q = e^{iπ/h} the values are complex,
-#  in ℚ(ζ_{4h}) up to the square root; the 6j symbol needs no weights because it is invariant under
-#  q ↔ q⁻¹, the coupling coefficients are not.
+#  The factorials are those of the 3j rule; the q-power weights are what a symmetric rule cannot carry (the
+#  substituted formula, `q3j_factorial`, is 0.76 from orthogonal at q = 0.8). They are kept as two integers,
+#  `w` per summation step and the doubled overall power `e2`, and applied inside the scaled representation.
+#  At q = 1 the weights are 1 (classical values bit for bit); at a level the values are complex. The 6j
+#  needs no weights because it is invariant under q ↔ q⁻¹.
 # ---------------------------------------------------------------------------------
 
 "The q-power weights of the Clebsch–Gordan sum, doubled labels: `(w, e2)`, term z × q^{wz}, value × q^{e2/2}."
@@ -103,19 +97,10 @@ end
 """
     _weighted_level_pass(s, w, e2, k, R) -> (value, relbound, κ)
 
-One pass over a weighted rule at q = e^{iπ/h}, h = k + 2, for labels inside the level's fusion rule.
-
-Not the analytic kernel at `cispi(1/h)`: that `q` is a rounding of the root, and the weights amplify the
-difference — q^{E₀} with |E₀| ~ j² turns the 10⁻¹⁶ in the argument into 10⁻¹² at j ~ 100, which measured
-1.9× over the contract at level 200. Here every number is taken at the root itself. The q-integers are
-positive below h, so the terms and the prefactor are real, and the weights are the exact phases ζ^r,
-r = w·z mod 2h.
-
-Each term is built directly from the level's correctly rounded split factorials rather than by a ratio
-from the one before: in a double word for Float64, so a term is accurate to its final rounding. The error
-then does not grow along the sum, and the bound is a fixed multiple of κ = Σ|t_z|/|Σ| — the term rounding,
-its phase and the product with it, and the compensated sum, about 4u·κ, charged at 6u·κ. With the ratio
-recurrence the bound carried Σ z|t_z| and rejected the Float64 pass for most labels at large levels.
+One pass over a weighted rule at q = e^{iπ/h}, h = k + 2, for labels inside the level's fusion rule. Every
+number is taken at the root itself (a rounded `cispi(1/h)` is amplified by q^{E₀}, |E₀| ~ j²): real level
+q-integers, exact phases ζ^r with r = w·z mod 2h, and each term built directly from split factorials in a
+double word, so the bound is a fixed multiple of κ = Σ|t_z|/|Σ| (about 4u·κ, charged at 6u·κ).
 """
 function _weighted_level_pass(s::FactorialSum, w::Int, e2::Int, k::Int, ::Type{R}) where {R}
     tab = qint_tables(R, k)
@@ -164,11 +149,8 @@ function _weighted_level_pass(s::FactorialSum, w::Int, e2::Int, k::Int, ::Type{R
 end
 
 """
-Prove that the weighted sum vanishes at a level. This is called only after two
-precision passes have been inconclusive. A nonzero residue modulo a prime
-excludes a zero cheaply; a zero residue needs confirmation in the cyclotomic
-field. The prefactor and overall phase are nonzero for admissible CG/3j labels,
-and every term factorial has argument below k + 2.
+Prove that the weighted sum vanishes at a level, after two inconclusive precision passes: a nonzero residue
+modulo a prime excludes a zero; a zero residue is confirmed in the cyclotomic field.
 """
 function _weighted_level_zero(s::FactorialSum, w::Int, k::Int)
     tab = level_zero_table(k)
@@ -274,24 +256,18 @@ The quantum Clebsch–Gordan coefficient ⟨j₁m₁; j₂m₂|j m⟩_q of U_q(s
 Δ(E) = E⊗K + K⁻¹⊗E; the default is its classical value, the ordinary Clebsch–Gordan coefficient. The
 argument order follows `clebschgordan` in WignerSymbols.jl.
 
-Use `q` for a real or complex parameter and `k` for the level, q = e^{iπ/(k+2)} (mutually exclusive). For
-real q > 0 the coefficients form an orthogonal matrix in (j, m₁) at fixed m. At complex q, including a level,
-orthogonality uses the transpose, not the adjoint: Cᵀ C = 1 for columns labelled by j. At a level the fusion
-rule may remove columns, so C Cᵀ = 1 holds only for a complete sector. Negative real q is evaluated as `complex(q)`,
-with the principal branch of q^{1/2}, so the values are complex there too. [`qcg_matrix`](@ref) builds whole
-coupling matrices, by a recurrence, much faster than entry by entry. At a level, labels outside the fusion rule
-j₁ + j₂ + j ≤ k give zero. `exact = true` and `Exact()` give the exact classical coefficient; exact level
-values and `Symbolic()` are not available yet.
+Use `q` for a real or complex parameter and `k` for the level, q = e^{iπ/(k+2)} (mutually exclusive). At real
+q > 0 the coefficients form an orthogonal matrix in (j, m₁) at fixed m; at complex q, including a level,
+orthogonality is bilinear, Cᵀ C = 1 (at a level, for complete sectors). Negative real q is evaluated as
+`complex(q)`. At a level, labels outside the fusion rule j₁ + j₂ + j ≤ k give zero. `exact = true` and
+`Exact()` give the exact classical value; exact level values and `Symbolic()` are not available yet.
+[`qcg_matrix`](@ref) and [`qcg_row`](@ref) build whole matrices and rows by recurrence.
 
-For generic complex q, square roots in the representation matrices must use the same balanced-factor
-convention as the coefficients: `[n] = Π_{d|n,d>1} Ψ_d(q)`, where `Ψ_d(q) = q^{−φ(d)} Φ_d(q²)`
-and each `Ψ_d` is rooted separately.
-Taking a principal root only after multiplying the factors can change the basis signs. The lowering
-generator uses the transpose of the raising matrix, and Δ(F) = F⊗K + K⁻¹⊗F in this convention.
+Square roots follow the balanced-factor convention: `[n] = Π_{d|n,d>1} Ψ_d(q)`, `Ψ_d(q) = q^{−φ(d)} Φ_d(q²)`,
+each `Ψ_d` rooted separately; Δ(F) = F⊗K + K⁻¹⊗F, with F the transpose of E.
 
-The value is a factorial rule with q-power weights: the 3j rule, with term z multiplied by q^{−z(j₁+j₂+j+1)}
-and the whole by q^{½(j₁+j₂−j)(j₁+j₂+j+1) + j₁m₂ − j₂m₁}, evaluated by the same scaled, compensated and
-escalating kernel as the other symbols. See also [`q3j`](@ref).
+The value is the 3j rule with term z weighted by q^{−z(j₁+j₂+j+1)} and the whole by
+q^{½(j₁+j₂−j)(j₁+j₂+j+1) + j₁m₂ − j₂m₁}, evaluated by the same scaled, escalating kernel. See also [`q3j`](@ref).
 """
 function qcg(j1::Spin, m1::Spin, j2::Spin, m2::Spin, j::Spin, m::Spin = m1 + m2;
              k = nothing, q = nothing, exact::Bool = false, T::Type{TT} = Float64,
