@@ -1,5 +1,4 @@
-# Exact q=1 specialization of a factorial rule. No cyclotomic representation or
-# floating-point zero screen is involved. Only immutable prime tables are cached.
+# Exact q=1 specialization of a factorial rule. Immutable prime tables are cached.
 const CLASSICAL_EXACT_PRIMES = LevelCache{Vector{Int}}()
 
 function _classical_primes(N::Int)
@@ -107,11 +106,7 @@ function _horner_sum_big(s::FactorialSum)
         P = b*Q + a*P
         Q *= b
     end
-    # One reduction at the end, not one per step. Reducing every step keeps the operands small but pays a
-    # gcd of growing integers n times; leaving them unreduced lets P and Q grow, but they grow slowly —
-    # 2,830 bits at j = 600, where the per-step version is already 5 ms. Measured (minimum of seven
-    # batches, GC settled): 1.06× at j = 20, 1.46× at j = 80, 2.16× at j = 160, 3.31× at j = 320 and
-    # 4.92× at j = 600, with bit-identical output at every size.
+    # One gcd reduction at the end. 
     g = gcd(P,Q)
     return div(P,g), div(Q,g)
 end
@@ -119,10 +114,8 @@ end
 """
     classical_exact(s::FactorialSum) -> ClassicalResult
 
-Evaluate a factorial rule exactly at q=1. The finite sum uses integer Horner nesting;
-Legendre valuations cancel factorial powers in the squared prefactor and initial
-term before materializing integers. The result is a sign and a reduced squared
-rational value. No DCR, approximate arithmetic, or modular zero decision is used.
+Evaluate a factorial rule exactly at q=1. The finite sum uses integer Horner nesting. 
+The result is a sign and a reduced squared rational value.
 """
 function classical_exact(s::FactorialSum)
     is_empty_sum(s) && return zero(ClassicalResult)
@@ -134,8 +127,7 @@ function classical_exact(s::FactorialSum)
     end
     iszero(P) && return zero(ClassicalResult)
     num,den = _classical_factorial_ratio(_classical_square_factors(s))
-    # num/den and P/Q are each coprime once P/Q is reduced, so the squared value needs one cross-reduction
-    # rather than the gcds of `P//Q`, `r^2` and a rational product.
+    # num/den and P/Q are each coprime once P/Q is reduced
     g = gcd(P,Q)
     isone(g) || (P = div(P,g); Q = div(Q,g))
     P2 = P*P; Q2 = Q*Q

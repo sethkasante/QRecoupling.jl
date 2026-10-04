@@ -1,15 +1,10 @@
 # ---------------------------------------------------------------------------------
-#  The classical limit q → 1 from the factorial rule
+#  The classical limit (q → 1) from the factorial rule
 #
-#  At q = 1 every q-integer is an ordinary integer, so the rule that describes a symbol at a level also
-#  describes it classically: the same ratio loop runs over tables of n and log n!, with the same
-#  cancellation estimate and precision escalation. There are no valuations to track (Φ_h never divides
-#  an ordinary factorial), but cancellation zeros exist classically too — the "non-trivial zeros" of
-#  6j symbols. Modular residues exclude nonzeros cheaply; candidates are checked by exact summation.
-#
-#  This replaces a floating-point projection of the expanded form that lost all accuracy at large spins
-#  (12% off at j = 100 for {j j j; j j j}).
-# ---------------------------------------------------------------------------------
+#  At q = 1, the same ratio loop runs over tables of n and split-exponent n!, 
+#  with the same cancellation estimate and precision escalation.
+#  Cancellation of zeros also exist. Modular residues exclude nonzeros cheaply.
+#---------------------------------------------------------------------------------
 
 "Ordinary integers, their inverses and split-exponent factorials up to N, in the layout of the level tables."
 function ClassicalTables(::Type{T}, N::Int) where {T}
@@ -123,8 +118,8 @@ end
 """
     pairwise_zero(s) -> Bool
 
-Does the sum cancel term by term, for every q? The reflection `z ↦ zlo + zhi − z` maps the factor
-`[a z + b]!^c` to `[−a z + (a(zlo+zhi) + b)]!^c`. When it maps the rule's multiset of factors onto itself,
+Does the sum cancel term by term, for every q? The reflection `z ↦ zlo + zhi - z` maps the factor
+`[a z + b]!^c` to `[-a z + (a(zlo+zhi) + b)]!^c`. When it maps the rule's multiset of factors onto itself,
 the terms at `z` and at its mirror are the same product of q-factorials; when the sum alternates and
 `zlo + zhi` is odd they have opposite signs and no term is its own mirror, so every pair cancels.
 
@@ -154,12 +149,6 @@ function pairwise_zero(s::FactorialSum)
 end
 
 # ---- identically zero at generic q: modular filtering and polynomial confirmation ----
-#
-# At a level or at q = 1 the modular screens evaluate the sum where it is asked for. At generic q the
-# question is whether the sum is the zero *function*. A nonzero residue proves that it is not. The fixed
-# evaluation points carry no universal false-positive probability, so vanishing residues are confirmed
-# by expanding the exact polynomial numerator. Without a zero decision, an identically vanishing sum
-# escalated until `analytic_value` gave up: `q3j_factorial(5, 5, 5, 1, -2, 1; q = 0.8)` threw.
 
 const _GENERIC_ZERO_SEEDS = (UInt64(0x1f3a9c2d7e4b5a61), UInt64(0x2b7e151628aed2a6))
 const GENERIC_MOD_TABLES = LevelCache{Tuple{ClassicalModTable,ClassicalModTable}}()
@@ -215,13 +204,6 @@ function is_generic_zero(s::FactorialSum, tabs = nothing)
 end
 
 # ---- exact evaluation by Horner nesting (replaces BigFloat escalation for Float64 results) ----
-#
-# Consecutive terms differ by a ratio of small integers, t_{z+1}/t_z = a_z/b_z, so the sum nests as
-# t_lo (1 + r_lo (1 + r_{lo+1} (1 + ...))) and, carried as P/Q from the top, P <- b Q + a P, Q <- b Q.
-# Every step is big integer x machine word: exact, linear cost, no prime tables. The prefactor and first
-# term come from split-exponent factorial tables (correctly rounded mantissa and binary exponent), which
-# keep ~20 eps of accuracy at any size where log tables lose |log n!| eps. One rounding at the end.
-# Measured against WignerSymbols.jl's exact prime-factorised route: 4-13x faster, error <= 6e-16.
 
 using Base.GMP: MPZ
 
@@ -234,9 +216,7 @@ function _split_product(tab::QIntTables{Float64}, pairs)
 end
 
 """
-Upper bound on the bits the Horner accumulators reach, Σ_z log₂(|a_z| + b_z), so that they can be
-allocated once. Growing them a limb at a time was most of the allocations of an exact classical symbol
-(310 at {100×6}, against 77 presized).
+Upper bound on the bits the Horner accumulators reach, Σ_z log₂(|a_z| + b_z), so that they can be allocated once.
 """
 function _horner_bits(s::FactorialSum)
     bits = 64
@@ -308,9 +288,9 @@ end
 """
     classical_value(s, T) -> T
 
-The symbol described by rule `s` at q = 1. Same contract as the level path: the sum runs in `T`,
-cancellation is measured, exact zeros come back as zero, and when too few digits survive a `Float64`
-result is recomputed exactly (Horner nesting in integers); other types escalate in `BigFloat`.
+The symbol described by rule `s` at q = 1. Cancellation is measured, exact zeros 
+come back as zero, and when too few digits survive a `Float64` result is  
+recomputed exactly (Horner nesting in integers); other types escalate in `BigFloat`.
 """
 function classical_value(s::FactorialSum, ::Type{T}; labels = nothing, workspace=nothing) where {T}
     is_empty_sum(s) && return zero(T)
