@@ -10,7 +10,7 @@
 
 Evaluate classical and quantum Clebsch–Gordan coefficients, 3j/6j symbols, fusion and braiding data, and finite q-factorial series in Julia. Use the same labels at `q = 1`, at a root-of-unity, or at a real or complex q. Build exact level values and generic formulas in `x = q + q⁻¹`.
 
-`QRecoupling` provides local building blocks for angular momentum, spin networks, Turaev–Viro models, and fusion-based tensor networks. It does not contract full networks or assemble state sums automatically.
+`QRecoupling` provides local building blocks for angular momentum, spin networks, quantum topology, and fusion-based tensor networks. It does not contract full networks or assemble state sums automatically.
 
 ## Quick start
 
