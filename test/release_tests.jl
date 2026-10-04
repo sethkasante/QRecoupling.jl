@@ -129,7 +129,7 @@
             @test qeval(f(Symbolic(),l...);q) == v
         end
         @test real(fsymbol(l...;q)) < 0
-        @test project_analytic(fsymbol(Symbolic(),l...).dcr,q) ≈ fsymbol(l...;q) rtol=1e-13
+        @test QR.project_analytic(fsymbol(Symbolic(),l...).dcr,q) ≈ fsymbol(l...;q) rtol=1e-13
         @test_logs q6j(1,1,1,1,1,1;q=-nextfloat(1.0))
     end
 

@@ -106,7 +106,7 @@ rel(a, b) = abs(a - b) / max(1.0, abs(b))
         n = radical(q6j(Exact(5), 1, 1, 1, 1, 1, 1))
         @test n isa NoRadical && n.kind === :none
         @test occursin("no radical form", repr(MIME"text/plain"(), n))
-        @test has_radical_form(3) && !has_radical_form(5)
+        @test QR.has_radical_form(3) && !QR.has_radical_form(5)
         # arithmetic, including scalars, and the one-class collapse
         w = q6j(Exact(10), 3//2, 1, 3//2, 1, 3//2, 1)
         @test v * w isa ExactX && v + 1 isa ExactX
@@ -123,7 +123,7 @@ rel(a, b) = abs(a - b) / max(1.0, abs(b))
         @test occursin("Σ", sprint(show, MIME"text/plain"(), v))
         @test x_form(v) == QR.generic_sixj(QR.doubled(1, 1, 1, 1, 1, 1)...)
         @test occursin("x² − 3", sprint(show, MIME"text/plain"(), x_form(v)))
-        @test splits_completely(phi_form(v)) isa Bool
+        @test QR.splits_completely(phi_form(v)) isa Bool
         @test v.dcr isa QR.DCR
         # the rule evaluates to the same numbers the direct calls give
         for k in (5, 10), js in (LABELS[1], LABELS[3])
@@ -155,9 +155,9 @@ rel(a, b) = abs(a - b) / max(1.0, abs(b))
         @test qdim(1//2; k = 5) > 0
         @test qdim(1//2; k = 5, exact = true) isa ExactX
         # a q-series through the generic constructor
-        # the summand builds monomials: in v0.4 `qfact(z)` is a number, `qfact_mono(z)` the rule
+        # the summand builds monomials: in v0.4 `qfact(z)` is a number, `QR.qfact_mono(z)` the rule
         s = qseries(1:6) do z
-            (-1)^z * qfact_mono(z)
+            (-1)^z * QR.qfact_mono(z)
         end
         @test isfinite(qeval(s; k = 10))
         @test rel(qeval(s; q = 1), sum((-1)^z * factorial(z) for z in 1:6)) < 1e-10
@@ -166,7 +166,7 @@ rel(a, b) = abs(a - b) / max(1.0, abs(b))
     @testset "refusals are errors, not wrong answers" begin
         @test_throws DomainError q6j(1, 1, 1, 1, 1, 1; k = -1)
         @test_throws ArgumentError q6j(1//3, 1, 1, 1, 1, 1)
-        @test_throws DomainError has_radical_form(-1)
+        @test_throws DomainError QR.has_radical_form(-1)
         @test_throws DivideError inv(zero(ExactX, 10))
         # an identically vanishing symbol at generic q is a zero, not an error
         @test QR.q3j_factorial(5, 5, 5, 1, -2, 1; q = 0.8) == 0.0

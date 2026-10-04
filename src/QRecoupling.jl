@@ -56,35 +56,22 @@ include("qcg_columns.jl") # coupling columns by the Casimir recurrence: qcg_matr
 
 # Export physics tqft and recoupling symbols api
 export q6j, q3j, qcg, qcg_matrix, qcg_row, fsymbol, gsymbol, rmatrix, qdim
-export fmatrix, fmatrix_labels
-export smatrix, tmatrix, bmatrix, twist, monodromy, verlinde
-export level_labels, central_charge, total_qdim, gauss_sum
+export fmatrix
+export smatrix, tmatrix, bmatrix, twist
 export qint, qfact, qbinomial, qseries, qeval
 
-#projection
-export project_discrete, project_exact, project_analytic
-export project_classical, project_classical_exact
-
-# evaluation targets, batching and structural queries
-export EvalTarget, Level, Exact, At, Classical, Symbolic
-export QSymbol, SixJ, ThreeJ, FSymbol, GSymbol, Tetrahedron, ThetaValue
-export symbol_rule, level_admissible, symbol_family, symbol_of, nlabels
+# evaluation targets
+export Level, Exact, At, Classical, Symbolic
 
 # exact values in x = q + 1/q: generic q, and identities proved for every level at once
-export generic_sixj, prove_identity
-export x_form, xvalue, XValue
-export phi_form, splits_completely
-export ExactX, RadExpr, NoRadical, exact_x, radical, radical_form, has_radical_form, radical_levels
-export xpolynomial, radicand, numeric_value, ExactXSum
+export prove_identity, x_form, XValue, phi_form
+export ExactX, ExactXSum, RadExpr, NoRadical, radical, numeric_value
+
+# structural queries and batches
 export all_6j, iszero_at, issingular_at, level_spectrum
 
-# cache management
+# factorial rules, workspaces and returned types
+export FactorialSum, AffineFactorial, EvaluationWorkspace, SymbolicValue, QPhase
 export empty_caches!
-
-# Export api for generic series
-export CyclotomicMonomial, DCR, QPhase, SymbolicValue, symbolic_terms
-export AffineFactorial, FactorialSum, EvaluationWorkspace
-export add_qint!, add_qfact!, build_dcr!, build_series
-export qint_mono, qfact_mono, qbinomial_mono
 
 end
