@@ -1,12 +1,7 @@
 # ---------------------------------------------------------------------------------
-#  K-word floating point, for the precision tier beyond compensated Horner
-#
-#  A value is an unevaluated sum of K doubles (≈ 53K bits), built only from error-free transformations
-#  (TwoSum, FMA-based TwoProd) and a renormalisation by VecSum passes, so it allocates nothing. The
-#  summation kernel is generic in its number type, so the ratio loop run in `MW{K}` has relative error
-#  ≈ u_K·κ, u_K ≈ 2^(−53K) — the accuracy class of K-fold compensation. K = 3 gives full double output up
-#  to κ ≈ 1e30, K = 4 up to κ ≈ 1e46. These fixed-size expansions provide intermediate precision tiers
-#  before the more expensive BigFloat fallback.
+#  K-word floating point, the tier beyond compensated Horner: an unevaluated sum of K doubles from error-free
+#  transformations, allocation-free. The ratio loop in `MW{K}` has relative error ≈ 2^(−53K)·κ, so K = 3
+#  gives full double output to κ ≈ 1e30 and K = 4 to κ ≈ 1e46, before BigFloat.
 # ---------------------------------------------------------------------------------
 
 struct MW{K} <: AbstractFloat

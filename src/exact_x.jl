@@ -64,7 +64,7 @@ end
     _divmod_psi(num, den, h) -> QQPoly or nothing
 
 `num · den⁻¹ mod Ψ_h`, from images modulo word-sized primes, or `nothing` if the primes run out. The answer
-is far smaller than the inputs, so this beats Euclidean inversion over ℚ[x] (13–23× at large labels). Each
+is far smaller than the inputs, so this beats Euclidean inversion over ℚ[x], by 13–23× at large labels. Each
 reconstruction is checked exactly, `p·den ≡ num (mod Ψ)`, before it is returned.
 """
 function _divmod_psi(num, den, h::Int)

@@ -1,26 +1,7 @@
 # ---------------------------------------------------------------------------------
-#  The F-matrix (associativity / recoupling matrix)
-#
-#  For four spins a, b, c, d the two ways of fusing to d,
-#
-#      ((a b)_e c)_d     and     (a (b c)_f)_d ,
-#
-#  are related by a change of basis. Its matrix is the F-matrix, and its entries are exactly the package's
-#  F-symbol:
-#
-#      [F^{abc}_d]_{ef} = (-1)^{a+b+c+d} √([2e+1][2f+1]) {a b e; c d f} = fsymbol(a, b, e, c, d, f).
-#
-#  In that normalisation F is **orthogonal** — Σ_e [F]_{ef}[F]_{ef'} = δ_{ff'} is the orthogonality relation
-#  the package already verifies — so the inverse is the transpose. At a level the rows and columns run over
-#  the level-admissible intermediates only, which is why both label vectors are returned with the matrix.
-#
-#  Computing it column by column is what makes it cheap. With f fixed, e runs over a *column* of 6j symbols,
-#  which the three-term recurrence of `families.jl` fills in O(n) instead of n independent Racah sums — and
-#  the row and column ranges do not depend on f at all, because e's triangle conditions are (e,a,b) and
-#  (e,c,d). Better still, the recurrence coefficients are shared: `Bn`, `Dn` and hence `up(x−1)²` depend only
-#  on (b, a, d, c), which are fixed for the whole matrix, and of `di` only the single scalar
-#  C = [ (a-f-d)/2 ][ (a+f-d)/2 + 1 ] changes from column to column. So the four-factor products are formed
-#  once for the entire matrix.
+#  The F-matrix, [F^{abc}_d]_{ef} = fsymbol(a, b, e, c, d, f), orthogonal in this normalisation. With f fixed,
+#  e runs over a 6j column, filled by the recurrence of `families.jl`. The row and column ranges and the
+#  coefficients `Bn`, `Dn` are fixed for the whole matrix; only C = [(a−f−d)/2][(a+f−d)/2 + 1] changes per column.
 # ---------------------------------------------------------------------------------
 
 """
@@ -78,29 +59,16 @@ The F-matrix (associativity matrix) for four spins, relating the two fusion base
 
     ((a b)ₑ c)_d   ⟷   (a (b c)_f)_d ,
 
-together with the intermediate spins labelling its rows (`e`) and columns (`f`). Entries are
+with the intermediate spins labelling its rows (`e`) and columns (`f`). Entries are
 
     F[i, j] = fsymbol(a, b, e[i], c, d, f[j]) = (-1)^{a+b+c+d} √([2e+1][2f+1]) {a b e; c d f} ,
 
-which is the **orthogonal** normalisation: `transpose(F) * F ≈ I`, so the inverse change of basis is `transpose(F)`.
+so `transpose(F) * F ≈ I`. At complex `q` the matrix is complex orthogonal, not unitary.
 
-Use `k` for a unitary level, `q` for a real or complex deformation, or neither for the
-classical limit; `k` and `q` are mutually exclusive, as elsewhere in the package. At a level the ranges are
-the level-admissible intermediates, so `F` can be smaller than the classical matrix, or empty.
-
-`T` sets a precision floor. The default is `Float64` at a level, classically and at positive real `q`,
-and `ComplexF64` at negative real or complex `q`. Negative real q uses the same branch as `complex(q)`.
-BigFloat inputs preserve their real or complex precision. Requests for `BigFloat`
-or `Complex{BigFloat}` entries, and BigFloat inputs, use scalar `fsymbol` evaluations at the requested
-precision instead of the machine-precision recurrence. This path is slower but retains the extra digits.
-The orthogonality relation `Σ_e [F]_{ef} [F]_{ef'} = δ_{ff'}` is an algebraic identity,
-so at complex `q` it makes `F` **complex orthogonal — `transpose(F) * F ≈ I`, not unitary**. `F' * F` is
-not the identity there, and nothing says it should be: the sum is bilinear, not sesquilinear.
-
-At machine precision the whole matrix is built from the column recurrence, at `O(1)` work per entry rather than one Racah sum
-each, and the recurrence coefficients are shared across all columns. Off the real axis the column runs in
-complex double words (`CDWord`), at the same `u²` per component; `q` at a root of unity is refused
-there, because that is a level and has its own tables.
+Use `k` for a level, `q` for a real or complex parameter, or neither for the classical limit (`k` and `q`
+are exclusive). At a level the ranges hold only admissible intermediates, so `F` can be smaller or empty.
+Negative real q uses the branch of `complex(q)`. `T` sets a precision floor: machine precision uses the
+column recurrence (O(1) per entry); `BigFloat` requests and inputs use scalar `fsymbol` calls instead.
 
 ```julia
 using LinearAlgebra

@@ -1,10 +1,6 @@
 
 # ---------------------------------------------------------------------------
-#                   --- Analytic Continuation ----
-# Project Deferred Cyclotomic Representations (DCR) analytically for q ∈ ℂ
-# Convention: [n]_q =q^{n}-q^{-n} / (q-q^{-1}) = q^{1-n} * \prod \Phi_d(q^2)
-# Optimized for complex phase tracking and branch-cut stability.
-# Thread-Safe
+#  Analytic projection of a DCR for q ∈ ℂ, with [n] = q^{1−n} Π Φ_d(q²). Thread safe.
 # ---------------------------------------------------------------------------
 
 
@@ -14,16 +10,8 @@
 """
     build_analytic_table(max_d, q_sq [, q]) -> Vector
 
-Numerical values of `Φ_d(q²)` up to `max_d`.
-
-`(q²)^n − 1` is accumulated by the recurrence `wₙ₊₁ = q²·wₙ + w₁` rather than formed as a difference of a
-power and 1. That difference loses everything as `q → 1`: `qdim(1/2; q = 1 − 1e−7)` came back with a
-relative error of **8e−11**, against 1e−16 now, while every other numeric path in the package held 1e−15
-there. The recurrence only ever adds quantities of the same size, so nothing cancels after the seed.
-
-The seed `w₁ = q² − 1` is the one place cancellation can still bite, and passing `q` itself avoids it:
-`(q − 1)(q + 1)` is accurate to an ulp for every `q`, because near 1 the subtraction `q − 1` is exact.
-Without `q` the plain difference is used, which is what a caller that only has `q²` can do.
+Numerical values of `Φ_d(q²)` up to `max_d`. `(q²)ⁿ − 1` is accumulated as `wₙ₊₁ = q²·wₙ + w₁`, which
+does not cancel as `q → 1`. The seed `w₁ = (q − 1)(q + 1)` is accurate to an ulp when `q` is passed.
 """
 function build_analytic_table(max_d::Int, q_sq::T, q = nothing) where T
     max_d == 0 && return Vector{T}(undef, 0)
@@ -100,22 +88,13 @@ end
 """
     _radical_sqrt(rad, q, table)
 
-Square root of a square-free radical monomial on the balanced branch. Writing
-`rad = σ q^P Π Ψ_d^{e_d}` with `Ψ_d(q) = q^{-φ(d)} Φ_d(q²)` and `P = balanced_phase(rad)`, this returns
+Square root of a square-free radical monomial on the balanced branch: for `rad = σ q^P Π Ψ_d^{e_d}`,
 
     √σ · q^{P/2} · Π (√Ψ_d)^{e_d} ,
 
-i.e. **one principal root per Ψ_d**, never a single root of the assembled product. That distinction is not
-cosmetic: √ is not multiplicative across its branch cut, so a root of the product differs from the product
-of roots by a sign that depends on how the individual phases add. Two sides of a coherence identity then
-assemble different products and their radicals stop cancelling. Taking one root per factor makes the branch
-depend only on the *set* of factors, which both sides share. Measured: Biedenharn--Elliott 40/40 on and off
-the unit circle, against 9–36/40 for a root of the product.
-Each `Ψ_d` is real on `|q| = 1`, and is snapped to the real axis
-when its imaginary part is at rounding level so that the branch is reproducible.
-
-For positive real `q` the ordinary square root of the assembled value is kept.
-Negative-real DCR projections enter through the complex branch, as in the factorial-rule evaluator.
+one principal root per Ψ_d, never a root of the product, so the branch depends only on the set of factors
+and coherence identities hold (Biedenharn–Elliott 40/40, against 9–36/40 for a root of the product).
+`Ψ_d` is snapped to the real axis on |q| = 1. Positive real `q` takes the ordinary root.
 """
 function _radical_sqrt(rad::CyclotomicMonomial, q::T, table) where T
     T <: Real && return sqrt(_eval_mono_analytic(rad, q, table))
@@ -147,13 +126,8 @@ function _eval_analytic_dcr(res::DCR, q::T, q_sq::T) where T
     # root * √(radical) * base; the radical is rooted factor by factor (see `_radical_sqrt`)
     pref_val = val_root * _radical_sqrt(res.radical, q, table) * val_base
 
-    # This evaluator multiplies cyclotomic values directly: there is no split-exponent scaling, no
-    # compensation and no error bound, so its intermediates overflow or underflow well inside the range
-    # of ordinary inputs. In numerical checks, at j = 20 it returned NaN or a
-    # spurious zero for five of eight sampled q, and at j = 30 for six of eight, while the factorial-rule
-    # kernel is exact against a 512-bit reference throughout. Rather than hand back a silently wrong
-    # number, say so and name the path that works. A *structurally* zero DCR is a different thing and
-    # still returns zero.
+    # No scaling or error bound here: intermediates overflow at moderate spins (NaN or spurious zeros at
+    # j = 20), so refuse rather than return a wrong number. A structurally zero DCR still returns zero.
     structural_zero = res.base.sign == 0 || res.radical.sign == 0 || res.root.sign == 0
     structural_zero && return zero(T)
     if iszero(pref_val) || !isfinite(abs(pref_val))

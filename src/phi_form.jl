@@ -114,8 +114,8 @@ end
     phi_form(dcr::DCR; maxdeg = 400, basis = :q) -> PhiForm
 
 The exact closed form of a DCR in q, as Φ factors times at most one irreducible remainder, valid at every
-level. **The expensive expansion**: it factors the numerator over ℤ[q] (about 38× [`x_form`](@ref) on
-`{6 6 6; 6 6 6}`). Above `maxdeg` the numerator is reported by size, not factored; that is a different
+level. **The expensive expansion**: it factors the numerator over ℤ[q], about 38× the cost of [`x_form`](@ref) on
+`{6 6 6; 6 6 6}`. Above `maxdeg` the numerator is reported by size, not factored; that is a different
 answer, recorded in `truncated`, not a cheaper one. `basis = :x` writes the remainder in `x = q + q⁻¹`
 (the Φ factors stay in q).
 """

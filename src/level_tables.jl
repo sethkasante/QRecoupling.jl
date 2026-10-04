@@ -2,9 +2,7 @@
 # ---------------------------------------------------------------------------------
 #  Per-level tables: modular zero screening, q-integer and split-factorial tables, ratio helpers
 #
-#  Everything a level needs before any symbol is evaluated. Tables are built once per level and read
-#  without a lock (`LevelCache`), which is what makes batches at one level cheap. 
-#  the tables are the expensive part and every symbol at the level shares them.
+#  Built once per level and read without a lock (`LevelCache`); every symbol at the level shares them.
 # ---------------------------------------------------------------------------------
 
 # ---- modular zero screen: two Galois conjugates modulo one prime ----
@@ -155,22 +153,10 @@ end
 """
     reflection_zero(s, segs, k) -> Bool
 
-Does the sum vanish at level `k` by a *level reflection*? A proof, not a screen.
-
-At q = e^{iπ/h}, h = k + 2, the identity [h − n] = [n] gives
-
-    [m]! · [h−1−m]! = [h−1]!      (0 ≤ m ≤ h − 1),
-
-so every factor of a term can be moved across the fraction bar with its argument reflected, m ↦ h−1−m.
-Written that way — each factor as [z + b]!^μ(b) times a power of [h−1]! — a term T(z) has a canonical form,
-and so has T(c − z) with c = z₀ + z₁ the sum of the ends of the contributing range. When the two canonical
-forms agree and c is odd, z ↦ c − z is an involution of the range with no fixed point that reverses the
-sign (−1)^z and fixes the unsigned term, so the terms cancel in pairs.
-
-For the 6j symbol this is exactly the condition {β₁, β₂, β₃, k} = c − {α₁, …, α₄} with c odd, which
-forces k even; the equal-spin family {j j j; j j j} at k = 4j, j odd, is one case. Over every admissible
-6j symbol with k ≤ 22 (4.29 million) it flagged 9,739 symbols, every one an exact zero, and accounted for
-71% of all zeros — all of them at k = 4, 6, 8, 12, 14, 18 in that enumeration.
+Does the sum vanish at level `k` by a level reflection? A proof, not a screen. At q = e^{iπ/h},
+[m]!·[h−1−m]! = [h−1]!, which gives each term a canonical form. When T(z) and T(c − z) agree, with c = z₀ + z₁
+odd, z ↦ c − z pairs the terms with opposite signs. For the 6j this is {β₁, β₂, β₃, k} = c − {α₁, …, α₄};
+it accounts for 71% of the zeros among all 6j symbols with k ≤ 22.
 """
 function reflection_zero(s::FactorialSum, segs, k::Int)
     (s.alternating && length(segs) == 1) || return false
@@ -232,9 +218,8 @@ QIntTables{T}(q, qi, ql, qil, fm, fe, fml, gm, ge, gml, classical::Bool) where {
 """
     split_factorials(T, qhi) -> (fm, fe)
 
-Split-exponent factorials from q-integers given in a wider `BigFloat` precision: the running product is
-kept exactly as `BigFloat` and each [n]! is rounded to `T` once. Products of ~20 such entries keep ~20 ε of
-relative accuracy at any size (cf. log tables lose |log [n]!| · ε).
+Split-exponent factorials from q-integers in a wider `BigFloat` precision: the running product stays in
+`BigFloat` and each [n]! is rounded to `T` once, so products keep ~20 ε at any size.
 """
 function split_factorials(::Type{T}, qhi::Vector{BigFloat}) where {T}
     N = length(qhi)
@@ -345,9 +330,8 @@ const SCALE_BITS = 256
 """
     _integer_ratios(s, segs, tab) -> Bool
 
-Classically every term ratio is a ratio of two integers, a/b, built from the factorial arguments. When
-both stay below 2^53 they convert to floating point exactly, so a ratio costs one division (one rounding)
-instead of K table multiplications (2K roundings), and its low part is exact from one fma.
+Classically each term ratio is a/b with integers a, b. Below 2^53 both are exact in floating point, so a
+ratio costs one division instead of K table multiplications, and its low part is exact from one fma.
 """
 function _integer_ratios(s::FactorialSum, segs, tab::QIntTables)
     tab.classical || return false
@@ -378,12 +362,9 @@ end
 """
     _ratio_plan(s, N) -> (ok, plan)
 
-The ratio t_{z+1}/t_z as one load per factor. For [a z + b]!^{±1} with a = ±1 the factor is [n+1]^{±1}
-(a = 1) or [n]^{∓1} (a = -1), n = a z + b, i.e. entry `qq[a z + o]` of the combined table `[q; qi]` (length
-2N) for a fixed offset o. `plan` holds the pairs (a, o); `ok` is false when some factor has another slope
-or exponent, and the kernels then use the general branchy loop. Same entries in the same order, so the
-result is bitwise the same — the gain is that the loop has no data-dependent branches (1.3 ns instead of
-~10 ns per step for a 6j).
+The ratio t_{z+1}/t_z as one load per factor. For [a z + b]!^{±1} with a = ±1 the factor is entry
+`qq[a z + o]` of the combined table `[q; qi]`; `plan` holds the pairs (a, o), and `ok` is false for any other
+slope or exponent (the general loop then runs). Bitwise the same result, without data-dependent branches.
 """
 @inline function _ratio_plan(s::FactorialSum, N::Int)
     ok = all(f -> (f.a == 1 || f.a == -1) && (f.c == 1 || f.c == -1), s.fac)

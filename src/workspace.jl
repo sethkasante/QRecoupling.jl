@@ -1,14 +1,10 @@
 """
     EvaluationWorkspace()
 
-Reusable Float64 ratio/recoupling scratch and bounded fixed-q analytic tables. Pass `workspace=work` to
-`q6j`, `q3j`, `qcg`, `QRecoupling.q3j_factorial`, `fsymbol`, `gsymbol`, or `qeval(::FactorialSum)`. Storage grows on demand.
-One workspace may be reused sequentially, but must not be shared by concurrent tasks.
-Batched symbol evaluation creates a separate workspace for each worker automatically.
-Analytic tables are keyed by q, numeric type, precision, and capacity; changing q
-invalidates them. A workspace retains at most four precision/type tiers.
-CG recurrence scratch retains one sector, rebuilding its coefficients when the
-target or `(j1,j2,m1+m2)` changes. Repeated entries reuse its arrays and coefficients.
+Reusable Float64 scratch and fixed-q analytic tables. Pass `workspace=work` to `q6j`, `q3j`, `qcg`,
+`QRecoupling.q3j_factorial`, `fsymbol`, `gsymbol`, or `qeval(::FactorialSum)`. Reuse it sequentially, never
+across concurrent tasks (batches give each worker its own). Tables are keyed by q, type and precision, with
+at most four tiers; CG scratch keeps one sector.
 """
 struct EvaluationWorkspace
     ratios::Vector{Float64}
@@ -30,17 +26,9 @@ end
 
 # ---- a ratio buffer for calls that bring no workspace ----
 #
-# The `:lazy` policy stores each ratio's low part during the plain pass so that the compensated fallback
-# reuses it, which makes the fallback 13–24% cheaper (`q6j(40×6; k = 200)`: 501 ns against 572 ns). Without a
-# caller workspace that buffer was a fresh `Vector` per call: two heap allocations on every symbol with two
-# or more ratio steps, although almost none of them ever fall back. So a call without a workspace borrows
-# one buffer per thread instead.
-#
-# Borrowing is guarded by an atomic flag, not by the thread id alone. The region that holds the buffer is
-# pure arithmetic and never yields, but a guard that relied on that would break silently the day someone
-# added a yield (a log message is enough); with the flag a second task that finds the slot busy — because
-# the first yielded, migrated, or is re-entering — simply allocates, which is the old behaviour. A slot that
-# is never returned (an exception inside the region) degrades that thread to allocating, never to sharing.
+# The `:lazy` policy stores each ratio's low part for the compensated fallback. Calls without a workspace
+# borrow one buffer per thread, guarded by an atomic flag: a task finding it busy allocates, and a buffer
+# never returned (an exception) degrades that thread to allocating, never to sharing.
 
 mutable struct _RatioSlot
     @atomic busy::Bool

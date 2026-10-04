@@ -10,23 +10,13 @@
 #    Dn(x) = [x+j2−j3][j2+j3+1−x][x+l2−l3][x+l2+l3+1],          D(x) = Dn(x) / ([2x][2x+1]),
 #    C     = [j3−l1−l2][j3+l1−l2+1],
 #
-#  the q-analogue of the Schulten–Gordon recurrence (found numerically against the package's certified
-#  values and numerically verified to 1e-75). The level truncation needs no special
-#  case: E vanishes at the top of the level range because [h] = 0.
+#  the q-analogue of the Schulten–Gordon recurrence (verified to 1e−75); E vanishes at the top of a level's
+#  range because [h] = 0. The column runs forward to its first local maximum and backward to it, each in
+#  its growing direction, is normalised by Σ_x [2x+1][2l1+1] f(x)² = 1 and signed by one certified entry.
 #
-#  The Racah sum of a single symbol cancels (condition number κ, exponential in spin); the recurrence does
-#  not, if each part of the column is computed in the direction in which the solution grows. So the column
-#  is run forward from the left end to the first local maximum and backward from the right end to that
-#  point, matched there, normalised by orthogonality Σ_x [2x+1][2l1+1] f(x)² = 1, and signed by the
-#  certified value of one edge entry.
-#
-#  Arithmetic is double-word throughout. Rescaling f = h/P with P(x+1) = P(x) up(x) makes both directions
-#  free of divisions and square roots, because up(x−1)² = E(x)²/[2x]² = Bn(x−1) Dn(x)/[2x]² is a product of
-#  table entries:
-#      forward   h(x+1) = −di(x) h(x) − up(x−1)² h(x−1),
-#      backward  g(x−1) = −di(x) g(x) − up(x)² g(x+1)          (f = g/R, R(x−1) = R(x) up(x−1)),
-#  and a square root is taken once per entry to leave the gauge (only the running values stay in it). Entrywise error ≈ n·u² relative to the
-#  column's largest entry, so every entry that is not within ~10⁻¹⁵ of a node comes out to full precision.
+#  Double words throughout. The gauge f = h/P, P(x+1) = P(x) up(x), removes divisions and square roots:
+#      forward h(x+1) = −di(x) h(x) − up(x−1)² h(x−1),  backward g(x−1) = −di(x) g(x) − up(x)² g(x+1),
+#  with one square root per entry to leave the gauge. Error ≈ n·u² of the column's largest entry.
 # ---------------------------------------------------------------------------------
 
 const DWord = Tuple{Float64,Float64}
@@ -49,22 +39,10 @@ end
 # ---------------------------------------------------------------------------------
 #  The complex double word
 #
-#  A column at complex q needs the same arithmetic in ℂ. The representation is the obvious one — a high
-#  and a low `ComplexF64`, so `a[1]` still means "the value" and `a[2]` "its correction", and every
-#  magnitude test, rescaling and array in the kernel keeps working unchanged.
-#
-#  What it is *not* is a complex-valued Dekker word: `fma` has no complex counterpart, so there is no
-#  error-free transformation to build on directly. Instead each of the real and imaginary parts is an
-#  ordinary real double word, carried in the same pair; `_mk` reassembles them and `_re_dw`/`_im_dw` take
-#  them apart. So a complex product is four real double-word products and two sums, and every component
-#  inherits the real word's `u²` accuracy — the recurrence's error analysis carries over term by term
-#  rather than having to be redone.
-#
-#  Division goes through the conjugate, `a/b = a·b̄/|b|²`, and the square root is the standard stable form
-#  `√z = t + i y/2t` (or `|y|/2t + i·sign(y)·t` when Re z < 0) with `t = √((|z| + |Re z|)/2)`, which avoids
-#  the cancellation the naive formula suffers on one side of the imaginary axis. Both form `|b|²` or
-#  `|z|`, so they need their argument within the square root of the exponent range; the kernel's rescaling
-#  keeps every running value inside 2^±600, which is exactly what that requires.
+#  A high and a low `ComplexF64`, each component an ordinary real double word (no complex fma exists), so
+#  a complex product is four real double-word products and every component keeps u² accuracy. Division is
+#  through the conjugate; the square root is the stable form √z = t + iy/2t, t = √((|z| + |Re z|)/2). Both
+#  need the argument within the root of the exponent range, which the kernel's 2^±600 rescaling ensures.
 # ---------------------------------------------------------------------------------
 
 const CDWord = Tuple{ComplexF64,ComplexF64}
@@ -178,15 +156,8 @@ end
 """
     RealQ(q, N)
 
-A column at generic **real** `q`, built from double-word tables of `[n]` and `1/[n]` for `n = 0…N`. The
-recurrence itself is q-generic — nothing in the gauge form of §`sixj_column!` mentions a level — so the only
-thing that tied families to levels and to `q = 1` was the absence of a table. With this, a column at real q
-costs `O(n)` instead of n independent sums, the same as at a level.
-
-Entries are computed once in 128-bit arithmetic and split into double words, so each is the correct rounding
-of its value with a low part good to about `u²`, matching what `LevelQ` reads from `QIntTables`.
-
-Off the real axis the same job is done by [`ComplexQ`](@ref), which carries the complex double word.
+A column at generic real `q`, from double-word tables of `[n]` and `1/[n]`, `n = 0…N`, built in 128 bits and
+rounded (as `LevelQ` reads from `QIntTables`). [`ComplexQ`](@ref) does the same off the real axis.
 """
 struct RealQ
     q::Float64
@@ -260,17 +231,9 @@ RealQ(q::Real, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int) =
 """
     ComplexQ(q, N)
 
-A column at generic **complex** `q`, from complex double-word tables of `[n]` and `1/[n]`. The recurrence
-is q-generic — nothing in the gauge form mentions a level, a sign, or the reality of `q` — so the only
-thing that kept families real was the word type. With [`CDWord`](@ref) in place a column off the real axis
-costs `O(n)` like any other.
-
-Entries are built in 256-bit `Complex{BigFloat}` from `[n+1] = x[n] − [n−1]`, `x = q + q⁻¹`, and split into
-complex double words. The extra precision over [`RealQ`](@ref)'s 128 bits is not decoration: on `|q| = 1`
-the q-integers neither grow nor decay, so that step is a genuine subtraction of comparable numbers and
-loses digits near a root of unity. The build tracks exactly that loss — `(|x·[n]| + |[n−1]|)/|[n+1]|` — and
-**refuses** the table when it exceeds `CANCEL_LIMIT`, rather than returning a column whose accuracy it
-cannot stand behind. A root of unity is a level; use a level target there.
+A column at generic complex `q`, from complex double-word tables of `[n]` and `1/[n]`, built in 256 bits from
+`[n+1] = x[n] − [n−1]`. On `|q| = 1` that step cancels near a root of unity; the build tracks the loss
+`(|x·[n]| + |[n−1]|)/|[n+1]|` and refuses the table past `CANCEL_LIMIT`. A root of unity is a level.
 """
 struct ComplexQ
     q::ComplexF64
@@ -285,52 +248,24 @@ end
 """
     column_accuracy(Q::ComplexQ) -> Float64
 
-Relative accuracy a column built from this table can promise, `u·cancel`.
-
-`cancel` is the worst ratio `(|x[n]| + |[n−1]|)/|[n+1]|` met building the q-integers, so it is how many
-digits the recurrence coefficients lose before the column starts. Away from a root of unity it is a few
-units and the promise is the usual `1e−15`; at `q = e^{0.1111iπ}`, which is `1.1e−5` from a ninth root of
-unity, it is large enough that a nearly-imaginary entry keeps only about eleven digits of its real part.
-That is a property of the point, not a defect of the recurrence, and it is reported rather than hidden —
-the alternative is a promise the table cannot keep.
+Relative accuracy a column built from this table can promise, `u·cancel`, with `cancel` the worst ratio met
+building the q-integers: a few units away from a root of unity, large close to one (a property of the point).
 """
 column_accuracy(Q::Union{RealQ,ComplexQ}) = max(eps(Float64), eps(Float64) * Q.cancel)
 
 """
-Accuracy floor a near-edge run inherits from its table, on top of the double-word error of the run itself.
-
-The table entries are built at 256 bits and rounded to double words, so they are accurate wherever `q` is.
-What a run cannot do better than is the conditioning of everything assembled from them — the recurrence
-coefficients, the Ψ-split roots, the seeds — and near a root of unity that is not small: at
-`q = e^{0.1111iπ}` a j ≈ 38 entry came out `1.6e−12` from a 512-bit reference while the run's own
-double-word estimate said `1e−28`, because the estimate charges the arithmetic and not the inputs.
-
-`u·cancel` is the measured scale of it: over a sweep of 14 `q` and 60 label sets the near-edge error tracks
-this within a factor of 2, and it is the same number `column_accuracy` reports; the 2 is that factor.
-Tuned by measurement in both directions: at 1 the tier still answered two `e^{0.61iπ}` columns at 1.5–3.0e−14
-against a promised 1e−14, and at 4 it began declining well-conditioned real-`q` runs that were accurate to
-3.5e−17. Like the rest of the
-estimate this is a measured heuristic, not a derived bound — `sixj_entry` has always said so — but with it
-in place every answer the tier gives is inside the `rtol` it promises, and the cases it cannot are declined
-to the arbitrary-precision ladder instead. A level and the classical limit have exact tables and add
-nothing.
+Accuracy floor a near-edge run inherits from its table, beyond the run's own double-word error: the
+conditioning of the coefficients, roots and seeds near a root of unity. `2·u·cancel` tracks the measured
+error within the factor 2 (a heuristic, tuned so the tier stays inside its `rtol` and declines otherwise).
+Exact tables (levels, q = 1) add nothing.
 """
 @inline _table_floor(Q::Union{RealQ,ComplexQ}) = 2 * eps(Float64) * Q.cancel
 @inline _table_floor(::Any) = 0.0
 
 """
-Cancellation a `ComplexQ` table will tolerate in `[n+1] = x[n] − [n−1]`.
-
-The 256-bit build is not what this protects: it could absorb far more. What cannot is the *column*. A
-cancellation of `C` means some `[n]` is `C` times smaller than its neighbours, so `1/[n]` is `C` times
-larger, and the recurrence coefficients built from it lose `log₂C` bits to the subtraction in `di`. A
-complex double word carries 106, so 2⁴⁰ still leaves 66 — comfortably more than `Float64`.
-
-The threshold is where it is because of what happens past it, measured on `fmatrix(1,1,1,1)`: at
-`q = e^{iπ/4}` orthogonality came out at 1.0 and at `q = e^{iπ/3}` at 4.5e15, both silently. Those q are
-roots of unity, where the table has a `[n]` that is only rounding noise; the cancellation ratio there is
-about 2⁵², against about 2⁶ at a generic point on the unit circle. A root of unity is a level and has
-exact tables of its own.
+Cancellation a `ComplexQ` table tolerates in `[n+1] = x[n] − [n−1]`. A cancellation `C` costs the column's
+coefficients `log₂C` of a complex double word's 106 bits; 2⁴⁰ leaves 66. Past it are roots of unity, where
+orthogonality failed silently (1.0 at e^{iπ/4}, 4.5e15 at e^{iπ/3}).
 """
 const CANCEL_LIMIT = 2.0^40
 
@@ -413,15 +348,9 @@ end
 """
     _sqrt_qint_product(Q, args, cnt) -> CDWord
 
-`√(∏ᵢ [nᵢ])` at complex `q`, in the branch convention the rest of the package uses: rewrite the product
-over the Ψ basis, `[n] = ∏_{d | n} Ψ_d`, take the even part of each exponent out of the root exactly, and
-root what is left **one Ψ_d at a time**.
-
-Why not simply `sqrt` of the product, or a root per q-integer: neither is the same function. `√` is not
-multiplicative across its cut, so each factorisation of the same number gives a different branch, and only
-one of them agrees with `analytic_rules.jl`'s prefactor — which splits over exactly this Ψ basis. Measured,
-rooting per q-integer instead disagreed with `q6j` by a sign on 9 of 12 sampled complex `q`, including
-points far from any cut; over the Ψ basis the disagreement is gone.
+`√(∏ᵢ [nᵢ])` at complex `q` in the package's branch convention: over the Ψ basis `[n] = ∏_{d | n} Ψ_d`, even
+exponents leave exactly and the rest is rooted one Ψ_d at a time, as `analytic_rules.jl` does (rooting per
+q-integer disagreed with `q6j` by a sign at 9 of 12 complex `q`).
 """
 function _sqrt_qint_product(Q::ComplexQ, args, cnt::Vector{Int})
     acc = _dwone(CDWord)
@@ -515,13 +444,9 @@ Fills `out[i]` with {x j2 j3; l1 l2 l3} for the i-th admissible x (doubled label
 (`tab` the level's q-integer tables) or, with `Q = ClassicalQ()`, at q = 1. `work.w[i]` holds the same
 values as double words.
 
-With `xdim = true` each entry carries the extra factor √[2x+1] and with `cfac` a constant factor, which
-together give the tetrahedrally symmetric normalisation (the G-symbol, and the F-symbol when its running
-label is one of the two that carry a dimension). Both are folded into the square root that leaves the gauge
-and into the normalising scale, so they cost nothing per entry — where multiplying each finished entry by
-√(Π[2j+1]) costs six double-word products and a square root. The orthogonality sum is unchanged by the
-folding, because Σ_x [2x+1] f² = Σ_x (√[2x+1] f)². Exact zeros inside the column come out as tiny values of the order of the
-column's rounding error; callers that promise exact zeros test those entries.
+With `xdim = true` each entry carries √[2x+1], and `cfac` a constant: the G- and F-symbol normalisations,
+folded into the gauge exit and the scale at no per-entry cost (the orthogonality sum is unchanged). Exact
+zeros inside the column come out at rounding level; callers that promise exact zeros test them.
 """
 sixj_column!(out, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int, k::Int, tab::QIntTables{Float64},
              work::ColumnWork = ColumnWork(); kwargs...) =
@@ -543,10 +468,8 @@ end
 """
     _column_shared!(shared, work, Q, X, J2, J3, L2, L3)
 
-The part of the recurrence coefficients that does not involve `L1`: `work.e[i] = up(x−1)²` and
-`shared[i] = [2x+1](B(x) + D(x))`. Everything here is built from four-factor products of q-integers in
-(J2, J3, L2, L3), so for a *family* that varies only `L1` — an F-matrix column index, say — this is computed
-once for the whole family and only the scalar `C` changes afterwards (see [`_column_di!`](@ref)).
+The part of the recurrence coefficients that does not involve `L1` (`work.e[i] = up(x−1)²` and
+`shared[i] = [2x+1](B(x) + D(x))`), computed once for a family varying only `L1`; see [`_column_di!`](@ref).
 """
 function _column_shared!(shared, work::ColumnWork, Q, X, J2::Int, J3::Int, L2::Int, L3::Int)
     e = work.e
@@ -685,23 +608,10 @@ end
 """
     _column_scale(Q, W, w, X, n, J2, J3, L1, L2, L3, q, U, Z, xdim)
 
-The one overall factor the recurrence leaves free, and the two ways of pinning it.
-
-**On the real axis and at a level**, orthogonality does it: `Σ_x [2x+1] f(x)² = 1/[2L1+1]`, so the scale is
-one square root of a sum of *positive* terms, and only the sign is left for a certified entry to settle.
-Nothing cancels and the result is as accurate as the entries. That path is unchanged.
-
-**At complex q the terms are not positive.** `Σ [2x+1] f²` then cancels — measured `4.6e6` on a j = 4
-column at `q = e^{0.108iπ}`, and far more nearer a root of unity — and the cancellation multiplies the
-entries' own relative error straight into the scale, hence into every entry. That column came out `7.7e−10`
-from a 512-bit reference, uniformly, while `q6j` of the same symbols was accurate to `6e−15`: the
-recurrence was right and the normalisation threw it away.
-
-So at complex q the scale comes from the certified symbol itself, at the entry where the column peaks:
-`f(x*) / w(x*)` is well conditioned by construction, costs the one `analytic_value` call that
-`_sign_reference` was already making to settle the sign, and pins magnitude and phase together rather than
-pinning the magnitude badly and then correcting the sign. Orthogonality remains the fallback if the peak
-entry's certified value is zero or not finite.
+The one overall factor the recurrence leaves free. On the real axis and at a level, orthogonality fixes it
+(a root of a sum of positive terms) and a certified entry fixes the sign. At complex `q` that sum cancels
+(a j = 4 column came out 7.7e−10 off), so the scale is the certified value at the column's peak; orthogonality
+is the fallback if that value is zero or not finite.
 """
 function _column_scale(Q, ::Type{W}, w, X, n::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int,
                        q, U, Z, xdim::Bool) where {W}
@@ -753,19 +663,9 @@ still hands `_leave_gauge` the *unrooted* `[2x+1]` so that one square root cover
 """
     _gauge_step(P, e) -> P
 
-Advance the gauge by one step. On the real axis the running quantity is `P²`, multiplied by `up(x)² = e`,
-and the square root is taken once when an entry leaves the gauge — `√` of a positive number, so nothing
-can go wrong. That is left exactly as it was.
-
-At complex `q` it can, and did. `√` is not multiplicative across its cut, so the principal root of an
-*accumulated* `P²` is not the accumulation of the roots: as the product's argument wanders past ±π the
-root jumps, and the entries after the jump come out with the opposite sign. Measured on
-`q = e^{0.2718iπ}`, the first entry of a column matched `q6j` and the rest were negated; rooting `e` as a
-whole fixed that case and broke another, where two consecutive steps flipped and only the entry *between*
-them came out wrong. So the complex path accumulates `P ← P·up(x)` with `up(x)` assembled from the roots
-of its **eight individual q-integers**, `√Dn·√Bn/[2x]` factor by factor — exactly what
-`analytic_rules.jl` does for the prefactor. The branch then depends only on which factors occur, and both
-the column and `q6j` see the same ones.
+Advance the gauge one step. Real axis: accumulate `P²` and take one root per entry (of a positive number).
+Complex `q`: the root of an accumulated product jumps across the cut and negated entries, so accumulate
+`P ← P·up(x)` with `up(x)` from the roots of its eight q-integers, as `analytic_rules.jl` does.
 """
 @inline _gauge_step(P::DWord, work::ColumnWork, i::Int) = _dwm(P, work.e[i])
 @inline _gauge_step(P::CDWord, work::ColumnWork, i::Int) = _dwm(P, work.up[i])
@@ -775,21 +675,15 @@ the column and `q6j` see the same ones.
 @inline _gauge_rescale(P::CDWord, sc::Float64) = _dws(P, sc)
 
 """
-Resolve the one sign the orthogonality normalisation leaves free. Orthogonality fixes `|f|`; the overall
-sign comes from one certified entry. On the real axis the scale is positive, so comparing the *unscaled*
-entry with the reference settles it, and that is left exactly as it was. At complex `q` the scale carries
-a phase of its own, so the comparison has to be made after it is applied — and "same sign" becomes
-"same half-plane", `Re(conj(ref)·v) ≥ 0`, which is the only ambiguity a square root can introduce.
+Resolve the sign orthogonality leaves free, from one certified entry. At complex `q` the scale has its own
+phase, so the test is made after applying it, as `Re(conj(ref)·v) ≥ 0`.
 """
 @inline _fix_phase(s0::DWord, w_ie::DWord, ref) =
     signbit(ref) == signbit(w_ie[1]) ? s0 : _dwn(s0)
 
 """
-The reference an entry of the column is actually compared against. `_sign_reference` returns the bare 6j
-symbol, but with `xdim = true` the column carries `√[2x+1]` as well. On the real axis that factor is
-positive and invisible to a sign test; at complex `q` it is a phase, and leaving it out rotates the
-comparison — measured, it flipped whole columns of an F-matrix. The root is the one the column folded in,
-[`_xdim_pass`](@ref), not a fresh principal root of the product.
+The reference an entry is compared against: the bare 6j times the `√[2x+1]` the column folded in, by
+[`_xdim_pass`](@ref) (at complex `q` that factor is a phase; leaving it out flipped whole F-matrix columns).
 """
 @inline _phase_ref(::Type{DWord}, ref, _) = ref
 @inline _phase_ref(::Type{CDWord}, ref, ::Nothing) = ComplexF64(ref)
@@ -872,19 +766,10 @@ _entry_value(Q::ComplexQ, X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int):
 # ---------------------------------------------------------------------------------
 #  One hard symbol from the nearer end of its column
 #
-#  A symbol whose Racah sum has lost its digits (κ beyond the compensated range) is one entry of a column,
-#  and a column recurrence can avoid that cancellation. It has its own directional stability constraints.
-#  We compute only the stretch between a seed and the target: O(distance) arithmetic, O(n) workspace.
-#
-#  Two seeds are needed for a three-term recurrence, and at a column end the boundary condition supplies the
-#  second for free: E vanishes there, so the recurrence degenerates to f(edge+1) = −di(edge) f(edge)/up(edge).
-#  One accurate value at the end is therefore enough — and at the end the Racah sum usually has a single
-#  term, so that value avoids sum cancellation (and is taken in split form, mantissa and binary exponent, because
-#  at large spin an end value can be far below the smallest Float64 while the target is of order one).
-#
-#  The number of Racah terms suggests candidate interior seeds. Their actual compensated error bounds
-#  must pass a separate check and are transported through the remaining recurrence. Term count alone
-#  does not determine conditioning. Two interior seeds need no boundary condition.
+#  A symbol whose Racah sum cancels badly is one entry of a column: run only the stretch between a seed and
+#  the target, O(distance). At a column end E vanishes, so one accurate end value (usually a one-term sum,
+#  in split form against underflow) seeds the recurrence. Interior seeds are suggested by term counts and
+#  accepted only if their compensated bounds survive transport through the run.
 # ---------------------------------------------------------------------------------
 
 """
@@ -917,17 +802,9 @@ const MAX_RISE_LOG2 = 20
 const SEED_MIN_SAVING = 16
 
 """
-Steps an interior-seeded run may take. A boundary seed is a product of split table entries, accurate to a
-double word, so its uncertainty is negligible and the run's length is limited only by the rise. An interior
-seed is a *compensated sum*, and its certified bound is ~2e-16 relative — measured, and irreducible here:
-half of it is the final rounding to `Float64`, the other half the compensated pass's own bound, so carrying
-the double word through would gain a factor of two, not the factors of 10¹⁴ that transporting the error over
-a long run costs. With `rtol = 1e-14` the seed's error may be amplified by about 50, i.e. the run may rise
-about 5 bits, which at the 0.2–0.5 bits per step observed in a forbidden stretch is a few dozen steps.
-
-Past that the transport fails *after* the run has been paid for, and the fall back to the boundary seed pays
-for a second one. Measured over eight escalated symbols, the interior seed won (1.7–1.8×) at 3 and 13 steps
-and lost (1.1–2.0×) at 33, 53, 153, 253 and 853; this threshold keeps exactly the cases that win.
+Steps an interior-seeded run may take. An interior seed is a compensated sum (~2e−16), so with `rtol = 1e-14`
+the run may rise about 5 bits, a few dozen steps; past that the boundary seed wins (measured: interior won
+at 3 and 13 steps, lost from 33 on).
 """
 const SEED_MAX_STEPS = 24
 
@@ -1045,11 +922,8 @@ end
 # ---------------------------------------------------------------------------------
 #  Seeds at generic q
 #
-#  The near-edge tier needs two things the generic-q route did not expose: a value in split form (an end
-#  entry can sit far below the smallest Float64 while the target is of order one — narrowing it first
-#  loses the symbol), and an honest bound on it. Both come straight out of the double-word analytic pass,
-#  whose mantissa *is* a double word and whose exponent is already carried separately. So a seed off the
-#  level axis costs one pass and nothing else.
+#  A seed in split form (an end entry can underflow Float64) with an honest bound: both come from the
+#  double-word analytic pass.
 # ---------------------------------------------------------------------------------
 
 # The double-word mantissa of an analytic pass, as this file's `DWord`/`CDWord`. Left untyped because
@@ -1105,15 +979,9 @@ function _entry_output(m,e::Int,estimate::Float64,rtol::Float64)
 end
 
 """
-Coefficients `di` and `e` of the recurrence for column indices `lo:hi` (1-based), into `work` — and, at
-complex `q`, `up(x−1)` itself alongside `up(x−1)² = e`.
-
-`up` is not redundant with `e`. Off the real axis the gauge cannot be left by rooting an accumulated `P²`:
-`√` is not multiplicative across its cut, so the principal root of the product is not the product of the
-roots and the entries come out with the wrong sign — measured as an exact factor of −1 on two of four
-sampled complex `q`. `sixj_column!` solved this by accumulating `P ← P·up(x)` with `up` assembled from the
-roots of its eight individual q-integers over the Ψ basis, and the near-edge tier needs the same thing;
-see [`_gauge_step`](@ref) and [`_sqrt_qint_product`](@ref).
+Coefficients `di` and `e` for column indices `lo:hi` (1-based) into `work`, and at complex `q` also `up(x−1)`
+itself: the gauge there must accumulate `up`, not root `P²`; see [`_gauge_step`](@ref) and
+[`_sqrt_qint_product`](@ref).
 """
 function _coefficients!(work::ColumnWork, Q, X, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int,
                         lo::Int, hi::Int)
@@ -1217,10 +1085,8 @@ end
 """
     sixj_entry(J, q::Number, work; rtol) -> value or nothing
 
-The same tier at generic `q`, which is what makes it reachable from `analytic_value`. The recurrence never
-mentioned a level; what was missing was a table (`RealQ`/`ComplexQ` supply it) and seeds in split form
-(`_analytic_split` does). The table is sized for the worst of the six candidate columns, since
-`_best_column` has not chosen yet.
+The same tier at generic `q`, reached from `analytic_value`: `RealQ`/`ComplexQ` tables and `_analytic_split`
+seeds, the table sized for the worst of the six candidate columns.
 """
 function sixj_entry(J::NTuple{6,Int}, q::Number, work::ColumnWork = ColumnWork(); rtol::Float64 = 1e-14)
     N = sum(J) ÷ 2 + 4                       # every q-integer index `_coefficients!` can reach
@@ -1295,7 +1161,9 @@ function _sixj_entry_path(J::NTuple{6,Int},Q,work::ColumnWork=ColumnWork();
     oscillatory=false
     @inbounds for j in steps
         if 1<j<n && W === DWord
-            # Local characteristic discriminant of the symmetric recurrence:
+            # Real axis: reject a direction that enters a forbidden interval after an oscillatory one, by the
+            # local discriminant d² − 4·up(x−1)·up(x). Off the axis this test aborts almost every run, so
+            # complex q relies on `rise_log`, checked below for every word type.
             # d² - 4*up(x-1)*up(x). Past an oscillatory interval, entering a
             # forbidden interval can amplify the unwanted dominant solution.
             # Reject this direction instead of trusting its final magnitude.

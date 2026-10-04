@@ -1,10 +1,6 @@
 # ---------------------------------------------------------------------------------
-#  Shared pieces of the two kernels: 
-#  the prefactor ∏[n]!^c (with the square root folded in when the rule carries one)
-#  and the number of roundings a term or a ratio costs. 
-#  Both kernels differ only in how they traverse a segment
-#   -- forward by ratios, or backward by compensated Horner -- 
-#  so everything before and after the traversal lives here once.
+#  Shared pieces of the two kernels: the prefactor ∏[n]!^c (with any square root folded in) and the
+#  rounding cost of a term or ratio. The kernels differ only in how they traverse a segment.
 # ---------------------------------------------------------------------------------
 
 "Prefactor in split form `(mantissa, exponent, relative error bound)`, single word."
@@ -60,28 +56,17 @@ end
 end
 
 # ---------------------------------------------------------------------------------
-#  Summation kernels for a factorial rule, with certified error bounds
-#
-#  The plain ratio loop with a running error bound, compensated Horner over double-word ratios,
-#  the policy that decides which result satisfies the requested tolerance,
-#  and the escalation ladder above them: exact zero test, K-word tiers, BigFloat.
+#  Summation kernels for a factorial rule, with certified error bounds: the plain ratio loop,
+#  compensated Horner, the acceptance policy, and the escalation ladder (zero test, K-word, BigFloat).
 # ---------------------------------------------------------------------------------
 
 """
     _sum_at_level(s, segs, k, tab) -> (value, bound)
 
-Σ over the contributing segments in type T by the term ratio, with the prefactor.
-
-`bound` is a rigorous bound on |value - exact|. Every table entry is the correct rounding of 
-its value, so a term reached after j ratio steps carries at most j(2K+1) relative roundings 
-(K factorials per ratio); summation adds at most u Σ|partial sums|; the prefactor and first 
-terms are products of correctly rounded split entries.
-
-digits lost to cancellation, the condition number — follows from the pair 
-(see [`_digits_lost`](@ref)).
-
-All bookkeeping is in split form, mantissa · 2^exponent: rescaling is by exact powers of 
-two and segments are combined by aligning exponents. No `log` or `exp` is taken.
+Σ over the contributing segments in type T by the term ratio, with the prefactor. `bound` is a rigorous
+bound on |value − exact|: a term reached after j ratio steps carries at most j(2K+1) relative roundings
+(K factorials per ratio), and summation adds at most u Σ|partial sums|. Bookkeeping is in split form,
+mantissa · 2^exponent, so no `log` or `exp` is taken.
 """
 function _sum_at_level(s::FactorialSum, segs, k::Int, tab::QIntTables{T},
                        buf::B = nothing) where {T,B<:Union{Nothing,Vector}}
@@ -181,12 +166,9 @@ BOUND_SLACK(::Type{T}) where {T} = one(T) + T(1e-6)
 """
     _digits_lost(value, bound) -> Float64
 
-Decimal digits of the working precision that cancellation has consumed, read off the certified bound:
-a bound of B on a value v means the surviving relative accuracy is B/|v|, so log₁₀(B/(u|v|)) digits are
-gone, where u is the unit roundoff of the type the sum ran in. Measured against the term-by-term estimate
-max|term|/|Σ| this **over**states the loss by 1.3–3.9 digits (the bound's own pessimism), which is the safe
-direction: it is used only to size the precision of an escalated pass. `Inf` for a value that the bound does
-not separate from zero.
+Decimal digits cancellation has consumed, log₁₀(B/(u|v|)) from the certified bound B. It overstates the
+loss by 1.3–3.9 digits, the safe direction for sizing an escalated pass. `Inf` when the bound does not
+separate the value from zero.
 """
 function _digits_lost(value::T, bound) where {T}
     v = abs(Float64(value)); b = Float64(bound)
@@ -197,9 +179,8 @@ end
 """
     _bound_pessimism(s, segs, tab) -> Float64
 
-The factor `c·n` — roundings charged per ratio step, over every segment — by which the rigorous bound
-exceeds the sharp O(u Σ|terms|) size of the error. Callers keep the rigorous bound; only *estimates* of how
-many digits a pass kept divide it out, which is how the ladder sized and stopped itself before bounds existed.
+The factor `c·n` (roundings charged per ratio step, over every segment) by which the rigorous bound exceeds
+the sharp O(u Σ|terms|) error. Only estimates divide it out; callers keep the rigorous bound.
 """
 function _bound_pessimism(s::FactorialSum, segs, tab::QIntTables)
     nsteps = sum(seg -> length(seg) - 1, segs; init = 0)
@@ -210,11 +191,9 @@ end
 """
     _surviving_digits(value, bound, pessimism) -> Float64
 
-Decimal digits of `value` that its `bound` leaves standing, with the bound's own pessimism removed. This is
-an estimate, not a certificate: it is what decides when an escalated pass has reached its target, because a
-pass that has lost *every* digit reports a bound of order `u·c·n·Σ|terms|` against a value of order
-`u·Σ|terms|`, i.e. `bound/|value| ≈ c·n` — a constant carrying no information about the cancellation at all.
-Sizing a pass from that number is what makes escalation overshoot.
+Decimal digits of `value` that its `bound` leaves standing, with the bound's pessimism removed. An estimate,
+used to stop escalation: a pass that lost every digit has `bound/|value| ≈ c·n`, which says nothing about
+the cancellation, so sizing from the raw ratio overshoots.
 """
 function _surviving_digits(value, bound, pessimism)
     # Logarithms in the value's own type: a BigFloat value below the Float64 range (e.g. 2e-344 at a large
@@ -227,17 +206,12 @@ end
 """
     _sum_compensated(s, segs, k, tab) -> (value, bound)
 
-Compensated Horner evaluation of the same sum (after Graillat–Langlois–Louvet 2005), extended to ratios
-that are themselves products of double-word table entries:
+Compensated Horner (Graillat–Langlois–Louvet 2005) over ratios that are products of double-word entries:
 
     Y_i = 1 + r_i Y_{i+1}  from the top of each segment,  S_segment = t_first · Y_0,
 
-where every product r_i·y and sum 1 + p is split exactly by TwoProd/TwoSum, the low part of each ratio is
-tracked to first order, and the rounding errors are propagated in a correction c_i = r_i c_{i+1} + … in
-working precision. Prefactor, first terms, segment combination and the final product are double-word.
-The result is as accurate as the plain loop run in doubled precision: relative error ≤ u + O((c n u)²) κ,
-where u is unit roundoff, n the number of ratio steps, c their rounding-cost factor and κ the sum's
-condition number. `bound` is the a posteriori version of that estimate.
+with TwoProd/TwoSum errors propagated in a working-precision correction. Relative error
+≤ u + O((c n u)²) κ, as the plain loop in doubled precision; `bound` is its a posteriori form.
 """
 function _sum_compensated(s::FactorialSum, segs, k::Int, tab::QIntTables{T},
                           buf::B = nothing) where {T,B<:Union{Nothing,Vector}}
@@ -333,11 +307,9 @@ function _sum_compensated(s::FactorialSum, segs, k::Int, tab::QIntTables{T},
 end
 
 """
-Accuracy policy for `Float64` values. A plain-pass value is kept when its *certified* relative error bound is
-at most `RTOL_PLAIN`; otherwise the compensated pass runs and is kept when its certified bound is at most
-`RTOL_CERTIFIED`; only then does evaluation fall back to the exact zero test and higher precision. The plain
-bound was pessimistic by ~10–1000× in numerical checks, where accepted plain values were typically
-accurate to a few units in the last place; the acceptance criterion remains the bound itself.
+Accuracy policy for `Float64` values: keep the plain pass when its certified relative bound is at most
+`RTOL_PLAIN`, else the compensated pass at `RTOL_CERTIFIED`, else the zero test and higher precision. The
+plain bound is typically 10–1000× pessimistic.
 """
 const RTOL_PLAIN = 2.0^-40          # ≈ 9.1e-13 certified
 const RTOL_CERTIFIED = 2.0^-44
@@ -348,13 +320,10 @@ _target_digits(::Type{T}) where {T} = T === BigFloat ? _decimal_digits(T) - 4 : 
 """
     value_at_level(s, k, T; fallback) -> T
 
-Value at q = e^{iπ/(k+2)}. Poles throw a `DomainError` and vanishing terms are skipped, both decided from
-valuations before any arithmetic. The sum runs in T and reports how many digits cancellation consumed.
-If too few digits survive, algebraic identities or exact confirmation of a modular candidate establish
-cancellation zeros. Nonzero values use wider arithmetic, doubling precision when necessary. Acceptance
-uses an error estimate rather than a rigorous enclosure. `fallback()` is used if a factorial falls
-outside the level tables. With `labels` (the doubled labels of a 6j), escalation first tries the column
-recurrence, subject to its own error estimate.
+Value at q = e^{iπ/(k+2)}. Poles (a `DomainError`) and vanishing terms are decided from valuations. When
+cancellation leaves too few digits, identities or exact confirmation decide zeros and nonzero values
+escalate precision. `fallback()` handles factorials outside the level tables. With `labels` (a 6j's doubled
+labels), escalation first tries the column recurrence.
 """
 function value_at_level(s::FactorialSum, k::Int, ::Type{T}; fallback, labels = nothing, family = nothing, workspace = nothing) where {T}
     v, status, segs = level_pass1(s, k, qint_tables(T, k); family=family, workspace=workspace)
@@ -366,10 +335,9 @@ end
 """
     level_pass1(s, k, tab) -> (value, status, segments)
 
-First pass in the table's own type, with no locking and no `BigFloat`, so it is safe to run on many
-threads. `status` is `:done` when the value keeps enough digits, `:escalate` when cancellation consumed
-them (the caller then runs the zero test and higher precision), or `:fallback` when a factorial falls
-outside the level tables.
+First pass in the table's own type, lock-free and without `BigFloat`, so safe on many threads. `status` is
+`:done`, `:escalate` (cancellation: zero test and higher precision follow), or `:fallback` (a factorial
+outside the level tables).
 """
 const NO_SEGMENTS = UnitRange{Int}[]          # shared empty result; never mutated
 
@@ -408,9 +376,8 @@ end
 """
     _certified_value(s, segs, k, tab, workspace) -> (value, :done | :escalate)
 
-Plain pass with its certified bound; if the bound is too loose, the compensated pass with its own. Thread
-safe (no global state). One rule for every type: a value is kept when its own bound certifies the target
-relative accuracy for that type.
+Plain pass, then the compensated pass if its bound is too loose; a value is kept when its own bound
+certifies the type's target. Thread safe.
 """
 function _certified_value(s::FactorialSum, segs, k::Int, tab::QIntTables{T}, workspace=nothing) where {T}
     if T !== Float64                     # a wider type keeps its own digit budget, as before
@@ -479,9 +446,9 @@ const LAZY_MIN_STEPS = 2
 """
     level_escalate(s, segs, k, T, ztab) -> T
 
-Finishes an `:escalate` case: algebraic identities or exact confirmation of modular candidates resolve
-zeros; nonzero sums use multiword tiers and then `BigFloat`, doubling until the error estimate meets the
-target. Callers on runtimes with shared `BigFloat` precision keep this work off worker threads.
+Finishes an `:escalate` case: identities or exact confirmation resolve zeros; nonzero sums go to multiword
+tiers, then `BigFloat`, doubling until the estimate meets the target. Keep off worker threads where
+`BigFloat` precision is shared.
 """
 function level_escalate(s::FactorialSum, segs, k::Int, ::Type{T}, ztab::LevelZeroTable;
                         labels = nothing, workspace = nothing) where {T}

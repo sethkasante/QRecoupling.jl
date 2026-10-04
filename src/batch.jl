@@ -1,13 +1,9 @@
 # --------------------------------------------
 #  Batched evaluation and level sweeps
 #
-#  A symbol function called with a collection of label tuples returns an array of values, building the
-#  per-level tables once and spreading the work over threads. This is the amortisation that matters: the
-#  tables are the expensive part and every symbol at a level shares them.
-#
-#  Worker tasks take the tables as arguments, so the common path touches no cache lock. Precision
-#  scopes are task-local on Julia 1.12+. Older runtimes use serial batches because BigFloat precision
-#  is shared there. Generic-q workers own their fixed-q tables; exact batches stay serial.
+#  A symbol called with a collection of labels builds the per-level tables once and threads the work.
+#  Workers take the tables as arguments (no cache lock). Older runtimes, where BigFloat precision is shared,
+#  and exact batches run serially; generic-q workers own their fixed-q tables.
 # --------------------------------------------
 
 "Batches at least this long are threaded when more than one thread is available."
@@ -57,9 +53,8 @@ end
 """
     BatchScratch
 
-Per-batch scratch. The doubled labels and the runs along one spin depend on the *labels* only, not on the
-level, so a grid over many levels builds them once (they were rebuilt per level: 48 B per label per level).
-`done` and `rest` are per level but reused.
+Per-batch scratch. Doubled labels and runs depend only on the labels, so a multi-level grid builds them
+once; `done` and `rest` are per level but reused.
 """
 struct BatchScratch
     J::Vector{NTuple{6,Int}}
@@ -81,9 +76,8 @@ end
 """
     _level_batch(rule, fallback, labels, k, T, threads) -> Vector{T}
 
-Values of one symbol family over many label tuples at a single level: the tables are built once and the
-labels are spread over threads. `rule(label)` builds the factorial rule; `fallback(label)` is the generic
-route for the rare label whose factorials fall outside the level tables.
+One symbol family over many labels at one level, tables built once and labels threaded. `rule(label)`
+builds the factorial rule; `fallback(label)` handles labels outside the level tables.
 """
 function _level_batch(rule::R, fallback::F, labels, k::Int, ::Type{T}, threads;
                       family = nothing) where {R,F,T}
@@ -180,13 +174,9 @@ end
 
 # ---- families: runs of labels along one spin go to the three-term recurrence ----
 #
-# A batch that contains whole columns {x j2 j3; l1 l2 l3} (x varying, the rest fixed) — a whole level from
-# `all_6j`, an F-matrix built by a comprehension, a sweep over one spin — is computed column by column by the
-# recurrence of `families.jl`: 40–85 ns per entry at any spin, every entry to ~1e-16, where a single symbol
-# costs 0.1–1 µs and much more once its Racah sum cancels. Columns are found as runs of consecutive labels
-# in which one spin steps by one (O(1) per label); any of the six positions is moved to the first by a
-# tetrahedral symmetry. Entries within 10⁻¹² of the column's largest (near a node, or exact zeros) and
-# labels outside runs take the certified single-symbol path, so exact zeros stay exact.
+# Runs of labels in which one spin steps by one (any position, moved first by symmetry) are computed as
+# columns by the recurrence of `families.jl` (40–85 ns per entry, ~1e-16). Entries within 10⁻¹² of the
+# column's largest, and labels outside runs, take the certified single-symbol path, so zeros stay exact.
 
 "Shortest run of labels worth a recurrence (below it the column setup costs more than it saves)."
 const FAMILY_MIN_RUN = 4
@@ -239,9 +229,8 @@ end
 """
     DoubledLabels
 
-Label tuples kept as doubled integers (J = 2j). It behaves as a vector of spin tuples, so every function
-takes it like any other collection of labels, while the batch path reads the integers directly and skips the
-conversion (~15 ns per label for `Rational` spins). `all_6j(; doubled = true)` returns one.
+Label tuples kept as doubled integers (J = 2j). Behaves as a vector of spin tuples; batches read the
+integers directly. `all_6j(; doubled = true)` returns one.
 """
 struct DoubledLabels <: AbstractVector{NTuple{6,Rational{Int}}}
     J::Vector{NTuple{6,Int}}
@@ -296,9 +285,8 @@ _family_fallback(::Val{:g}, J::NTuple{6,Int}, k::Int, ::Type{T}) where {T} =
 """
     _column_normalisation(family, Q, J, p) -> (xdim, cfac)
 
-How to run the column so that it comes out in the symbol's own normalisation. The G-symbol carries
-√(Π[2j+1]), the F-symbol √([2j3+1][2j6+1]); the factor of the *running* label is folded into the column
-(`xdim`), the rest is the constant `cfac`. What is left per entry is at most a sign.
+Run the column in the symbol's normalisation: the running label's dimension factor goes into the column
+(`xdim`), the rest into the constant `cfac`, leaving at most a sign per entry.
 """
 @inline _column_normalisation(::Val{:sixj}, Q, J, p) = (false, (1.0, 0.0))
 
@@ -405,9 +393,8 @@ end
 """
     _sweep_levels(symbol, args, ks; q, exact, T, threads) -> Vector
 
-One symbol across a range of levels, which is what `k = 2:50` means in a symbol call. Each level needs its
-own tables, so the levels are the unit of parallel work. Exact and generic-q sweeps stay serial, because
-they go through the computer-algebra layer.
+One symbol across a range of levels (`k = 2:50` in a symbol call), threaded over levels. Exact and
+generic-q sweeps stay serial.
 """
 function _sweep_levels(symbol::S, args, ks; q, exact::Bool, T::Type, threads) where {S}
     K = _as_vector(ks)
@@ -443,10 +430,8 @@ _rule_family(::typeof(_rule_g)) = symbol_family(GSymbol())
 """
     _rule_admissible(rule, s, l, k) -> Bool
 
-Is the symbol admissible at level `k`? The rule `s` already encodes the triangle conditions (an inadmissible
-label gives an empty rule), so for the 6j, F and G only the level bound is left — and it is free: their
-summation starts at `zlo = max α`, so `zlo ≤ k` says exactly that every triangle sum is at most 2k. The 3j
-needs its one triangle, from three labels rather than six.
+Is the symbol admissible at level `k`? The rule encodes the triangles, so for the 6j, F and G the level
+bound is `zlo ≤ k`; the 3j checks its one triangle.
 """
 _rule_admissible(rule, s::FactorialSum, l, k) = s.zlo <= k
 _rule_admissible(::typeof(_rule_3j), s::FactorialSum, l, k) = _qδ(doubled(l[1],l[2],l[3])...,k)
@@ -528,11 +513,10 @@ end
 """
     all_6j(; k, jmax = k, canonical = false, doubled = false)
 
-Every 6j label set that is admissible at level `k`, as spin tuples (multiples of 1/2 as `Rational`), with
-each spin at most `jmax`. With `canonical = true` only one representative per symmetry class is kept (all 144
-symmetries: tetrahedral relabellings and Regge's), which is what a sweep over a level of 6j values wants. F- and
-G-symbols carry dimension factors that are not invariant, so sweep them over all labels. With `doubled = true` the labels come back as `DoubledLabels`,
-which behaves the same but lets batches skip the conversion to doubled integers (~10% on a whole level).
+Every 6j label set admissible at level `k`, as spin tuples with each spin at most `jmax`. `canonical = true`
+keeps one representative per class of the 144 symmetries (tetrahedral and Regge); F- and G-symbols are
+not invariant, so sweep them over all labels. `doubled = true` returns `DoubledLabels`, which skips the
+conversion in batches.
 
 ```julia
 labels = all_6j(k = 6)

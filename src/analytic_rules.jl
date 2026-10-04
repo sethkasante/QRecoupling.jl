@@ -8,14 +8,9 @@ end
 # ---------------------------------------------------------------------------
 #  Double-word mantissas for real q
 #
-#  The machine-precision table is built by two length-N recurrences, so its
-#  entries carry O(N u) relative error (measured: 15,000 u on the unit circle)
-#  and no error bound over them can certify a Float64 answer. Carrying the
-#  mantissa as a double word makes every operation accurate to u², so the same
-#  bound certifies and the arbitrary-precision tier is only needed for genuinely
-#  ill-conditioned q. Real q needs no transcendental functions here: q is exact,
-#  q^{-2} is one division, and 1 − q^{-2} is exact as a double word even at
-#  q ≈ 1, where the Float64 build needs `expm1`.
+#  Machine-precision tables carry O(N u) error, which no bound over them can certify; double-word mantissas
+#  are accurate to u², so the same bound certifies and arbitrary precision is left for ill-conditioned q.
+#  Real q needs no transcendental functions (1 − q⁻² is exact as a double word even at q ≈ 1).
 # ---------------------------------------------------------------------------
 struct DWNum <: Real
     hi::Float64
@@ -209,18 +204,11 @@ AnalyticRuleTable(q,bits,circle,ints,inverses,facts,balanced,roots,condmax) =
 """
     _on_unit_circle(q) -> Bool
 
-Whether `q` is on the unit circle up to the rounding of its own Float64 representation.
-
-This is a question about the *input*, not about the tier evaluating it: a `q` the caller wrote as
-`cispi(t)` has `|q| = 1 ± 2⁻⁵³` because that is as close as a pair of Float64s gets, and widening it to a
-double word or to BigFloat reproduces the same near-miss rather than curing it. So the same tolerance is
-used at every precision, which is what makes the tiers agree with one another.
-
-On the circle every balanced factor `Ψ_d` is *exactly real*, and a negative one sits on the branch cut of
-the square root. Left to the arithmetic, which of `±i√|Ψ_d|` comes back is then decided by the sign of the
-rounding error in `|q| − 1` — measured, **21 of 72** unit-circle 6j symbols flipped sign under a one-ulp
-perturbation of `q` that does not change the point being asked about. `_analytic_prefactor` therefore
-discards that imaginary part and roots the real value, which fixes the branch at `+i√|Ψ_d|`; see there.
+Whether `q` is on the unit circle up to the rounding of its own Float64 representation (`cispi(t)` gives
+`|q| = 1 ± 2⁻⁵³`); the same tolerance at every precision keeps the tiers in agreement. On the circle each
+`Ψ_d` is real and a negative one sits on the branch cut, so `_analytic_prefactor` drops the rounding-noise
+imaginary part and fixes the branch at `+i√|Ψ_d|` (otherwise 21 of 72 symbols flipped sign under a one-ulp
+change of `q`).
 """
 _on_unit_circle(::Real) = false
 @inline function _on_unit_circle(q::Complex)
@@ -256,13 +244,8 @@ function _table_balanced(tab::AnalyticRuleTable)
 end
 
 """
-`√Ψ_d` for every `d`, on the branch the package takes — one principal root per balanced factor, and the
-imaginary part discarded first when `q` is on the unit circle (see `_on_unit_circle`).
-
-Cached because it is the *only* transcendental left in a complex-q prefactor and it does not depend on the
-rule: ten rooted factors at a complex `sqrt` apiece were about 300 ns of a 900 ns symbol, recomputed on
-every call at the same `q`. Built on first use, like `balanced`, and never needed on the positive real
-axis where the prefactor takes one root of the assembled product instead.
+`√Ψ_d` for every `d`, one principal root per balanced factor (real part only on the unit circle). Cached:
+it is the only transcendental in a complex-q prefactor and does not depend on the rule.
 """
 function _table_roots(tab::AnalyticRuleTable)
     length(tab.roots) == length(tab.ints) && return tab.roots
@@ -331,15 +314,9 @@ function _analytic_table(q::T,N::Int) where {T<:Union{DWNum,Complex{DWNum}}}
 end
 
 """
-Real Float64 `q`: the double-word table, rounded once per entry.
-
-The plain tier's bound counts each table read as one rounding, which needs entries correct to about `u`. The
-machine-precision recurrence above does not deliver that on the real axis: its `[n]` drift by up to 280 u and
-its `[n]!` by up to 88,000 u at n = 600 (measured near q = 0.95–0.999, where `[n+1] = (q + q⁻¹)[n] − [n−1]`
-is only weakly dominant), and the bound, which charged none of it, accepted values up to 2.3e−12 against a
-promise of 9.1e−13 (measured for `q3j_factorial` at j ≤ 150, q = 0.999). Rounded
-from double words, every entry is within half an ulp and the bound holds as written. The table is cached per
-`q`, so the 6× longer build is paid once per parameter, not per symbol.
+Real Float64 `q`: the double-word table, rounded once per entry, so every entry is within half an ulp as the
+plain tier's bound assumes. The Float64 recurrence drifted by up to 88,000 u in `[n]!` near q ≈ 1, and values
+up to 2.3e−12 were accepted against the 9.1e−13 promise. Cached per `q`.
 """
 function _analytic_table(q::Float64,N::Int)
     # [n+1] = x[n] − [n−1], x = g + 1/g with g = max(|q|, 1/|q|), in double words: near q = 1 the recurrence
@@ -375,15 +352,9 @@ function _analytic_table(q::Float64,N::Int)
 end
 
 """
-Complex Float64 `q` near the unit circle: the double-word table, rounded once per entry.
-
-There the machine-precision recurrence is only `pcond·u` accurate — `|q^{−2n}|` stays near 1, so every q-integer
-is built from a subtraction of comparable numbers (`_prefactor_cond`) — and the plain tier charged `pcond` on
-every read. Near a root of unity that charge refused the plain pass for almost every symbol, and on the circle
-every call ran in double words (15–22 µs). Rounded from double words the entries are within half an ulp, the
-charge is not needed, and the plain pass is accepted on its own bound. The value is still the one at the `q`
-that was passed; only the table is more accurate. Off the circle `pcond` is a few units and the recurrence is
-kept, so those tables are unchanged.
+Complex Float64 `q` near the unit circle: the double-word table, rounded once per entry. Accurate entries need
+no `pcond` charge, so the plain pass is accepted on the circle (2–4 µs instead of 15–22 µs in double words).
+The value is still the one at the `q` passed. Off the circle the recurrence is kept.
 """
 function _analytic_table(q::ComplexF64,N::Int)
     _negative_real_axis(q) && return _negative_axis_table(q,N)
@@ -430,16 +401,9 @@ function _analytic_table(q::T,N::Int,w::EvaluationWorkspace) where T
     tab
 end
 """
-Process-wide analytic tables, for callers that pass no workspace.
-
-The table depends on `q`, the arithmetic type and precision, and the required capacity, rather than on
-the individual labels. Caching it avoids repeated construction when scalar calls sweep labels at a
-fixed `q`, as a caller-owned workspace does. A cache hit reuses any table with sufficient capacity.
-
-Entries are shared between tasks. They are only ever *extended* — `inverses`, `balanced` and `condmax` are
-built in a local and then assigned whole — so a task either sees the empty field and rebuilds it or sees a
-finished one, and two tasks that race produce the same content. Nothing here needs a lock beyond the cache
-itself, which `empty_caches!` clears.
+Process-wide analytic tables for callers without a workspace, keyed by `q`, type and precision; a hit reuses
+any table large enough. Shared between tasks: the lazy fields are built locally and assigned whole, so a racing
+task rebuilds the same content.
 """
 const _ANALYTIC_TABLE_CACHE = LRU{UInt,Any}(maxsize = 12)
 const _ANALYTIC_TABLE_LOCK = ReentrantLock()
@@ -465,12 +429,8 @@ end
 _analytic_table(q,N,::Nothing) = _analytic_table_cached(q,N)
 
 """
-`Π Ψ_d^{e_d}` for one balanced monomial, from the table's balanced factors.
-
-A top-level function rather than the closure this used to be. The closure assigned to a variable that the
-enclosing scope also assigned to, so Julia shared them and boxed it — **35 heap allocations per prefactor**
-on the plain real path, which is a third of the cost of an entire generic-q symbol and does not exist on
-the level or classical paths.
+`Π Ψ_d^{e_d}` for one balanced monomial, from the table's balanced factors (a function, not a closure: the
+closure boxed a variable and allocated 35 times per prefactor).
 """
 @inline function _balanced_mono(m, psi, q)
     acc=_ascaled(oftype(q,m.sign))
@@ -493,14 +453,8 @@ end
 """
     _psi_exponents(s) -> (E, Dmax, qpow)
 
-The Ψ-basis exponents of a rule's prefactor `Π [n]!^c`, and its residual q-power.
-
-`[n]! = Π_{d≥2} Ψ_d^{⌊n/d⌋}` with `Ψ_d = q^{-φ(d)}Φ_d(q²)`, and `[n]` contributes `q^{1−n}` on top, so one
-pass over the rule's factorials gives both — the same numbers a `CycloBuffer` accumulates, and the same
-split into a square part and a square-free radical that `snapshot_square_root` makes, but as a flat
-exponent array instead of a buffer plus two monomials carrying two sparse exponent vectors. Those were
-**9 heap allocations in every complex-q prefactor**, on the path every symbol off the positive real axis
-takes; this is one.
+The Ψ-basis exponents of a rule's prefactor `Π [n]!^c`, and its residual q-power: `[n]! = Π_{d≥2} Ψ_d^{⌊n/d⌋}`
+with `Ψ_d = q^{-φ(d)}Φ_d(q²)`, and `[n]` adds `q^{1−n}`. One flat array, one allocation.
 """
 function _psi_exponents(s::FactorialSum)
     Dmax=0; qpow=0
@@ -523,11 +477,9 @@ end
 """
     _analytic_prefactor(s, tab) -> (value, phase_weight, nroots)
 
-The prefactor, together with what a running error bound needs to know about *how* it was computed.
-`phase_weight` is `|pr + pd/2|`, the exponent of the bare `q` power: on the complex path that power is
-`exp(phase·log q)`, whose relative error is governed by `|phase·log q|·u` rather than by any count of
-roundings, which is exactly the term the plain tier was missing. `nroots` counts the individual square
-roots and balanced-factor multiplications, which the operation count of the caller does not see.
+The prefactor, with what the running bound needs: `phase_weight = |pr + pd/2|`, the exponent of the `q`
+power evaluated as `exp(phase·log q)` (error `|phase·log q|·u`), and `nroots`, the roots and balanced-factor
+products the caller's operation count does not see.
 """
 function _analytic_prefactor(s,tab)
     q=tab.q
@@ -571,32 +523,16 @@ function _analytic_prefactor(s,tab)
         # Integer powers, so the phase costs a count of multiplications, not a logarithm.
         return _amul(r,_asqrt(v)),0.0,nroots+abs(Int(pr))+abs(Int(pd)),1.0
     end
-    # Complex q: the square root of the radical must be taken *factor by factor*, never of the
-    # assembled product. √ is not multiplicative across its branch cut, so the principal root of
-    # ∏ Ψ_d differs from ∏ √Ψ_d by a sign that depends on how the individual phases add up. With a
-    # root of the product, the two sides of a coherence identity assemble different products and
-    # their radicals no longer cancel; with one root per Ψ_d the choice depends only on the *set* of
-    # factors, which both sides share, so the cancellation is exact. Measured over 40 label sets:
-    # Biedenharn–Elliott 40/40 on and off the unit circle, against 9–36/40 for a root of the product.
-    # `rad` is square-free, so every exponent here is ±1.
+    # Complex q: root the radical factor by factor, never the assembled product. √ is not multiplicative
+    # across its cut; one root per Ψ_d depends only on the set of factors, so radicals cancel exactly in
+    # coherence identities (Biedenharn–Elliott 40/40, against 9–36/40 for a root of the product).
+    # `rad` is square-free, so every exponent is ±1.
     sv=_ascaled(one(q))
     sq=_table_roots(tab)
-    # Distance of each rooted factor from the branch cut, relative to its own size — for `q` *off* the
-    # unit circle, where a small imaginary part of Ψ_d is a fact about q and decides the root honestly.
-    # The plain tier is refused when it cannot resolve that sign (`CUT_MARGIN`).
-    #
-    # **On** the circle there is no sign to resolve: every Ψ_d is exactly real, a negative one lies on
-    # the cut, and what the arithmetic returns is decided by the rounding error in |q| − 1 rather than by
-    # the point being asked about (21 of 72 symbols flipped under a one-ulp perturbation; see
-    # `_on_unit_circle`). The imaginary part is therefore discarded and the real value rooted, which fixes
-    # the branch at +i√|Ψ_d| for every tier at once. That choice is not arbitrary:
-    #
-    #  * it is continuous in θ = arg q — √Ψ_d runs down to 0 along the reals and back up along +i, so the
-    #    symbol has no jumps between roots of unity, which the ulp-dependent branch did not manage;
-    #  * it agrees with the level path, where the radicand of an admissible symbol is positive and no
-    #    choice arises, so the limit θ → π/h reproduces `Level(k)`;
-    #  * it depends only on the *set* of Ψ_d, which both sides of a coherence identity share, so the
-    #    radicals still cancel exactly — the property the factor-by-factor rule exists for.
+    # Off the circle, a small imaginary part of Ψ_d decides its root, so the plain tier is refused when the
+    # factor is too close to the cut (`CUT_MARGIN`). On the circle Ψ_d is real: drop the noise and fix the
+    # branch at +i√|Ψ_d|, which is continuous in arg q, matches `Level(k)` as θ → π/h, and still cancels in
+    # coherence identities.
     cut=1.0
     oncut=tab.circle
     @inbounds for d in 2:Dmax
@@ -618,27 +554,17 @@ function _analytic_prefactor(s,tab)
 end
 
 """
-Weight of the phase term `exp(P·log q)` in the plain tier's running bound. Three roundings reach the
-exponent — the logarithm, the multiplication by `P`, and the exponential's own argument reduction — and
-one more is allowed for the scaled representation, so four is the constant that makes the bound hold with
-margin in numerical checks; the rounding count alone does not establish that margin.
+Weight of the phase term `exp(P·log q)` in the plain tier's running bound: three roundings reach the exponent
+plus one for the scaling; validated numerically.
 """
 const CPHASE = 4
 
 """
     _prefactor_cond(q, N) -> Float64
 
-How accurate a single table entry is, in units of `u`. Every q-integer is built from `1 − q^{-2n}`, and
-subtracting two numbers of modulus one loses digits in proportion to `|q^{-2n}| / |1 − q^{-2n}|`. Near a
-root of unity of order m that blows up at `n = m`, which is exactly where the plain tier's value went
-wrong: the *sum's* condition number says nothing about a prefactor assembled from inaccurate q-integers.
-
-Real `q` is excluded on purpose. Its tier was measured and accepted with this factor absent, and adding it
-would reject near-classical real `q` (at `q = 0.99` the factor is ≈ 50) for no measured gain in accuracy —
-a speed regression, not a correctness fix.
-
-The loop is short: once `|q^{-2n}|` leaves a neighbourhood of 1 the ratio is bounded by 2 and stays there,
-so only `|q| = 1` runs the full length, and there nothing can overflow.
+How accurate a single table entry is, in units of `u`: `max_n |q^{-2n}| / |1 − q^{-2n}|`, the digits lost in
+building `[n]` from `1 − q^{-2n}`, which blows up near a root of unity. Real `q` is excluded (it would reject
+near-classical `q` for no gain). The loop stops once `|q^{-2n}|` leaves a neighbourhood of 1.
 """
 function _prefactor_cond(q,N::Int)
     (q isa Real || _negative_real_axis(q)) && return 1.0
@@ -656,10 +582,8 @@ end
 """
     _prefactor_cond(tab, N) -> Float64
 
-The same number, read from the table instead of recomputed. Off the unit circle the loop above stops after
-a few terms and either form is free; **on** it `|q^{-2n}|` never leaves the neighbourhood of 1, so the loop
-runs its full length on every call — as expensive as building the table it is guarding. The prefix maxima
-are a property of `q` alone, so they are computed once per table and indexed.
+The same number, from prefix maxima cached on the table (on the circle the loop otherwise runs its full length
+on every call).
 """
 function _prefactor_cond(tab::AnalyticRuleTable,N::Int)
     (tab.q isa Real || _negative_real_axis(tab.q)) && return 1.0
@@ -686,17 +610,10 @@ end
 """
     NEAR_ROOT_COND
 
-Above this prefactor condition number, `q` is a root of unity that could not be written down exactly.
-
-`_prefactor_cond` is `max_n |q^{-2n}| / |1 − q^{-2n}|`, so `c ≥ 2⁻⁸/u` means some `[n]` agrees with zero
-to within a few of its own last bits: `q` is within rounding of a root of unity of order at most `2N`. The value
-returned is still the value *at the Float64 `q` that was passed* — a 512-bit rerun of the same `q` agrees
-with it to `2e−16` — but `q` itself is then only a `2⁻⁵³` approximation of the point the caller meant, and
-perturbing it by one ulp changes the answer by a factor of order one. `q6j(1,1,1,1,1,1; q = cispi(1/3))`
-returns `5.8e15 + 1.0e16im`; at the level it names, `q6j(1,1,1,1,1,1; k = 1)` is `0`.
-
-A deliberate probe of the neighbourhood is not caught: at `cispi(1/7)·(1 + 1e−10)` the smallest `|1 − q^{-2n}|`
-is `1.4e−9`, seven orders above the threshold, and those values are certified in the ordinary way.
+Above this prefactor condition number, `q` is within rounding of a root of unity of order at most `2N`. The
+value returned is still the one at the Float64 `q` passed, but a one-ulp change of `q` changes it by a factor
+of order one (`q6j(1,1,1,1,1,1; q = cispi(1/3))` is `5.8e15 + 1.0e16im`; at `k = 1` it is 0). Deliberate
+nearby probes such as `cispi(1/7)·(1 + 1e−10)` are far below the threshold and certified normally.
 """
 const NEAR_ROOT_COND = ldexp(1.0, -8) / eps(Float64)
 
@@ -725,15 +642,8 @@ function _warn_near_root(q, N::Int)
 end
 
 """
-How far a rooted factor must sit from the branch cut, relative to its own magnitude, before a plain
-Float64 prefactor is trusted. Below this the principal root's *sign* is set by rounding rather than by the
-value, and the tier falls through to the double word.
-
-This is now a guard for `q` **near** the unit circle, not on it. On the circle the imaginary part of a
-`Ψ_d` is rounding noise rather than information, so `_analytic_prefactor` discards it and the branch is
-fixed by convention (see `_on_unit_circle`); there is no sign left for a wider mantissa to resolve, and
-`cut` comes back as 1. Just off the circle a small imaginary part is a fact about `q` and does decide the
-root, which is what this refuses to guess in Float64.
+How far a rooted factor must sit from the branch cut, relative to its size, before a plain Float64 prefactor is
+trusted. A guard for `q` near the unit circle (on it the branch is fixed by convention and `cut` is 1).
 """
 const CUT_MARGIN = 1e-6
 
@@ -741,12 +651,8 @@ const CUT_MARGIN = 1e-6
 _wide_arith(q) = real(q) isa BigFloat || real(q) isa DWNum
 
 """
-`q^n` and `q^{n/2}` as scaled values, accurate to about one rounding of the pass's own precision.
-
-Binary powering in Float64 carries a relative error that grows like `n·u` (each squaring doubles the error
-already there), and the Clebsch–Gordan weights reach `n ~ j²`. A Float64 pass therefore powers in a double
-word and rounds once; the double-word and arbitrary-precision passes power in their own arithmetic, where
-`n·u` is far below what they certify.
+`q^n` and `q^{n/2}` as scaled values, accurate to about one rounding: Float64 binary powering errs like
+`n·u` and the CG weights reach `n ~ j²`, so a Float64 pass powers in double words and rounds once.
 """
 _aqpow(q,n::Int) = _apow(_ascaled(q),n)
 _aqpow(q::ComplexF64,n::Int) = _anarrow(_apow(_ascaled(_dwnum(q)),n))
@@ -960,17 +866,9 @@ end
 """
     analytic_value(s, q, T; workspace) -> value
 
-The same evaluation, with `T` as a **floor** on the working precision and on the output type.
-
-Without this method the `T` keyword was silently dropped at generic `q`: `q6j(js...; q = 0.7, T = BigFloat)`
-returned a `Float64`, and a batch returned a `Vector{Float64}`, while the identical call at a level
-honoured `T`. Asking for `BigFloat` now widens `q` and runs the whole ladder there.
-
-`T` is a floor and not an exact output type, because at generic `q` the *parameter* also carries a
-precision and a `q` the caller gave in `Complex{BigFloat}` must not be narrowed by the default
-`T = Float64`. So the result type is `promote_type(T, typeof(value))`: asking for more gives more, asking
-for less than `q` already carries gives what `q` carries. A real `T` with a complex `q` widens the same
-way, which is why `q6j(js...; q = 0.8 + 0.3im)` keeps returning a `ComplexF64`.
+The same evaluation, with `T` as a **floor** on the working precision and output type: the result type is
+`promote_type(T, typeof(value))`, so `BigFloat` widens `q`, and a `Complex{BigFloat}` or complex `q` is never
+narrowed by the default `T = Float64`.
 """
 function analytic_value(s::FactorialSum,q::Number,::Type{T};workspace=nothing,labels=nothing,
                         weight::Tuple{Int,Int}=(0,0),near_edge=nothing) where {T}
@@ -982,13 +880,9 @@ function analytic_value(s::FactorialSum,q::Number,::Type{T};workspace=nothing,la
 end
 
 """
-Direct, scaled analytic evaluation with compensated sums and precision escalation.
-
-`labels` are the doubled 6j labels when the rule *is* a bare 6j, and they buy the near-edge tier: the
-symbol as one entry of its column, filled by the three-term recurrence in `O(distance)` with no Racah-sum
-cancellation at all. It is offered the case only after the double word has failed, exactly as
-`level_escalate` does at a level, and it declines whenever its own estimate cannot certify the entry — so
-the arbitrary-precision ladder below is still what answers when the recurrence is unsafe.
+Direct, scaled analytic evaluation with compensated sums and precision escalation. For a bare 6j, `labels`
+enable the near-edge tier (the column recurrence) after the double word fails; it declines when it cannot
+certify, and the arbitrary-precision ladder answers.
 """
 function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothing,
                         weight::Tuple{Int,Int}=(0,0),near_edge=nothing)
@@ -1013,27 +907,10 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
     weighted && (ops+=16*(s.zhi-s.zlo+1)*(abs(w)*(s.zhi+1)+abs(e2)+2))
     tol=R===BigFloat ? eps(one(real(qq)))*32 : R(64)*eps(R)
     if R===Float64
-        # Plain tier, accepted on a *running* bound rather than an operation count.
-        #
-        # The operation-count bound below (`ops`) is ~300× looser than the work actually done, because it
-        # charges every term the worst case: at j = 5 it is of order 10⁴ against an index-weighted
-        # c·Σj|t_j|/|Σ| of order 50κ. Measured, it accepted a plain pass for *0 of 13* label sets in every
-        # regime, so the plain tier was dead code and every generic-q call paid for double-word tables and
-        # arithmetic — measured overheads of 2.7–4.4× on the pass and 4.9–7.7× on the table.
-        #
-        # The running bound combines the term-generation error c·u·Σ j|t_j|, the
-        # summation error (the plain pass is compensated, so 2u·Σ|t_j| covers it), and the prefactor and
-        # first-term roundings. Accepting at `RTOL_PLAIN` makes the contract the same one the level and
-        # classical kernels already offer, rather than a second, stricter one that nothing could meet.
-        # A value that fails it falls through to exactly the tiers that ran before.
-        #
-        # Complex q needs one more term. Off the positive real axis the prefactor ends in
-        # `_aexp_pow(q, P) = exp(P·log q)` with a balanced phase `P = pr + pd/2` that grows with the
-        # labels, and the error of that is not a count of roundings: perturbing the exponent by δ
-        # multiplies the result by exp(δ), so the relative error is |P·log q|·u up to a small constant.
-        # Charging `CPHASE·|P|·|log q|`, plus the individual square roots and balanced factors that the
-        # operation count never saw (`nr`), makes the bound cover the complex path as well. On the
-        # positive real axis `pw` and `nr` are zero, so these additional terms vanish.
+        # Plain tier, accepted on a running bound (an operation count was ~300× too loose and never passed):
+        # term generation c·u·Σ j|t_j|, compensated summation 2u·Σ|t_j|, prefactor and first-term roundings,
+        # and for complex q the phase term CPHASE·|P|·|log q| plus the roots and balanced factors (`nr`).
+        # Accepting at RTOL_PLAIN gives the same contract as the level and classical kernels.
         mode=POLICY[]
         if !(mode === :strict || mode === :strict_lazy || mode === :compensated_only)
             tabp=_analytic_table(qq,N,workspace)
@@ -1042,21 +919,9 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
             cstep=2*sum(f->abs(Int(f.c)),s.fac;init=0)+2+(iszero(w) ? 0 : 2)
             mpre=2*(sum(p->abs(Int(p.second)),s.pre;init=0)+sum(f->abs(Int(f.c)),s.fac;init=0))+2
             phase=iszero(pw) ? zero(R) : R(CPHASE)*R(pw)*abs(log(qq))
-            # Every table entry a rule reads is only `pcond·u` accurate, so `pcond` multiplies the
-            # *count* of reads — the prefactor's factorials and balanced factors, and equally the ratio
-            # steps of the sum. Charging it on the prefactor alone left the bound short: over 8,000
-            # (labels, q) pairs it understated the measured error in 5 of them, worst by 3.1×, all on the
-            # unit circle where `pcond` is the several-fold thing it is, and one accepted case came within
-            # 3% of the promise. With it on both terms nothing understates. On the positive real axis
-            # `pcond` is 1 and the bound is bit-for-bit the one measured before.
-            #
-            # The two terms get their *own* condition number, because they do not read the same entries.
-            # The prefactor's factorials stop at the largest argument in `s.pre`; the sum's ratio steps go
-            # to `N`. On the unit circle the worst `[n]` is often above the prefactor's reach, and
-            # charging the whole bound at `condmax[N]` then rejects a pass whose prefactor never touched
-            # the bad index — which is most of what kept the unit circle on the double word at large spin.
-            # A table rounded from double words is accurate whatever `pcond` is, and is charged nothing for
-            # it; the condition still decides the near-root warning, which is about `q`, not the table.
+            # Table entries are only `pcond·u` accurate, so `pcond` multiplies the count of reads, separately
+            # for the prefactor (up to its largest argument) and the sum (up to N). Tables rounded from double
+            # words are charged nothing; the condition still drives the near-root warning.
             pc=_prefactor_cond(tabp,N)
             pc >= NEAR_ROOT_COND && _warn_near_root(qq,N)
             pcond=tabp.accurate ? one(R) : R(pc)
@@ -1077,14 +942,8 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
         if isfinite(kd) && ops*eps(DWNum)*kd <= tol
             return T(_aldexp(_narrow(vd.m),vd.e))
         end
-        # The near-edge tier, before arbitrary precision: O(distance) along the column instead of a sum
-        # whose digits have gone. It returns `nothing` rather than a value it cannot stand behind.
-        #
-        # It is asked for this path's own promise rather than its stricter default. `RTOL_PLAIN/8` is what
-        # every other value returned here is certified to, with a factor of eight in hand for an estimate
-        # that is a measured heuristic; asking for 1e−14 instead made the tier decline the whole unit
-        # circle, where the table's conditioning puts a floor of about 5e−14 on it, and the arbitrary
-        # precision tier then cost 46 µs at j = 30 to deliver digits nobody was promised.
+        # Near-edge tier before arbitrary precision: O(distance) along the column, asked for this path's own
+        # promise RTOL_PLAIN/8 (a stricter target declined the whole unit circle for no promised gain).
         if labels !== nothing && !weighted
             vr = sixj_entry(labels,qq,_column_workspace(workspace);rtol=RTOL_PLAIN/8)
             vr === nothing || return T(vr)

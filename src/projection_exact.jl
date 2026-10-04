@@ -6,17 +6,8 @@
 
 
 # -------------------------------------------------------------------------------
-# !!! note  Performance note for high level k:
-# 
-# This exact engine maps a deferred cyclotomic representation (DCR) into Nemo.jl 
-# cyclotomic number fields. It is optimized to use zero-division hot loops.
-# However, Computer Algebra Systems (CAS) fundamentally consume exponential 
-# memory as the cyclotomic degree grows. 
-# 
-# As a rule of thumb, this exact engine is incredibly fast and stable for k < 500. 
-# Pushing past k = 1000 may cause RAM explosion or severe slowdowns due to 
-# dense polynomial arithmetic. If you are working in ultra-high level regimes, 
-# consider using the discrete numeric solver instead.
+# DCR → Nemo cyclotomic field ℚ(ζ_{2h}) (deprecated; `Exact(k)` uses the real basis). Fast for k < 500;
+# dense cyclotomic arithmetic makes k ≳ 1000 slow and memory-hungry.
 # -------------------------------------------------------------------------------
 
 

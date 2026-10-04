@@ -13,15 +13,9 @@
 #  [x]_q = [2x]_r/[2]_r, and the common [2]_r² drops out, so every coefficient is a product of integer
 #  r-numbers at doubled labels and a power of r — no half-integer q-numbers and no fractional powers.
 #
-#  The column is run as in `families.jl`: forward from lo to the first local maximum and backward from hi to
-#  it, each in the direction in which the column grows, matched there, all in double words (u² per step).
-#  The scale: at real q, Σ C² = 1 is a sum of positive terms and C(hi) > 0 (a single term with sign +1), so no
-#  seed value is needed; at a level the entries are complex and Σ C² can cancel, so one certified endpoint (a
-#  single-term sum, from the level pass) sets it. Error per entry: relative n·u² on the forward stretch, and
-#  absolute against the largest entry the backward branch has passed beyond the meeting point.
-#
-#  In numerical checks against 256-bit references, every sampled entry agreed to ≤ 4e−16, at
-#  q = 0.5 … 2, q = 1 and levels, against ≤ 9e−13 promised by the direct sum.
+#  Run as in `families.jl`, two-sided in double words. Scale: at real q, Σ C² = 1 (positive terms) with
+#  C(hi) > 0; at a level, one certified single-term endpoint. Error: relative n·u² on the forward stretch,
+#  absolute beyond the meeting point. Measured ≤ 4e−16 against 256-bit references.
 # ---------------------------------------------------------------------------------
 
 """
@@ -298,10 +292,8 @@ end
 #    e_j = −q^{m1+j1}[j1−m1] + q^{m+j}[j−m][j+j1−j2][j1+j2+j+1]/([2j][2j+1])
 #          + q^{m−j−1}[j1+j2−j][j+m+1][j−j1+j2+1]/([2j+1][2j+2]).
 #
-#  The entries are those of the q-Hahn polynomials' three-term recurrence (Koekoek–Swarttouw 14.6.3) in
-#  p = q², n = j1+j2−j, N = j1+j2−m, α = p^{−2j1−1}, β = p^{−2j2−1}, rewritten in q-numbers with the common
-#  factor q − q⁻¹ divided out — so nothing cancels against 1 near q = 1, and q → 1 is the classical recurrence.
-#  Numerically matched against Cᵀ diag(q^{2m1}) C to 1e−15 at q = 0.8 and 1.3.
+#  The q-Hahn recurrence (Koekoek–Swarttouw 14.6.3: p = q², n = j1+j2−j, N = j1+j2−m, α = p^{−2j1−1},
+#  β = p^{−2j2−1}) in q-numbers with q − q⁻¹ divided out, so q → 1 is the classical recurrence.
 # ---------------------------------------------------------------------------------
 
 """
@@ -412,12 +404,9 @@ end
 """
     _cg_entry(q, k, J1, M1, J2, M2, J; workspace=nothing) -> value or nothing
 
-One coefficient from its column, for the near-edge tier: returned only when its estimate meets the plain
-tier's promise with a factor of eight in hand, as `sixj_entry` is asked. `q` real and positive, or a level.
-
-The row in j through the entry (`_cg_row!`) is no shorter: a sector of the coupling matrix is square, so the
-column and the row both have one entry per j ≥ |m|. The column is kept because its coefficients can be reused
-from a workspace, and because a level's fusion rule never cuts it.
+One coefficient from its column, for the near-edge tier, returned only if its estimate meets
+`RTOL_PLAIN/8`. `q` real and positive, or a level. The row through the entry is the same length (a sector is
+square), and the column can reuse workspace coefficients and is never cut by a level.
 """
 function _cg_entry(q, k, J1::Int, M1::Int, J2::Int, M2::Int, J::Int; workspace=nothing)
     T = _cg_tables(q, k, J1, J2)
@@ -470,8 +459,8 @@ column is the coupled vector |j m⟩ in the basis `kron(e_{m1}, e_{m2})`; column
 each j, m from j down. At real `q` and classically `C` is orthogonal; at a level only the `j` inside the fusion
 rule are columns, and `transpose(C) * C ≈ I` (complex orthogonal: the entries are complex).
 
-The matrix is dense, (2j1+1)(2j2+1) square — 110 MB at j1 = j2 = 30; the sector method
-`qcg_matrix(j1, j2, m)` holds only the nonzero block of one m, and is how the full matrix is built.
+The matrix is dense, (2j1+1)(2j2+1) square (110 MB at j1 = j2 = 30); `qcg_matrix(j1, j2, m)` holds one
+sector.
 
 ```julia
 C, prod, coup = qcg_matrix(1, 1//2; q = 0.8)
