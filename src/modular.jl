@@ -152,7 +152,7 @@ end
 """
     tmatrix(k; T = ComplexF64, anomaly = true) -> (Tm, labels)
 
-The modular T-matrix, `T_{ab} = δ_{ab}·exp(−2πi c/24)·θ_a`. With `anomaly = false` the framing phase is
+The modular T-matrix, `T_{ab} = δ_{ab}·exp(-2πi c/24)·θ_a`. With `anomaly = false` the framing phase is
 dropped and the diagonal is the bare twists, which is what most fusion-category conventions print.
 
 Returned as a `Diagonal`-shaped dense matrix so that `(S*T)^3 ≈ S^2` can be written directly.
@@ -171,7 +171,7 @@ end
 The total quantum dimension `D = √(Σ_a d_a²) = √(h/2)/sin(π/h)`, `h = k+2`.
 
 The closed form is used rather than the sum — they agree, and `test/modular.jl` checks that they do —
-because `Σ_{n=1}^{h-1} sin²(nπ/h) = h/2` exactly, which is also why `D² = 2h/(4−x²)` is a rational
+because `Σ_{n=1}^{h-1} sin²(nπ/h) = h/2` exactly, which is also why `D² = 2h/(4-x²)` is a rational
 function of the package's `x = 2cos(π/h)`.
 """
 total_qdim(k::Integer; T::Type = Float64) = _total_qdim(k, T)
@@ -277,9 +277,7 @@ function bmatrix(a::Spin, b::Spin, c::Spin, d::Spin;
     (isempty(es) || isempty(es2)) && return B, es, es2
     @inbounds for (l, f) in enumerate(fs)
         r = rmatrix(b, c, f; k = k, q = q)
-        # `inv`, not `conj`: they agree only where |R| = 1. At a level they do, but at real q the
-        # braiding is a positive real number and conjugating it is not inverting it — measured, that
-        # left `B⁻¹B` off the identity by 11.5 at q = 0.7.
+        # `inv`, not `conj`: they agree only where |R| = 1.
         inverse && (r = inv(r))
         for j in eachindex(es2)
             w = r * F2[j, l]
