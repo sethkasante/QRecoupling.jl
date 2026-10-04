@@ -8,7 +8,7 @@
 
 **Quantum recoupling, from fast numerical coefficients to readable exact formulas.**
 
-Evaluate classical and quantum 3j/6j symbols, fusion and braiding data, and finite q-factorial series in Julia. Use the same labels at `q = 1`, at a root-of-unity, or at a real or complex q. Build exact level values and generic formulas in `x = q + q⁻¹`.
+Evaluate classical and quantum Clebsch–Gordan coefficients, 3j/6j symbols, fusion and braiding data, and finite q-factorial series in Julia. Use the same labels at `q = 1`, at a root-of-unity, or at a real or complex q. Build exact level values and generic formulas in `x = q + q⁻¹`.
 
 `QRecoupling` provides local building blocks for angular momentum, spin networks, Turaev–Viro models, and fusion-based tensor networks. It does not contract full networks or assemble state sums automatically.
 
@@ -29,7 +29,7 @@ s = q6j(Symbolic(), js...)      # symbolic form, unexpanded sum
 x_form(s)                      # explicit x-form = (x² − 3) / (x⁴ − 3x² + 2)
 ```
 
-The spin labels are physical spins: use `1//2` for a half-integer (also accepts `0.5`). The same target interface applies to 3j, F/G symbols, dimensions, and q-integer/factorial/binomial products.
+The spin labels are physical spins: use `1//2` for a half-integer (also accepts `0.5`). The same target interface applies to Clebsch–Gordan coefficients, 3j, F/G symbols, dimensions, and q-integer/factorial/binomial products.
 
 ## What makes it useful?
 
@@ -49,6 +49,15 @@ grid = q6j(Level(15:20), labels)  # labels × levels
 ```
 
 At generic complex q, F matrices are complex orthogonal, not generally unitary: use `transpose(F)`, not the adjoint, in the algebraic identity.
+
+Quantum Clebsch–Gordan coefficients of U_q(sl₂) take the argument order of WignerSymbols.jl's `clebschgordan`, and equal the ordinary coefficients at q = 1:
+
+```julia
+qcg(1//2, 1//2, 1//2, -1//2, 1, 0)            # 1/√2
+qcg(At(0.8), 1//2, 1//2, 1//2, -1//2, 1, 0)   # quantum value at q = 0.8
+C, rows, cols = qcg_matrix(1, 1; q=0.8)       # whole coupling matrix, by recurrence
+@assert C * transpose(C) ≈ I
+```
 
 ## Custom finite series
 
@@ -95,7 +104,7 @@ Coming from v0.3: omitted q/k now means classical evaluation, including `qint`, 
 
 - *Floating point:* factorial-rule sums with compensated arithmetic; precision is raised when cancellation in the sum would otherwise cost digits loss.
 - *Exact:* algebraic numbers in the x-basis; equality, including `ExactXSum`, is decided by algebraic arithmetic, never by a numerical tolerance.
-- *Zero tests:* `iszero_at` and `level_spectrum` are fast modular screens. Confirm a reported zero with `Exact(k)` when you need a proof.
+- *Zero tests:* `iszero_at` confirms unresolved modular candidates with exact arithmetic. The `:cancels` entries of `level_spectrum` are screening results unless you pass `prove = true`.
 
 The fast paths are Float64 and machine-size labels. High-degree exact sums and BigFloat F matrices are supported but cost more. Batches and level grids can run on several threads; do not clear caches while other threads are evaluating.
 
