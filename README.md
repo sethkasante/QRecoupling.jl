@@ -74,7 +74,7 @@ qeval(s; q=0.8)
 qeval(Exact(20), s)
 ```
 
-This interface covers finite factorial-product sums. Arbitrary parameterized q-Pochhammer factors and infinite-series convergence are not currently supported. A compatibility DCR callback interface remains available for cyclotomic monomials and explicit q powers.
+This interface covers finite factorial-product sums. Arbitrary parameterized q-Pochhammer factors and infinite-series convergence are not currently supported.
 
 ## Install and upgrade version
 
@@ -103,7 +103,7 @@ See the [migration guide](https://sethkasante.github.io/QRecoupling.jl/stable/mi
 - [Research applications](https://sethkasante.github.io/QRecoupling.jl/stable/applications/)
 - [Full documentation](https://sethkasante.github.io/QRecoupling.jl/stable/) (latest release; [`dev`](https://sethkasante.github.io/QRecoupling.jl/dev/) follows `main`)
 
-**What the numbers mean.** Floating-point values, exact values, and zero tests are computed separately, each stated in the [accuracy guide](https://sethkasante.github.io/QRecoupling.jl/stable/performance/):
+**What the numbers mean:** Floating-point values, exact values, and zero tests are computed separately, each stated in the [accuracy guide](https://sethkasante.github.io/QRecoupling.jl/stable/performance/):
 
 - *Floating point:* factorial-rule sums with compensated arithmetic; precision is raised when cancellation would otherwise cost significant digits. Final conversion can underflow a nonzero value to zero.
 - *Exact:* algebraic numbers in the x-basis; equality, including `ExactXSum`, is decided by algebraic arithmetic, never by a numerical tolerance.

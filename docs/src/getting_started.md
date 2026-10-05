@@ -48,7 +48,9 @@ g = x_form(s)                           # explicit rational x-form with ψ radic
 g
 ```
 
-`Symbolic()` also applies to `qint`, `qfact`, `qbinomial`, dimensions, and the other recoupling symbols. It retains and displays the rule without carrying out the sum. `value.dcr` constructs a compatibility DCR lazily; ordinary numerical use needs no DCR.
+`Symbolic()` also applies to `qint`, `qfact`, `qbinomial`, dimensions, and F/G symbols. It retains and displays the rule without carrying out the sum. Use `x_form(value)` when you need an expanded expression.
+
+`qcg` and `q3j` support `Classical()`, `Exact()`, `At(q)` and `Level(k)`. Their deformation-dependent weights are included in numerical evaluation, but `Exact(k)` and `Symbolic()` are not yet supported.
 
 ## Batches and level sweeps
 

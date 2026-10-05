@@ -36,7 +36,7 @@ again = x_form(large)      # reuse the cached calculation; return an owned copy
 nothing # hide
 ```
 
-Dimensions and theta graphs use the same symbolic x-form interface. Radicals are displayed as products of ψ factors, where ψ_e(x) is the minimal polynomial of 2cos(2π/e). `phi_form(value)` remains an explicit cyclotomic factorization request. `value.dcr` builds a compatibility DCR on demand; printing a DCR shows only its deferred structure and never invokes `phi_form`. Braiding and twist phases preserve their branch through `u² − x·u + 1 = 0`, with `u = q`: x alone cannot distinguish q from its reciprocal.
+Dimensions and theta graphs use the same symbolic x-form interface. Radicals are displayed as products of ψ factors, where ψ_e(x) is the minimal polynomial of 2cos(2π/e). `phi_form(value)` requests cyclotomic factorization explicitly. Braiding and twist phases preserve their branch through `u² − x·u + 1 = 0`, with `u = q`: x alone cannot distinguish q from its reciprocal.
 
 Generic square roots specify an algebraic expression. To evaluate with the package's numerical branch convention, use `qeval(s; q=...)` or a level target on the original symbolic value. A polynomial identity does not license arbitrary changes of square-root branches at complex q.
 
@@ -69,7 +69,7 @@ no_surd
 | `:long` | The expression exceeds an explicitly requested length budget |
 | `:failed` | The descent could not finish its required sign checks |
 
-Here “radical” means **nested square roots**, not arbitrary nth roots. A `:none` result is not a claim that no representation using more general radicals exists. The default `degree_limit` is 32; `maxlen=0` imposes no expression-length cap. Increasing the degree limit can be very expensive in both time and memory. The older `QRecoupling.radical_form` API remains available but returns `nothing` instead of a reasoned failure object.
+Here “radical” means **nested square roots**, not arbitrary nth roots. A `:none` result is not a claim that no representation using more general radicals exists. The default `degree_limit` is 32; `maxlen=0` imposes no expression-length cap. Increasing the degree limit can be very expensive in both time and memory.
 
 To request an approximate value alongside the stored x-form:
 
@@ -98,7 +98,6 @@ The numerical evaluation of a sum of several exact radical classes has a separat
 ```@docs
 SymbolicValue
 x_form
-QRecoupling.xvalue
 XValue
 ExactX
 ExactXSum

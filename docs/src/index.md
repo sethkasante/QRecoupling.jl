@@ -40,6 +40,8 @@ Symbolic construction and display retain the factorial rule without carrying out
 | Whole fusion transformation | `fmatrix(a,b,c,d; k=k)` | Matrix and its row/column labels |
 | Finite factorial series | `FactorialSum(...)`, `qeval(...)` | The same evaluation targets |
 
+Quantum CG and 3j coefficients also support the numerical targets and `Exact()` at q = 1. Their exact-level and generic symbolic forms are not yet available.
+
 ## Why use it?
 
 - **One mathematical rule, several evaluations.** Compact factorial rules feed direct numerical and exact calculations, avoiding large symbolic expansions on the numerical path.

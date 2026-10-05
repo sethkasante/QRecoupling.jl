@@ -13,6 +13,8 @@ s = FactorialSum(1:3; factors=[(2,0,1)])
 
 Repeated factors are combined at construction. Factorial arguments must remain nonnegative integers over the finite range. General integer slopes, negative exponents, alternating signs, and an optional square-root prefactor are supported.
 
+`qcg` and `q3j` reuse this factorial machinery with additional q-power weights stored separately. Those weights are not yet part of the public `FactorialSum` constructor or its symbolic representation.
+
 ```@example rules
 r = FactorialSum(0:4;
     factors=[(2,0,1), (1,0,-2), (-1,4,1)],
@@ -37,32 +39,10 @@ Eligible families use three-term recurrences; selected single symbols can use a 
 
 Numerical evaluation does not first expand the symbolic rational function. This matters: polynomial expansion can be much more expensive than computing one value, and evaluating large expanded polynomials near x = 2 can itself be ill-conditioned.
 
-## The role of DCR
+## Symbolic expansion
 
-A Deferred Cyclotomic Representation stores a prefactor, a first summand, and adjacent-term ratios as factored cyclotomic monomials. It remains useful for legacy projections and callback series with explicit q powers. It is no longer the main user-facing symbolic form, and this compatibility layer is planned for retirement.
-
-```@example rules
-d = symbolic.dcr
-@assert d isa QRecoupling.DCR # hide
-d
-```
-
-Construction of `.dcr` is lazy and cached. Printing a DCR shows its structure; it neither sums nor factors its expression. `phi_form(symbolic)` remains an explicit, potentially expensive cyclotomic factorization request. Prefer `x_form(symbolic)` for reciprocal formulas.
-
-For callback series, return **cyclotomic monomials**, not numeric q-factorials:
-
-```@example rules
-d = qseries(1:5) do z
-    QRecoupling.qfact_mono(z)
-end
-@assert isapprox(qeval(d), sum(factorial(z) for z in 1:5)) # hide
-qeval(d)
-```
-
-The `*_mono` constructors are qualified compatibility helpers. For new factorial sums, prefer the compact `FactorialSum` or factorial-triple `qseries` interface. A callback series with an interior zero term cannot in general supply the next ratio and is rejected.
+`qeval(Symbolic(), rule)` retains the factorial rule without evaluating the sum. `x_form(value)` expands it in x; `phi_form(value)` requests cyclotomic factorization in q. Both expansions are explicit, and factorization can be substantially more expensive. See [Exact values in x](tutorials/exact_forms.md) for examples.
 
 ## Extending the symbol interface
 
 `QRecoupling.symbol_rule(QRecoupling.SixJ(), labels...)` exposes a symbol's rule using physical spins. A new `QRecoupling.QSymbol` subtype supplies `QRecoupling.symbol_rule`, `QRecoupling.nlabels`, and `QRecoupling.level_admissible`; `QRecoupling.symbol_family` and `QRecoupling.symbol_of` connect optional recurrence and function dispatch. Implementing a new formula this way lets it reuse the existing rule evaluators.
-
-`QRecoupling.build_dcr!` and `QRecoupling.CycloBuffer` remain advanced compatibility tools. Reusing the buffer reduces scratch allocation, but constructing and storing the returned DCR still allocates.

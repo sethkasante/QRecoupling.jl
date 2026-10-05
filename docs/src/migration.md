@@ -4,19 +4,18 @@
 
 ### `q3j` is the quantum 3j symbol
 
-`q3j` is now the 3j symbol of U_q(sl₂): the q-Clebsch–Gordan coefficient [`qcg`](@ref) with the 3j phase and normalisation. Up to v0.4 it substituted quantum factorials into the classical formula without the q-power weights, which is not the U_q(sl₂) coefficient and is not orthogonal at q ≠ 1. Classical values are unchanged; values at real or complex q and at levels change, and level values are complex. The old function remains available, unexported, as `QRecoupling.q3j_factorial`, with all its targets (including `Exact(k)` and `Symbolic()`).
+`q3j` is now the 3j symbol of U_q(sl₂): the q-Clebsch–Gordan coefficient [`qcg`](@ref) with the 3j phase and normalisation. It includes the deformation-dependent weights missing in v0.4. Classical values are unchanged; deformed values change, and level values are complex.
 
-```@example migration
-using QRecoupling
-q3j(1, 1, 1, 1, -1, 0) == QRecoupling.q3j_factorial(1, 1, 1, 1, -1, 0)   # classical: identical
-(q3j(1, 1, 1, 1, -1, 0; q = 0.8), QRecoupling.q3j_factorial(1, 1, 1, 1, -1, 0; q = 0.8))
-```
+`q3j` and `qcg` support numerical evaluation and exact classical values through `Exact()`. `Exact(k)` and `Symbolic()` are not yet implemented for these weighted coefficients.
+
+For existing code that requires the former formula, `QRecoupling.q3j_factorial` remains available with its previous targets.
 
 ### Negative real q is complex
 
 At negative real q every symbol uses the square-root branch of `complex(q)`, so results are complex and agree with the same point supplied as complex. Positive real q, classical values and levels are unchanged.
 
 ```@example migration
+using QRecoupling
 q6j(1, 1, 1, 1, 1, 1; q = -0.8) == q6j(1, 1, 1, 1, 1, 1; q = complex(-0.8))
 ```
 
@@ -34,9 +33,13 @@ These names are no longer exported. They still exist: call them as `QRecoupling.
 | Symbol interface, for adding symbols | `QSymbol`, `SixJ`, `ThreeJ`, `FSymbol`, `GSymbol`, `Tetrahedron`, `ThetaValue`, `symbol_rule`, `level_admissible`, `symbol_family`, `symbol_of`, `nlabels` |
 | Lower-level exact access | `exact_x` (use `Exact(k)`), `generic_sixj` (use `x_form(q6j(Symbolic(), …))`), `xvalue` (deprecated; use `x_form`), `radical_form`, `has_radical_form`, `radical_levels`, `xpolynomial`, `radicand` (use `v.x_value`), `splits_completely` |
 | Modular data helpers | `level_labels`, `central_charge`, `total_qdim`, `gauss_sum`, `monodromy`, `verlinde` |
-| Other | `EvalTarget`, `q3j_factorial` |
+| Other | `EvalTarget` |
 
 `smatrix`, `tmatrix`, `bmatrix`, `twist`, `rmatrix` and `fmatrix` remain exported.
+
+### DCR compatibility
+
+The DCR constructors, monomial helpers, callback form of `qseries`, and raw projection functions remain available for existing code and are planned for retirement. New code should use `FactorialSum` or factorial-triple `qseries`, `qeval`, and the evaluation targets. `value.dcr` still constructs a compatibility representation lazily; callbacks must return cyclotomic monomials. The public `phi_form(value)` operation remains available for cyclotomic factorization.
 
 ### New
 
@@ -59,13 +62,13 @@ qint(Symbolic(),5)
 
 | Earlier pattern | v0.4 replacement |
 |:--|:--|
-| `q6j(js...)` to construct a DCR | `q6j(Symbolic(), js...).dcr` |
+| `q6j(js...)` for a symbolic expression | `q6j(Symbolic(), js...)` |
 | `qfact(n)` as a symbolic expression | `qfact(Symbolic(), n)` |
-| `qfact(n)` inside a monomial callback | Prefer a factorial rule; otherwise `QRecoupling.qfact_mono(n)` |
+| Monomial callbacks for factorial sums | `FactorialSum` or factorial-triple `qseries` |
 | Exact level cyclotomic wrapper by default | `Exact(k)` returns `ExactX` |
 | `eager=true` | Remove the keyword |
 
-`qseries` remains a constructor: triples produce a `FactorialSum`, callbacks produce a DCR. Callback functions must return cyclotomic monomials; numeric product defaults cannot be substituted there. `SymbolicValue` is a rule-backed view, not a replacement monomial with the same multiplication interface. Build product rules using factorial prefactors or expand with `x_form` when algebra is needed.
+`SymbolicValue` retains a factorial rule; it does not have the old monomial multiplication interface. Build product rules using factorial prefactors or expand with `x_form` when algebra is needed.
 
 ### Exact classical evaluation
 
@@ -89,7 +92,7 @@ This also applies to `k=10, exact=true` for the recoupling and product functions
 
 Use `x_form(value)` to expand a symbolic rule. The earlier `QRecoupling.xvalue(value)` spelling is deprecated; `value.x_value` on an exact level result instead exposes its stored polynomials.
 
-Symbolic expressions display their finite factorial rule in x without carrying out the sum, for both small and large labels. Radicals use ψ factors. `x_form(value)` explicitly expands and caches the generic formula, returning an owned copy. `.dcr` constructs a compatibility DCR only when accessed; printing that DCR does no φ-form arithmetic.
+Symbolic expressions display their finite factorial rule in x without carrying out the sum, for both small and large labels. Radicals use ψ factors. `x_form(value)` explicitly expands and caches the generic formula, returning an owned copy.
 
 Dimensions and theta graphs use this interface too. R matrices and twists retain `QPhase` objects with an explicit branch over x. A classical exact R value is an integer sign; a symbolic or exact-level R value remains a phase.
 

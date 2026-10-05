@@ -74,8 +74,6 @@ certificate
 
 `prove_identity` compares normalized generic expressions by polynomial arithmetic. A proved identity is valid in the formal algebraic expression wherever the denominators are nonzero; complex numerical evaluation must retain consistent square-root branches. The returned `exceptional` list scans levels only through `kmax`. A canceled expression can have fewer visible denominator zeros than the original summands, so this list is not a substitute for checking their admissibility or singularities.
 
-`QRecoupling.generic_sixj` is a lower-level alternative that takes **doubled integer labels**. Prefer `x_form(q6j(Symbolic(), ...))` when working with physical spins consistently.
-
 ## When a zero test is a certificate
 
 `ExactXSum` keeps terms in radical classes. At a particular level, different generic classes can represent dependent roots. `iszero`/`==` use structural and norm tests first, then exact algebraic numbers in the selected real embedding when those tests are inconclusive. A `true` result is an exact zero decision, independent of numerical tolerance or rational rescaling. The fallback can be more expensive for high-degree values.
