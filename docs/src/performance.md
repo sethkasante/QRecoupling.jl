@@ -33,6 +33,8 @@ high
 
 Construct q at the intended precision: converting an existing Float64 to BigFloat does not recover missing input digits. At generic q, `T` sets a floor on the working/output precision; a higher-precision q is not narrowed. Classically and at a level, `T` is the result type: `T = Float32` returns `Float32`. For level calls, use `Level(k; T=BigFloat)` inside the desired precision scope.
 
+For phase and braid data, use `T=Complex{BigFloat}` inside a precision scope with `rmatrix`, `twist`, `tmatrix` and `bmatrix`. Both the phases and the basis transformations are computed at the requested precision. `Level(k; T=BigFloat)` also works for `rmatrix` and `twist`: the level phase determines the complex result type.
+
 A floating approximation to a root of unity is evaluated as the number supplied; it is not snapped to a level. Use `Level(k)` or `Exact(k)` when the root is known exactly. Near a singularity even a one-ulp input change can matter. Adaptive agreement is not a universal interval certificate, and a small numerical result is not proof of an exact zero. Final conversion can still overflow or underflow the output type.
 
 When generic-q evaluation needs an exact zero decision, it first evaluates the sum modulo a prime at the exact stored real or complex parameter, including any integer q-power weights. A nonzero residue proves the sum is nonzero and avoids growing rational arithmetic. A zero residue or an unusable modular image still requires exact confirmation. This speeds up exceptional zero checks; ordinary scalar calls may never need the filter.

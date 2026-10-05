@@ -52,12 +52,18 @@ phase
 The display makes the algebraic extension explicit: `u² − xu + 1 = 0`, with `u = q`. It retains the branch needed to distinguish q from its inverse. At a numerical target:
 
 ```@example symbols
-(rmatrix(1//2, 1//2, 1; k=5), twist(1//2; k=5))
+(rmatrix(Level(5), 1//2, 1//2, 1), twist(Level(5), 1//2))
 ```
+
+Level phases have complex output, including when the target specifies a real precision type such as
+`Level(5; T=BigFloat)`. Both phase functions also accept a range of levels.
+The conventions obey `rmatrix(a,b,c)^2 = twist(c)/(twist(a)*twist(b))` on admissible channels,
+with the same evaluation target on each side. `tmatrix` includes the framing phase by default;
+use `anomaly=false` for the diagonal matrix of twists alone.
 
 Generic complex square roots follow the package's balanced branch convention. Replacing products of roots by a principal root of their product can change a sign. Use the supplied symbol evaluators to preserve that convention.
 
-Negative real `q` uses the same branch as `complex(q)` throughout the recoupling symbols, `qcg`, and `fmatrix`; the result type is complex even when the value is real. At a point on the negative real axis, `arg(q)=π` and the square root of a negative balanced factor is the positive imaginary root. Passing a nonzero imaginary part evaluates that complex parameter without snapping it to the axis.
+Negative real `q` uses the same branch as `complex(q)` throughout the recoupling symbols, coupling coefficients, phases and matrices; the result type is complex even when the value is real. At a point on the negative real axis, including either signed imaginary zero, `arg(q)=π` and the square root of a negative balanced factor is the positive imaginary root. Passing a nonzero imaginary part evaluates that complex parameter without snapping it to the axis.
 
 ## Admissibility and model boundaries
 

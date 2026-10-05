@@ -42,6 +42,9 @@ B, incoming, outgoing = bmatrix(1,1,1,1; k=6)
 
 `bmatrix` assembles the basis changes and channel R phases. The ordered channel lists matter when the exchanged labels differ. The scalar `rmatrix` is a single-channel braiding eigenvalue, not a full many-body operator.
 
+The rows of `B` carry the incoming channels and the columns the outgoing channels. For a column vector
+`state_in`, apply the braid as `state_out = transpose(B) * state_in`; use the transpose here even at complex q.
+
 ## Modular data
 
 ```@example networks
