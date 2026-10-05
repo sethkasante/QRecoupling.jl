@@ -359,8 +359,9 @@ end
 "Resolve an undecided exact sum in its real embedding, including dependencies between radical classes."
 function _algebraic_value(s::ExactXSum)
     h = s.k + 2
-    x = 2 * cospi(QQBar(1 // h))
-    acc = QQBar(0)
+    field = QQBarField()
+    x = 2 * cospi(field(1 // h))
+    acc = field(0)
     for (S, c) in s.terms
         p = evaluate(c, x)
         iszero(p) && continue

@@ -293,7 +293,8 @@ function _analytic_table(q::T,N::Int) where {T<:Union{DWNum,Complex{DWNum}}}
     # Reciprocal invariance of the q-integers, so that q^{-2} cannot overflow.
     # For real q the sign is carried separately, as [n]_{-q} = (-1)^{n+1} [n]_q.
     aq=q isa Real ? abs(q) : q
-    growth=_ascaled(abs(aq) < one(DWNum) ? unit/aq : aq)
+    aqs=_ascaled(aq)
+    growth=abs(aq) < one(DWNum) ? _adiv(_ascaled(unit),aqs) : aqs
     decay=_avalue(_adiv(_ascaled(unit),_amul(growth,growth)))
     # |growth| >= 1 keeps |decay| <= 1; the subtraction is exact as a double
     # word even when q is within an ulp of 1.
@@ -319,6 +320,15 @@ plain tier's bound assumes. The Float64 recurrence drifted by up to 88,000 u in 
 up to 2.3e−12 were accepted against the 9.1e−13 promise. Cached per `q`.
 """
 function _analytic_table(q::Float64,N::Int)
+    # The short recurrence below rescales once per step. Very large or small q
+    # can exhaust that headroom; use fully scaled products in that case.
+    if !(0x1p-256 <= abs(q) <= 0x1p256)
+        d = _analytic_table(DWNum(q),N)
+        narrow(a) = AnalyticScaled(Float64(a.m),a.e)
+        empty = AnalyticScaled{Float64}[]
+        return AnalyticRuleTable(q,precision(Float64),false,map(narrow,d.ints),empty,
+                                 map(narrow,d.facts),copy(empty),copy(empty),Float64[],true)
+    end
     # [n+1] = x[n] − [n−1], x = g + 1/g with g = max(|q|, 1/|q|), in double words: near q = 1 the recurrence
     # is only weakly dominant and its error grows like n²·u², which at u² is still far below an ulp. Values
     # carry a separate exponent so that |q|^n cannot overflow; each entry is rounded to Float64 once.

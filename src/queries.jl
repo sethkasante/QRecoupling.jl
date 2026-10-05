@@ -23,7 +23,8 @@ end
     iszero_at(symbol, k, labels...) -> Bool
     iszero_at(k, labels::AbstractVector) -> BitVector
 
-Decide whether a symbol vanishes at level `k`, including cancellation between finite terms. `symbol` is one of `q6j`, `QRecoupling.q3j_factorial`, `fsymbol`, `gsymbol` (default `q6j`). Given a collection of
+Decide whether a symbol vanishes at level `k`, including cancellation between finite terms. `symbol`
+selects `q6j`, `fsymbol` or `gsymbol` (default `q6j`). Given a collection of
 label tuples, the test runs over the batch with shared tables and threads.
 
 Structural identities prove zeros directly. Other candidates pass through modular screening and exact
@@ -32,13 +33,14 @@ at high degree. Use `level_spectrum` for screening without exact confirmation.
 
 ```julia
 iszero_at(20, 5, 5, 5, 5, 5, 5)          # true: a cancellation zero
-iszero_at(QRecoupling.q3j_factorial, 10, 1, 1, 1, 1, -1, 0)
+iszero_at(fsymbol, 10, 1, 1, 1, 1, 1, 1)
 count(iszero_at(6, all_6j(k = 6); threads=1))       # how many symbols vanish at level 6
 ```
 """
 iszero_at(k::Integer, args::Spin...) = iszero_at(q6j, k, args...)
 
 function iszero_at(f::Function, k::Integer, args::Spin...)
+    _evaluation_q(k,nothing,false)
     k = Int(k)
     _admissible_at(f, k, args...) || return true
     return is_zero_at_level(_rule_for(f, args...), k)
@@ -47,6 +49,7 @@ end
 iszero_at(k::Integer, labels::AbstractVector; threads = nothing) = iszero_at(q6j, k, labels; threads = threads)
 
 function iszero_at(f::Function, k::Integer, labels::AbstractVector; threads = nothing)
+    _evaluation_q(k,nothing,false)
     k = Int(k)
     n = length(labels)
     n == 0 && return falses(0)
@@ -84,7 +87,7 @@ end
 
 Whether these labels are singular at level `k`: the level-k rule has a contributing term of negative
 valuation, i.e. a q-factorial in a denominator that vanishes. Decided from the valuations alone, with no
-arithmetic. `symbol` is one of `q6j`, `QRecoupling.q3j_factorial`, `fsymbol`, `gsymbol` (default `q6j`).
+arithmetic. `symbol` selects `q6j`, `fsymbol` or `gsymbol` (default `q6j`).
 
 Singular labels are exactly the ones a level cannot represent — for the 6j, those with a triangle sum above
 2k. Labels that *are* admissible at the level are never singular (their prefactor and term valuations are both
@@ -101,6 +104,7 @@ issingular_at(4, 1, 1, 5, 1, 1, 5)            # false: no triangle, so no repres
 issingular_at(k::Integer, args::Spin...) = issingular_at(q6j, k, args...)
 
 function issingular_at(f::Function, k::Integer, args::Spin...)
+    _evaluation_q(k,nothing,false)
     k = Int(k)
     return classify_at_level(_rule_for(f, args...), Int(k))[1] === :pole
 end
@@ -131,6 +135,7 @@ level_spectrum(args::Spin...; kw...) = level_spectrum(q6j, args...; kw...)
 function level_spectrum(f::Function, args::Spin...; k = 2:100, cancellation::Bool = true,
                         prove::Bool = false, threads = nothing)
     K = k isa AbstractVector ? collect(k) : [k]
+    _evaluation_q(K,nothing,false)
     out = Vector{Symbol}(undef, length(K))
     # entries left for exact confirmation: a candidate, or a screen that could not decide (`nothing`);
     # one byte per entry, so threaded workers never write neighbouring bits of a shared word

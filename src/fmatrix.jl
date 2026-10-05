@@ -38,9 +38,9 @@ the label ranges come out empty and the evaluation context is never built.
 """
 function _fmatrix_level(k, q)
     k === nothing && return nothing
-    q === nothing || throw(ArgumentError("give a level `k` or a parameter `q`, not both"))
+    k isa Integer || throw(ArgumentError("k must be an integer level"))
+    _evaluation_q(k,q,false)
     kk = Int(k)
-    kk >= 0 || throw(DomainError(k, "level must be nonnegative"))
     return kk
 end
 

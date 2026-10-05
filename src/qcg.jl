@@ -52,11 +52,11 @@ _level_q(::Type{T}, k::Int) where {T} = cispi(one(real(float(T))) / (k + 2))
 
 _weighted_exact_error(f) = ArgumentError(
     "$(f) at a level is complex, with values in ℚ(ζ_{4h}) up to a square root, and has no exact form yet. " *
-    "Use `Level(k)` for numerical values, or `QRecoupling.q3j_factorial` for the real factorial-substitution symbol.")
+    "Use `Level(k)` for numerical level values, or `Exact()` for exact classical values.")
 
 _weighted_symbolic_error(f) = ArgumentError(
     "$(f) carries q-power weights that the factorial-rule display cannot hold yet. " *
-    "Use `At(q)` or `Level(k)` for numerical values, or `QRecoupling.q3j_factorial(Symbolic(), ...)`.")
+    "Use `At(q)` or `Level(k)` for numerical values.")
 
 """
     _level_half_phases(k) -> Vector{ComplexF64}
@@ -275,6 +275,8 @@ function qcg(j1::Spin, m1::Spin, j2::Spin, m2::Spin, j::Spin, m::Spin = m1 + m2;
              k = nothing, q = nothing, exact::Bool = false, T::Type{TT} = Float64,
              workspace = nothing) where {TT}
     q = _evaluation_q(k, q, exact)
+    k isa AbstractVector && workspace !== nothing &&
+        throw(ArgumentError("workspace is for scalar calls; level sweeps do not accept caller-owned scratch"))
     k isa AbstractVector && return [qcg(j1, m1, j2, m2, j, m; k = kk, exact = exact, T = T) for kk in k]
     J1, M1, J2, M2, J, M = doubled(j1, m1, j2, m2, j, m)
     s, weight = qcg_rule(J1, M1, J2, M2, J, M)
@@ -299,13 +301,17 @@ q = e^{iπ/(k+2)} (mutually exclusive). At q ≠ 1 the symbol is complex in gene
 relabellings by q-powers: (j₂ j₁ j₃; m₂ m₁ m₃)_q = (−1)^{j₁+j₂+j₃} (j₁ j₂ j₃; m₁ m₂ m₃)_{1/q}, the same for
 m → −m, and (j₂ j₃ j₁; m₂ m₃ m₁)_q = q^{m₂} (j₁ j₂ j₃; m₁ m₂ m₃)_q.
 
-Until v0.4.0 `q3j` was the classical formula with quantum factorials substituted and no q-power weights.
-That function is [`QRecoupling.q3j_factorial`](@ref), not exported; the two agree at q = 1 and differ at every other q.
+From v0.5, the deformation-dependent weights are included; classical values are unchanged.
+`Exact()` is supported; `Exact(k)` and `Symbolic()` are not available yet.
+`eager=true` remains a deprecated alias for the standard evaluator.
 """
 function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = -m1 - m2;
              k = nothing, q = nothing, exact::Bool = false, T::Type{TT} = Float64,
-             workspace = nothing) where {TT}
+             workspace = nothing, eager::Bool = false) where {TT}
     q = _evaluation_q(k, q, exact)
+    eager && _deprecated_eager()
+    k isa AbstractVector && workspace !== nothing &&
+        throw(ArgumentError("workspace is for scalar calls; level sweeps do not accept caller-owned scratch"))
     k isa AbstractVector && return [q3j(j1, j2, j3, m1, m2, m3; k = kk, exact = exact, T = T) for kk in k]
     J1, J2, J3, M1, M2, M3 = doubled(j1, j2, j3, m1, m2, m3)
     s, weight = q3j_rule(J1, J2, J3, M1, M2, M3)
@@ -333,6 +339,8 @@ for f in (:q3j, :qcg)
     # shared q; the results are complex off the positive real axis, so the element type is taken from them.
     @eval function $f(labels::Union{AbstractVector,Base.Generator,Base.Iterators.Filter,Tuple{Any,Vararg{Any}}};
                       k = nothing, q = nothing, exact::Bool = false, T::Type = Float64, threads = nothing)
+        q = _evaluation_q(k,q,exact)
+        exact && k !== nothing && throw(_weighted_exact_error($(string(f))))
         L = _normalize_labels(labels, (5, 6), $(string(f)))
         k isa AbstractVector && return [$f(l...; k = kk, q = q, exact = exact, T = T) for l in L, kk in k]
         isempty(L) && return Any[]
@@ -340,7 +348,7 @@ for f in (:q3j, :qcg)
         first_value = $f(first(L)...; k = k, q = q, exact = exact, T = T)
         out = Vector{typeof(first_value)}(undef, n)
         out[1] = first_value
-        _run(n - 1, threads) do rng
+        _run(n - 1, exact ? 1 : threads) do rng
             work = EvaluationWorkspace()
             for i in rng
                 out[i + 1] = $f(L[i + 1]...; k = k, q = q, exact = exact, T = T, workspace = work)

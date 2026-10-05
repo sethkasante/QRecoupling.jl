@@ -10,6 +10,7 @@
 const BATCH_MIN_THREADED = 32
 
 function _nworkers(n::Int, threads)
+    n <= 1 && return 1
     VERSION < v"1.12" && return 1
     threads === nothing || return clamp(Int(threads), 1, n)
     return (n >= BATCH_MIN_THREADED && Threads.nthreads() > 1) ? min(Threads.nthreads(), n) : 1
