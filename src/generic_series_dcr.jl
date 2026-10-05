@@ -304,35 +304,14 @@ function build_dcr!(buf::CycloBuffer,
 end
 
 
-"""
-    qseries(summand::Function, z_range::UnitRange{Int}; 
-            prefactor::CyclotomicMonomial = ONE_MONOMIAL, 
-            extract_radical::Bool = false)
-
-A lightweight, user-friendly API for compiling a finite q-hypergeometric series 
-into a Deferred Cyclotomic Representation (DCR). 
-
-# Example
-```julia
-my_series = qseries(3:10) do z
-    return (-1)^z * (QRecoupling.qfact_mono(z) / QRecoupling.qfact_mono(z - 3))
-end
-```
-"""
+# Legacy callback constructor. Summands and the optional prefactor must be cyclotomic
+# monomials; keyword options are forwarded to build_series. Prefer factorial-triple qseries.
 function qseries(summand::Function, z_range::UnitRange{Int}; kwargs...)
     return build_series(summand, z_range; kwargs...)
 end
 
 
-"""
-    qeval(m::CyclotomicMonomial; k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
-
-Universal evaluation API for a single CyclotomicMonomial. 
-- Classical limit: the default, or pass `q = 1`.
-- Root of Unity (TQFT): Pass `k` (integer level).
-- Complex Analytic: Pass `q` (complex or real parameter).
-- Precision is controlled by `exact` (Float64 vs Rational/Cyclotomic).
-"""
+# Compatibility evaluation of a cyclotomic monomial using the legacy projectors.
 function qeval(m::CyclotomicMonomial; 
                k=nothing, 
                q=nothing, 
@@ -360,15 +339,7 @@ function qeval(m::CyclotomicMonomial;
 end
 
 
-"""
-    qeval(dcr::DCR; k=nothing, q=nothing, exact::Bool=false, T::Type=Float64)
-
-Universal evaluation API for a DCR. 
-- Classical limit: the default, or pass `q = 1`.
-- Root of Unity (TQFT): Pass `k` (integer level).
-- Complex Analytic: Pass `q` (complex or real parameter).
-- Precision is controlled by `exact` (Float64 vs Rational/Cyclotomic).
-"""
+# Compatibility evaluation of a DCR using the legacy projectors.
 function qeval(dcr::DCR; 
                      k=nothing, 
                      q=nothing, 

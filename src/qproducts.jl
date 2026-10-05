@@ -372,7 +372,7 @@ convention `[0] = 1`. `n < 0` is zero.
 
 The keywords are the ones every symbol takes: `k` for a level, `q` for a parameter, `exact = true` for
 the exact classical rational or, with `k`, the real-basis level value. `qint(Symbolic(), n)` returns the
-rule-backed symbolic x-form instead; its `.dcr` property constructs a one-term compatibility DCR.
+rule-backed symbolic x-form instead; use `x_form` to expand it explicitly.
 
 ```julia
 qint(5)                 # 5.0

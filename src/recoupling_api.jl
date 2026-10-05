@@ -47,7 +47,7 @@ end
 Evaluate the q6j symbol; the default is its classical value.
 Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
 `exact=true` requests an exact classical or level value. `q6j(Symbolic(), ...)`
-retains a factorial rule with bounded x-form display; `.dcr` constructs a compatibility DCR lazily.
+retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
 `eager=true` is deprecated and uses the same evaluator.
 """
@@ -75,7 +75,7 @@ for q ≠ 1 it is *not* the U_q(sl₂) coupling coefficient: the quantum 3j symb
 the function that was called `q3j` up to v0.4.0. It is not exported: call it as `QRecoupling.q3j_factorial`.
 Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
 `exact=true` requests an exact classical or level value. `q3j_factorial(Symbolic(), ...)`
-retains a factorial rule with bounded x-form display; `.dcr` constructs a compatibility DCR lazily.
+retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
 `eager=true` is deprecated and uses the same evaluator.
 """
@@ -100,7 +100,7 @@ end
 Evaluate (−1)^(j1+j2+j4+j5) √([2j3+1][2j6+1]) {6j}, classically by default.
 Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
 `exact=true` requests an exact classical or level value. `fsymbol(Symbolic(), ...)`
-retains a factorial rule with bounded x-form display; `.dcr` constructs a compatibility DCR lazily.
+retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
 """
 function fsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
@@ -123,7 +123,7 @@ end
 Evaluate √(Πᵢ[2ji+1]) {6j}, classically by default.
 Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
 `exact=true` requests an exact classical or level value. `gsymbol(Symbolic(), ...)`
-retains a factorial rule with bounded x-form display; `.dcr` constructs a compatibility DCR lazily.
+retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
 """
 function gsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
@@ -146,7 +146,7 @@ end
 Evaluate the closed tetrahedron in the package’s existing normalization, classically by default.
 Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
 `exact=true` requests an exact classical or level value. `tetrahedron(Symbolic(), ...)`
-retains a factorial rule with bounded x-form display; `.dcr` constructs a compatibility DCR lazily.
+retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
 """
 function tetrahedron(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;

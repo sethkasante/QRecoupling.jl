@@ -16,8 +16,7 @@
     SymbolicValue
 
 A recoupling symbol as an exact expression in `q`, with no level and no evaluation: what `Symbolic()`
-returns. It retains the factorial `rule` without evaluating the sum. The compatibility property
-`v.dcr` constructs and caches a DCR only when explicitly accessed.
+returns. It retains the factorial `rule` without evaluating the sum.
 
 **Displayed as the rule**, a finite factorial sum in `x = q + q⁻¹`, whatever the labels are. Printing
 carries out no sum or polynomial factorization. Its output length is bounded; the cost of
@@ -27,7 +26,6 @@ Expanding is a separate request, and which of the two you want depends on the ba
 
 | | | cost at j = 6 |
 |---|---|---|
-| `symbolic_terms(v)` | the summands as `CyclotomicMonomial`s, unsummed | 1 µs, exponent arithmetic |
 | `x_form(v)` | the sum carried out in `x`: `√(∏ψ)·P(x)/Q(x)` | 0.3 ms |
 | `phi_form(v)` | the sum carried out in `q` and **factored** over the cyclotomics | 10 ms |
 
@@ -284,5 +282,5 @@ function Base.show(io::IO,::MIME"text/plain",v::XValue)
     isempty(v.rad) || print(io,"\n  ψ_e(x) is the minimal polynomial of 2cos(2π/e)")
 end
 
-"Evaluating a symbolic value evaluates its rule, which is the accurate route; the DCR is the fallback."
+"Evaluate the retained factorial rule with the same targets and keywords as `qeval(::FactorialSum)`."
 qeval(v::SymbolicValue; kwargs...) = qeval(v.rule; kwargs...)

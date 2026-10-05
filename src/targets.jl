@@ -37,7 +37,7 @@ Level(k; T::Type = Float64) = Level{T,typeof(k)}(k)
 
 `Exact()` requests exact classical evaluation at q = 1. It is shorthand for
 `Classical(exact=true)`, reusing the direct classical evaluator and its rational/radical
-result types without constructing a DCR or a level field. Use `Symbolic()` to retain q.
+result types without constructing a level field. Use `Symbolic()` to retain q.
 
 `Exact(k)` requests exact level values:
 
@@ -55,7 +55,6 @@ braiding phases retain their `QPhase` form in either.
 q6j(Exact(), 1, 1, 1, 1, 1, 1)                     # 1//6
 q6j(Exact(3), 1, 1, 1, 1, 1, 1)                    # x − 2 at x = 2cos(π/5)
 radical(q6j(Exact(3), 1, 1, 1, 1, 1, 1))           # (√5 − 3)/2, the Fibonacci level
-q6j(Exact(3; form = :canonical), 1, 1, 1, 1, 1, 1) # the same value in ℚ(ζ₁₀)
 ```
 """
 struct Exact{K} <: EvalTarget
@@ -126,9 +125,9 @@ end
     Symbolic()
 
 Request a parameter-independent representation instead of evaluation. Recoupling symbols return
-a [`SymbolicValue`](@ref) retaining the factorial rule without constructing a DCR or carrying out the
-sum. Display shows the deferred factorial rule in x for every label size; it never carries out the sum.
-Use `x_form(value)` to request full expansion, or `value.dcr` for a lazily constructed compatibility DCR.
+a [`SymbolicValue`](@ref) retaining the factorial rule without carrying out the sum.
+Display shows the deferred factorial rule in x for every label size; it never carries out the sum.
+Use `x_form(value)` to request full expansion, or `phi_form(value)` for cyclotomic factorization.
 `qdim` and `theta_value` use the same x-form interface. `rmatrix` and `twist` retain `QPhase`
 objects, displayed as algebraic phases over x with their q branch. No evaluation keywords are accepted.
 Use `qeval(Symbolic(), rule)` to lower a `FactorialSum` the same way.

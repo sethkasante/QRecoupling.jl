@@ -8,7 +8,7 @@
     RadExpr
 
 A real number written as `rat + Σᵢ cᵢ √(eᵢ)`, with each `eᵢ` again a `RadExpr`. This is what the Lagrange
-descent produces and what [`radical_form`](@ref) returns; `float` evaluates it, so a rendered formula can
+descent produces and what [`radical`](@ref) returns on success; `float` evaluates it, so a rendered formula can
 be checked against the value it claims to be.
 """
 struct RadExpr

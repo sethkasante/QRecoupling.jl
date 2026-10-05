@@ -1,8 +1,8 @@
 """
     qseries(factors, range; prefactor=(), sqrt_prefactor=false, alternating=false, sign=1)
 
-Build a compact `FactorialSum` from affine factorial triples `(a,b,c)` representing 
-`[a*z+b]!^c`. Unlike the callback form of `qseries`, this does not expand a DCR.
+Build a compact `FactorialSum` from affine factorial triples `(a,b,c)` representing
+`[a*z+b]!^c`. Construction retains the rule without evaluating the sum.
 Example: `qeval(qseries([(2,0,1)], 1:3); q=1)` is `2!+4!+6! = 746`.
 """
 qseries(factors::Union{Tuple,AbstractVector}, r::UnitRange{<:Integer}; kwargs...) =
@@ -50,7 +50,7 @@ Evaluate a finite factorial rule, classically when no target is supplied (`k` an
 Classical and level values use ratio kernels, exact classical values integer arithmetic, and real or
 complex q scaled ratios with adaptive precision; `workspace` reuses fixed-q tables. Factorial arguments
 must be nonnegative, and individually polar terms are rejected. `qeval(Symbolic(), rule)` returns a
-`SymbolicValue`; its `.dcr` property constructs the compatibility DCR only when requested.
+`SymbolicValue` retaining the rule; use `x_form` to expand it explicitly.
 """
 function qeval(s::FactorialSum; k=nothing,q=nothing,exact::Bool=false,
                T::Type{TT}=Float64,workspace=nothing) where {TT}
