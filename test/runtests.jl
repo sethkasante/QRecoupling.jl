@@ -49,8 +49,8 @@ const ONES = (1, 1, 1, 1, 1, 1)
             @test F ≈ [fsymbol(1,1,e,1,1,f; kw...) for e in es, f in fs] atol=1e-13
         end
         @test gsymbol(ONES...; k=5) ≈ 1 atol=1e-13
-        @test abs(rmatrix(1,1,1; k=5)) ≈ 1
-        @test abs(twist(1//2; k=5)) ≈ 1
+        @test abs(rmatrix(Level(5),1,1,1)) ≈ 1
+        @test abs(twist(Level(5),1//2)) ≈ 1
         work = EvaluationWorkspace()
         q6j(ONES...; q=0.8,workspace=work)
         @test q6j(ONES...; q=0.8,workspace=work) == q6j(ONES...; q=0.8)
