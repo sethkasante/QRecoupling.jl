@@ -11,7 +11,7 @@ end
 
 """
 Level-k evaluation of a recoupling symbol from its factorial rule `s`. Inadmissible labels give zero.
-Numeric values use the factorial rule directly; exact values project the DCR built by `dcr()`.
+Numeric and exact values use the factorial rule directly; `dcr()` supplies the numerical fallback.
 A modular zero candidate is not sufficient to short-circuit an exact result.
 """
 function _level_value(s::FactorialSum, admissible::Bool, dcr, k::Int, exact::Bool, ::Type{T};

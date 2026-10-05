@@ -2,7 +2,7 @@
     EvaluationWorkspace()
 
 Reusable Float64 scratch and fixed-q analytic tables. Pass `workspace=work` to `q6j`, `q3j`, `qcg`,
-`QRecoupling.q3j_factorial`, `fsymbol`, `gsymbol`, or `qeval(::FactorialSum)`. Reuse it sequentially, never
+`fsymbol`, `gsymbol`, or `qeval(::FactorialSum)`. Reuse it sequentially, never
 across concurrent tasks (batches give each worker its own). Tables are keyed by q, type and precision, with
 at most four tiers; CG scratch keeps one sector.
 """

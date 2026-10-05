@@ -132,6 +132,7 @@ Use `x_form(value)` to request full expansion, or `value.dcr` for a lazily const
 `qdim` and `theta_value` use the same x-form interface. `rmatrix` and `twist` retain `QPhase`
 objects, displayed as algebraic phases over x with their q branch. No evaluation keywords are accepted.
 Use `qeval(Symbolic(), rule)` to lower a `FactorialSum` the same way.
+The weighted coefficients `q3j` and `qcg` do not yet support this target.
 """
 struct Symbolic <: EvalTarget end
 Base.show(io::IO,::Symbolic) = print(io,"Symbolic()")
@@ -179,14 +180,14 @@ end
 
 """
 Warn once. The cyclotomic carrier ℚ(ζ₂ₕ) is no longer what the package means by an exact level value —
-`Exact(k)` and `exact = true` both give the real basis ℚ[x]/Ψ_h now. `form = :canonical` and
-still works, and still returns exactly what it did, so that anything reading
+`Exact(k)` and `exact = true` both give the real basis ℚ[x]/Ψ_h now. `form = :canonical`
+still returns the former carrier, so that anything reading
 `CompositeExactResult` keeps working while it migrates; it is scheduled for
 removal later.
 """
 _deprecated_cyclotomic() = @warn(
     "the cyclotomic exact form `Exact(k; form = :canonical)` is deprecated; " *
-    "`Exact(k)` and `exact = true` return the real basis ℚ[x]/Ψ_h. They will be removed in v0.6.",
+    "use `Exact(k)` for the real basis ℚ[x]/Ψ_h. The `form = :canonical` option will be removed in a later release.",
     maxlog = 1)
 
 # The cyclotomic target, kept reachable under its own name while it is deprecated. It goes straight to

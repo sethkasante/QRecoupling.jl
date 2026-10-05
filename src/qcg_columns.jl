@@ -425,8 +425,9 @@ _cg_column_target(q, k) = k !== nothing || q === nothing || _is_classical(q) ||
 
 One sector of the coupling matrix: `C[a, b] = qcg(j1, m1[a], j2, m − m1[a], j[b], m)`, with `m1` running
 down from its largest value and `j` up over the spins of j1 ⊗ j2 that reach m (inside the fusion rule at a
-level). At real `q` and classically `C` is square and orthogonal, `transpose(C) * C ≈ I`; at a level, where
-the entries are complex, the same holds whenever the fusion rule keeps every `j` (complex orthogonal).
+level). At positive real `q` and classically `C` is square and orthogonal, `transpose(C) * C ≈ I`.
+At a level, the retained columns satisfy the same bilinear identity, but fusion truncation can make
+`C` rectangular; then `C * transpose(C)` need not be the identity.
 
 Built column by column from the Casimir recurrence in double words, `O(1)` work per entry, at real `q > 0`,
 classically and at a level; every entry whose own error estimate misses the package's accuracy promise is
@@ -456,16 +457,18 @@ end
 The coupling matrix of j1 ⊗ j2: `C[a, b] = qcg(j1, m1, j2, m2, j, m)` with `product[a] = (m1, m2)` and
 `coupled[b] = (j, m)`. Rows follow `kron` order — m1 from j1 down to −j1 and, for each, m2 from j2 down — so a
 column is the coupled vector |j m⟩ in the basis `kron(e_{m1}, e_{m2})`; columns run over j upwards and, within
-each j, m from j down. At real `q` and classically `C` is orthogonal; at a level only the `j` inside the fusion
-rule are columns, and `transpose(C) * C ≈ I` (complex orthogonal: the entries are complex).
+each j, m from j down. At positive real `q` and classically `C` is orthogonal; at a level only the `j` inside
+the fusion rule are columns, and `transpose(C) * C ≈ I` is a bilinear identity, without conjugation.
 
-The matrix is dense, (2j1+1)(2j2+1) square (110 MB at j1 = j2 = 30); `qcg_matrix(j1, j2, m)` holds one
-sector.
+The matrix is dense, with (2j1+1)(2j2+1) rows and as many columns before fusion truncation (about 110 MB
+for Float64 at j1 = j2 = 30). `qcg_matrix(j1, j2, m)` holds one sector.
 
 ```julia
+using LinearAlgebra
 C, prod, coup = qcg_matrix(1, 1//2; q = 0.8)
 transpose(C) * C ≈ I
-C[1, end - 1] == qcg(1, 1, 1//2, 1//2, 3//2, 3//2; q = 0.8)   # prod[1] = (1, 1//2), coup[end - 1] = (3//2, 3//2)
+b = findfirst(==((3//2, 3//2)), coup)
+C[1, b] ≈ qcg(1, 1, 1//2, 1//2, 3//2, 3//2; q = 0.8)
 ```
 """
 function qcg_matrix(j1::Spin, j2::Spin; k = nothing, q = nothing, T::Union{Type,Nothing} = nothing)
@@ -544,7 +547,8 @@ end
 
 The product state |j1 m1⟩⊗|j2 m2⟩ in the coupled basis: `c[i] = qcg(j1, m1, j2, m2, j[i])` for every `j` of
 j1 ⊗ j2 that reaches m = m1 + m2 (inside the fusion rule at a level), `j` ascending. It is one row of
-[`qcg_matrix`](@ref), restricted to its nonzero entries; at real `q` and classically `sum(abs2, c) ≈ 1`.
+[`qcg_matrix`](@ref), restricted to its allowed coupling channels (some coefficients can vanish).
+At positive real `q` and classically `sum(abs2, c) ≈ 1`.
 
 At real `q > 0`, classically and at a level the row comes from the three-term recurrence in j that
 q^{2m1} satisfies in the coupled basis (the q-analogue of J1z, from the q-Hahn polynomials), in double words:

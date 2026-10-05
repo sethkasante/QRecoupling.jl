@@ -15,7 +15,7 @@
 #
 #  and two optional ones (`symbol_family` for recurrence routing, `symbol_of` to attach a public
 #  function). The old helpers are kept, and now dispatch through here, so no call site changed and
-#  behaviour is identical — `test/symbols.jl` asserts that against the tables this replaced.
+#  behaviour is checked against the former dispatch tables in the symbol-interface tests.
 #
 #  To add a symbol: define the type, the three methods, and, if a public function should route to it,
 #  one `symbol_of`. Nothing else in the package needs to know.

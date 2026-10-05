@@ -18,7 +18,7 @@
 #      θ_j = q^{J(J+2)/2} = exp(2πi j(j+1)/(k+2)),   J = 2j,   q = exp(iπ/h),
 #
 #  which is the unique choice making `rmatrix(j, j, 0) = (−1)^{2j} θ_j⁻¹`, the self-braiding of a
-#  self-dual object through the vacuum. `test/modular.jl` pins that, and pins the rest against the
+#  self-dual object through the vacuum. The modular-data tests check this and the remaining identities against the
 #  category the package already has: Verlinde's formula must reproduce `_qδ`, the level-truncated fusion
 #  rule, which it has no way of knowing.
 # ---------------------------------------------------------------------------------
@@ -129,7 +129,7 @@ end
 
 The Virasoro central charge `c = 3k/(k+2)` of SU(2)_k. It enters the T-matrix through the framing
 anomaly `exp(−2πi c/24)`, and is fixed independently by the Gauss sums and by `(ST)³ = S²`, both of which
-`test/modular.jl` checks rather than assumes.
+the modular-data tests check rather than assume.
 """
 function central_charge(k::Integer)
     kk = Int(k)
@@ -170,7 +170,7 @@ end
 
 The total quantum dimension `D = √(Σ_a d_a²) = √(h/2)/sin(π/h)`, `h = k+2`.
 
-The closed form is used rather than the sum — they agree, and `test/modular.jl` checks that they do —
+The closed form agrees with the sum, as checked by the modular-data tests,
 because `Σ_{n=1}^{h-1} sin²(nπ/h) = h/2` exactly, which is also why `D² = 2h/(4-x²)` is a rational
 function of the package's `x = 2cos(π/h)`.
 """
