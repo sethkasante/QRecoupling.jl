@@ -31,6 +31,8 @@ x_form(s)                      # explicit x-form = (x² − 3) / (x⁴ − 3x² 
 
 The spin labels are physical spins: use `1//2` for a half-integer (also accepts `0.5`). The same target interface applies to Clebsch–Gordan coefficients, 3j, F/G symbols, dimensions, and q-integer/factorial/binomial products.
 
+`qcg` and `q3j` support numerical targets and exact classical values through `Exact()`. Their `Exact(k)` and `Symbolic()` forms are not yet implemented.
+
 ## What makes it useful?
 
 - **Direct numerical kernels.** Factorial rules supply scaled ratios and adaptive precision without constructing or expanding a symbolic expression first.
@@ -89,7 +91,7 @@ pkg> up QRecoupling
 pkg> status QRecoupling
 ```
 
-Coming from v0.3: omitted q/k now means classical evaluation, including `qint`, `qfact`, and `qbinomial`. Use `Exact()` for exact classical values (rationals) and `Symbolic()` for generic output; `exact=true` is still supported. `Exact(k)` returns an `ExactX`, and `eager=true` is deprecated. DCRs remain available through `.dcr` and display only their structure. See the [migration guide](https://sethkasante.github.io/QRecoupling.jl/stable/migration/) and [changelog](https://github.com/sethkasante/QRecoupling.jl/blob/main/CHANGELOG.md).
+See the [migration guide](https://sethkasante.github.io/QRecoupling.jl/stable/migration/) and [changelog](https://github.com/sethkasante/QRecoupling.jl/blob/main/CHANGELOG.md) for changes in old and current releases.
 
 ## Documentation and scope
 
@@ -103,7 +105,7 @@ Coming from v0.3: omitted q/k now means classical evaluation, including `qint`, 
 
 **What the numbers mean.** Floating-point values, exact values, and zero tests are computed separately, each stated in the [accuracy guide](https://sethkasante.github.io/QRecoupling.jl/stable/performance/):
 
-- *Floating point:* factorial-rule sums with compensated arithmetic; precision is raised when cancellation in the sum would otherwise cost digits loss.
+- *Floating point:* factorial-rule sums with compensated arithmetic; precision is raised when cancellation would otherwise cost significant digits. Final conversion can underflow a nonzero value to zero.
 - *Exact:* algebraic numbers in the x-basis; equality, including `ExactXSum`, is decided by algebraic arithmetic, never by a numerical tolerance.
 - *Zero tests:* `iszero_at` confirms unresolved modular candidates with exact arithmetic. The `:cancels` entries of `level_spectrum` are screening results unless you pass `prove = true`.
 

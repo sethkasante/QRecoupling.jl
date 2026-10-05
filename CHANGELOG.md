@@ -2,11 +2,10 @@
 
 ## v0.5.0
 
-- **Breaking:** `q3j` is now the quantum 3j symbol of U_q(sl₂), orthogonal at q ≠ 1; classical values are unchanged bit for bit. The previous factorial-substitution symbol is `QRecoupling.q3j_factorial`. Negative real q uses the branch of `complex(q)`, and `fmatrix(...; T)` treats `T` as a precision floor.
-- **Breaking:** the export list shrinks from about 90 to 45 names; the others remain available as `QRecoupling.name` (see the migration page).
-- **Added:** `qcg`, `qcg_matrix` and `qcg_row`: quantum Clebsch–Gordan coefficients (labels flat or as `(j, m)` pairs), with whole matrices and rows from three-term recurrences. `level_spectrum(...; prove = true)` confirms `:cancels` entries exactly.
-- **Fixed:** zeros are proved before they are returned (exact confirmation of modular candidates at levels, classically and at generic q). Real-q tables are correctly rounded at large spin (worst errors ≤ 1e−14, from 2.3e−12), and values near |q| = 1 are about 5× faster.
-- **Deprecations:** removal of `eager = true`, `Exact(k; form = :canonical)` and `xvalue` will be done in later versions. `Exact(k)` and `Symbolic()` for `q3j` and `qcg` are not supported yet.
+- Added `qcg`, `qcg_matrix` and `qcg_row`, with recurrence-based evaluation of coupling families.
+- **Breaking:** `q3j` now includes the quantum deformation weights; classical values are unchanged.
+- **Breaking:** fewer names are exported; qualified access remains. See [Migration](docs/src/migration.md) for target support and convention changes.
+- Improved numerical accuracy, zero confirmation and precision handling; added `level_spectrum(...; prove=true)`.
 
 ## v0.4.0
 
