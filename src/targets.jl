@@ -106,7 +106,8 @@ for f in (:q6j, :q3j_factorial, :fsymbol, :gsymbol, :rmatrix, :tetrahedron, :the
     @eval function $f(t::EvalTarget, args...; kw...)
         t isa Symbolic && throw(ArgumentError("Symbolic() does not accept evaluation keywords"))
         if t isa Exact && t.form === :x
-            isempty(kw) || throw(ArgumentError("`form = :x` targets do not accept evaluation keywords"))
+            isempty(kw) || throw(ArgumentError("`Exact($(t.k))` already sets the target and takes no keywords; remove " *
+                                               join(("`$key`" for key in keys(kw)), ", ")))
             return _exact_x_target($f,t.k,args...)
         end
         if t isa Exact && t.form === :canonical

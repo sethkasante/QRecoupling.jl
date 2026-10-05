@@ -2,7 +2,7 @@
 
 ## Change a fusion basis
 
-For four labels a, b, c, d, `fmatrix` changes between the intermediate channels of `((a b)ₑ c)ᵈ` and `(a (b c)𝒇)ᵈ`. It returns the matrix and both channel lists.
+For four labels a, b, c, d, `fmatrix` changes between the intermediate channels of `((a b)_e c)_d` and `(a (b c)_f)_d`. It returns the matrix and both channel lists.
 
 ```@example networks
 using QRecoupling, LinearAlgebra

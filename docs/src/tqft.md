@@ -5,7 +5,8 @@
 | Function | Meaning |
 |:--|:--|
 | `q6j(a,b,e,c,d,f)` | `{a b e; c d f}` |
-| `q3j(j1,j2,j3,m1,m2,m3)` | Three-spin coupling coefficient; m labels sum to zero |
+| `q3j(j1,j2,j3,m1,m2,m3)` | Quantum 3j symbol `(j1 j2 j3; m1 m2 m3)`; m labels sum to zero |
+| `qcg(j1,m1,j2,m2,j,m)` | Quantum Clebsch–Gordan coefficient `⟨j1 m1; j2 m2∣j m⟩`; also `qcg((j1,m1),(j2,m2),(j,m))` |
 | `fsymbol(a,b,e,c,d,f)` | Fusion-basis transformation coefficient |
 | `gsymbol(a,b,e,c,d,f)` | Package's dimension-weighted tetrahedral coefficient |
 | `qdim(j)` | Quantum dimension `[2j+1]` |
@@ -39,7 +40,7 @@ v = q6j(Exact(10), 1,1,1,1,1,1)
 v
 ```
 
-Exact level recoupling coefficients use `ExactX`, in the real algebraic variable `x = 2cos(π/(k+2))`, with square-root factors as needed. They do not default to the old cyclotomic-field wrapper. See [Exact forms](tutorials/exact_forms.md).
+Exact level recoupling coefficients use `ExactX`, in the real algebraic variable `x = 2cos(π/(k+2))`, with square-root factors as needed. They do not default to the old cyclotomic-field wrapper. See [Exact forms](tutorials/exact_forms.md). `q3j` and `qcg` have no `Exact(k)` or `Symbolic()` form yet: their level values are complex, in ℚ(ζ) up to a square root. Use `Level(k)` for them.
 
 Braiding and twists carry q phases. `rmatrix(Symbolic(), ...)` and exact level phase calls retain a `QPhase`; these are not ordinary real x-polynomials.
 

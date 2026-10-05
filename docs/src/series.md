@@ -39,7 +39,7 @@ Numerical evaluation does not first expand the symbolic rational function. This 
 
 ## The role of DCR
 
-A Deferred Cyclotomic Representation stores a prefactor, a first summand, and adjacent-term ratios as factored cyclotomic monomials. It remains useful for legacy projections and callback series with explicit q powers. It is no longer the main user-facing symbolic form.
+A Deferred Cyclotomic Representation stores a prefactor, a first summand, and adjacent-term ratios as factored cyclotomic monomials. It remains useful for legacy projections and callback series with explicit q powers. It is no longer the main user-facing symbolic form, and this compatibility layer is planned for retirement.
 
 ```@example rules
 d = symbolic.dcr
@@ -65,4 +65,4 @@ The `*_mono` constructors are qualified compatibility helpers. For new factorial
 
 `QRecoupling.symbol_rule(QRecoupling.SixJ(), labels...)` exposes a symbol's rule using physical spins. A new `QRecoupling.QSymbol` subtype supplies `QRecoupling.symbol_rule`, `QRecoupling.nlabels`, and `QRecoupling.level_admissible`; `QRecoupling.symbol_family` and `QRecoupling.symbol_of` connect optional recurrence and function dispatch. Implementing a new formula this way lets it reuse the existing rule evaluators.
 
-`QRecoupling.build_dcr!` and `CycloBuffer` remain advanced compatibility tools. Reusing the buffer reduces scratch allocation, but constructing and storing the returned DCR still allocates.
+`QRecoupling.build_dcr!` and `QRecoupling.CycloBuffer` remain advanced compatibility tools. Reusing the buffer reduces scratch allocation, but constructing and storing the returned DCR still allocates.

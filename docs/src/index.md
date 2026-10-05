@@ -57,7 +57,7 @@ Julia 1.10 or later is supported. In Julia's package manager:
 pkg> add QRecoupling
 ```
 
-To update an existing installation to the latest release, use `pkg> up QRecoupling`, and check the installed version with `pkg> status QRecoupling`. This documentation describes v0.4; see [Migrating to v0.4](migration.md) for changed defaults.
+To update an existing installation to the latest release, use `pkg> up QRecoupling`, and check the installed version with `pkg> status QRecoupling`. This documentation describes the latest release; see [Migration](migration.md) for changes between versions.
 
 - [Getting started](getting_started.md): labels, targets, and first calculations.
 - [Recoupling symbols](tqft.md): normalization, dimensions, and phases.

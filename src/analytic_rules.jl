@@ -857,7 +857,8 @@ function _analytic_q(q::Number)
     isfinite(qq) && !iszero(qq) || throw(DomainError(q,"analytic q must be finite and nonzero"))
     # Do not perturb exactly representable singular roots through log/exp.
     # Their cancellations belong to the level/symbolic projection machinery.
-    qq in (-1,im,-im) && throw(DomainError(q,"use a level target at roots of unity"))
+    qq == -1 && throw(DomainError(q,"q = -1 is degenerate (q - 1/q = 0); use a nearby q"))
+    qq in (im,-im) && throw(DomainError(q,"q = ±i is the root of unity of level 0; use `Level(0)` or `Exact(0)`"))
     # One convention for negative real q and the same point supplied as complex:
     # principal roots of balanced factors, and arg(q)=π for half powers.
     return _negative_real_axis(qq) ? complex(real(qq)) : qq

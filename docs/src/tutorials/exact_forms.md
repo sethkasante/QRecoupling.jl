@@ -42,7 +42,7 @@ Generic square roots specify an algebraic expression. To evaluate with the packa
 
 ## Stored x-form and explicit radicals
 
-`Exact(k)` now displays the stored `P(x)√R(x)` form. Printing does not run radical extraction or compute a numerical approximation. Large polynomials are summarized by size; their exact coefficients remain available.
+`Exact(k)` displays the stored `P(x)√R(x)` form. Printing does not run radical extraction or compute a numerical approximation. Large polynomials are summarized by size; their exact coefficients remain available.
 
 ```@example exact_forms
 v.x_value               # named pair (P, R) of stored polynomials
@@ -91,7 +91,7 @@ numeric_value(v; bits=128)
 
 Single `ExactX` values use adaptive guard precision for their selected real embedding and round to the requested output precision. The polynomial cancellation estimate is not an interval certificate. Negative radicands are rejected rather than silently changed to zero. General factorial rules can produce complex values even at a level; a real x-value cannot silently replace the required phase.
 
-The numerical evaluation of a sum of several exact radical classes has a separate cancellation problem; the single-value precision guarantee above should not be assumed for arbitrary `ExactXSum` expressions. The current multi-class equality fallback can use numerical comparison. For proof-oriented work, use an empty exact residual or a generic polynomial certificate as described in [Checking and proving identities](identities.md).
+The numerical evaluation of a sum of several exact radical classes has a separate cancellation problem; the single-value precision guarantee above should not be assumed for arbitrary `ExactXSum` expressions. Equality and `iszero` of a sum are still decided exactly, never by a numerical tolerance; see [Checking and proving identities](identities.md).
 
 ## API reference
 

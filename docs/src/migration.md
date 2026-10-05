@@ -30,7 +30,7 @@ These names are no longer exported. They still exist: call them as `QRecoupling.
 
 | Group | Names |
 |---|---|
-| Cyclotomic/DCR layer (deprecated, removed in v0.6) | `CyclotomicMonomial`, `DCR`, `build_dcr!`, `add_qint!`, `add_qfact!`, `build_series`, `qint_mono`, `qfact_mono`, `qbinomial_mono`, `symbolic_terms`, `project_discrete`, `project_exact`, `project_analytic`, `project_classical`, `project_classical_exact` |
+| Cyclotomic/DCR layer (compatibility; planned for retirement) | `CyclotomicMonomial`, `DCR`, `build_dcr!`, `add_qint!`, `add_qfact!`, `build_series`, `qint_mono`, `qfact_mono`, `qbinomial_mono`, `symbolic_terms`, `project_discrete`, `project_exact`, `project_analytic`, `project_classical`, `project_classical_exact` |
 | Symbol interface, for adding symbols | `QSymbol`, `SixJ`, `ThreeJ`, `FSymbol`, `GSymbol`, `Tetrahedron`, `ThetaValue`, `symbol_rule`, `level_admissible`, `symbol_family`, `symbol_of`, `nlabels` |
 | Lower-level exact access | `exact_x` (use `Exact(k)`), `generic_sixj` (use `x_form(q6j(Symbolic(), …))`), `xvalue` (deprecated; use `x_form`), `radical_form`, `has_radical_form`, `radical_levels`, `xpolynomial`, `radicand` (use `v.x_value`), `splits_completely` |
 | Modular data helpers | `level_labels`, `central_charge`, `total_qdim`, `gauss_sum`, `monodromy`, `verlinde` |
