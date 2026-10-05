@@ -294,7 +294,9 @@ function _analytic_table(q::T,N::Int) where {T<:Union{DWNum,Complex{DWNum}}}
     # For real q the sign is carried separately, as [n]_{-q} = (-1)^{n+1} [n]_q.
     aq=q isa Real ? abs(q) : q
     aqs=_ascaled(aq)
-    growth=abs(aq) < one(DWNum) ? _adiv(_ascaled(unit),aqs) : aqs
+    # Base's Float64 hypot scales its operands; the double-word hypot can
+    # underflow/overflow before this reciprocal-selection test is made.
+    growth=abs(_narrow(aq)) < 1 ? _adiv(_ascaled(unit),aqs) : aqs
     decay=_avalue(_adiv(_ascaled(unit),_amul(growth,growth)))
     # |growth| >= 1 keeps |decay| <= 1; the subtraction is exact as a double
     # word even when q is within an ulp of 1.

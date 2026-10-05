@@ -46,7 +46,7 @@ function _sin_table(h::Int, ::Type{T}) where {T<:AbstractFloat}
     key = (h, T, precision(T))
     lock(_SIN_LOCK) do
         get!(_SIN_TABLE, key) do
-            [sin(T(m) * T(pi) / T(h)) for m in 0:h]
+            [sinpi(T(m) / T(h)) for m in 0:h]
         end
     end::Vector{T}
 end
@@ -101,8 +101,8 @@ smatrix(k::Integer; T::Type = Float64) = _smatrix(k, T)
 The topological spin `θ_j = q^{J(J+2)/2} = exp(2πi j(j+1)/(k+2))`, `J = 2j`.
 
 This is the convention the package's `rmatrix` already uses: `rmatrix(j, j, 0) = (−1)^{2j} θ_j⁻¹`, the
-self-braiding of a self-dual object through the vacuum. With `exact = true` the answer is the [`QPhase`]
-(@ref) `q^{J(J+2)/2}`, exact at any level; the classical limit is 1.
+self-braiding of a self-dual object through the vacuum. With `exact = true` the answer is the
+[`QPhase`](@ref) `q^{J(J+2)/2}`, exact at any level; the classical limit is 1.
 
 `q` evaluates the same monomial away from a root of unity, which is what the rest of the package means by
 a generic parameter. It is the one place the modular layer has a generic-q value at all — `smatrix`,
@@ -110,18 +110,24 @@ a generic parameter. It is the one place the modular layer has a generic-q value
 """
 function twist(j::Spin; k = nothing, q = nothing, exact::Bool = false, T::Type = ComplexF64)
     q = _evaluation_q(k, q, exact)
+    k isa AbstractVector && return [twist(j;k=kk,exact=exact,T=T) for kk in k]
+    _check_phase_q(q)
     J = doubled(j)
     J >= 0 || throw(DomainError(j, "spin must be nonnegative"))
     if k !== nothing
         kk = Int(k)
         _qδ(J, 0, J, kk) || throw(ArgumentError("j = $j is not an object of SU(2)_$kk"))
     end
-    p = (J * (J + 2)) // 2
-    exact && return QPhase(Int8(1), p)
+    p = J * (J + 2)
+    exact && return QPhase(Int8(1), p//2)
     _is_classical(q) && return T(1)                   # q → 1
     k === nothing && q === nothing && return T(1)
-    k === nothing && return T(qhalfpow(q, J * (J + 2)))
-    return T(cispi(float(p) / (Int(k) + 2)))
+    if k === nothing
+        v = qhalfpow(_phase_parameter(q,T), p)
+        return _phase_eltype(T,k,q)(v)
+    end
+    E = _phase_eltype(T,k,q)
+    return E(_level_phase(p,Int(k),real(E)))
 end
 
 """
@@ -142,10 +148,13 @@ function _tmatrix(k::Integer, ::Type{T}, anomaly::Bool) where {T<:Number}
     kk >= 0 || throw(DomainError(k, "level must be nonnegative"))
     js = level_labels(kk)
     n = length(js)
-    pre = anomaly ? T(cispi(-central_charge(kk) / 12)) : T(1)   # exp(−2πi c/24)
-    M = zeros(T, n, n)
+    R = real(float(T))
+    E = Complex{R}
+    pre = anomaly ? cispi(-R(kk) / R(4(kk+2))) : one(E)   # exp(−2πi c/24)
+    M = zeros(E, n, n)
     @inbounds for i in 1:n
-        M[i, i] = pre * twist(js[i]; k = kk, T = T)
+        J = i-1
+        M[i, i] = pre * _level_phase(J*(J+2),kk,R)
     end
     return M, js
 end
@@ -163,7 +172,7 @@ function _total_qdim(k::Integer, ::Type{T}) where {T<:AbstractFloat}
     kk = Int(k)
     kk >= 0 || throw(DomainError(k, "level must be nonnegative"))
     h = kk + 2
-    return sqrt(T(h) / T(2)) / sin(T(pi) / T(h))
+    return sqrt(T(h) / T(2)) / sinpi(one(T) / T(h))
 end
 """
     total_qdim(k; T = Float64)
@@ -180,13 +189,14 @@ function _gauss_sum(k::Integer, ::Type{T}, inverse::Bool) where {T<:Number}
     kk = Int(k)
     kk >= 0 || throw(DomainError(k, "level must be nonnegative"))
     h = kk + 2
-    R = real(T)
+    R = real(float(T))
+    E = Complex{R}
     tab = _sin_table(h, R)
     s1 = tab[2]                                   # sin(π/h)
-    acc = zero(T)
+    acc = zero(E)
     @inbounds for J in 0:kk
         d = tab[J+2] / s1                         # d_j = [J+1] = sin((J+1)π/h)/sin(π/h)
-        θ = T(cispi(R(J * (J + 2)) / R(2h)))
+        θ = _level_phase(J*(J+2),kk,R)
         acc += d * d * (inverse ? conj(θ) : θ)
     end
     return acc
@@ -197,8 +207,6 @@ end
 `p₊ = Σ_a d_a² θ_a` (or `p₋ = Σ_a d_a² θ_a⁻¹`). The pair fixes the central charge without reference to
 the formula `3k/(k+2)`: `p₊ = D·exp(2πi c/8)`, so `p₊p₋ = D²` and `p₊/p₋ = exp(2πi c/4)`.
 
-(The last exponent is `/4`, not `/8` — the ratio doubles the anomaly. Getting it wrong is the one thing
-that made the checks below look inconsistent when they were not.)
 """
 gauss_sum(k::Integer; T::Type = ComplexF64, inverse::Bool = false) = _gauss_sum(k, T, inverse)
 
@@ -214,16 +222,22 @@ no code. Returns the nearest integer, and throws if the sum is not within `1e-6`
 """
 function verlinde(a::Spin, b::Spin, c::Spin; k::Integer, T::Type = Float64)
     kk = Int(k)
-    S, js = _smatrix(kk, T)
-    ia = findfirst(==(Rational{Int}(a)), js)
-    ib = findfirst(==(Rational{Int}(b)), js)
-    ic = findfirst(==(Rational{Int}(c)), js)
-    (ia === nothing || ib === nothing || ic === nothing) &&
+    kk >= 0 || throw(DomainError(k,"level must be nonnegative"))
+    A,B,C = doubled(a,b,c)
+    (0 <= A <= kk && 0 <= B <= kk && 0 <= C <= kk) ||
         throw(ArgumentError("labels must be objects of SU(2)_$kk: 0, 1/2, …, $(kk//2)"))
+    h = kk+2
+    tab = _sin_table(h,T)
+    ra = rb = rc = 0
     acc = zero(T)
-    @inbounds for x in eachindex(js)
-        acc += S[ia, x] * S[ib, x] * S[ic, x] / S[1, x]
+    # Three sine rows suffice; there is no need to allocate the full S-matrix.
+    @inbounds for x in 1:kk+1
+        ra += A+1; ra >= 2h && (ra -= 2h)
+        rb += B+1; rb >= 2h && (rb -= 2h)
+        rc += C+1; rc >= 2h && (rc -= 2h)
+        acc += _sin_at(tab,ra,h)*_sin_at(tab,rb,h)*_sin_at(tab,rc,h)/tab[x+1]
     end
+    acc *= T(2)/T(h)
     r = round(Int, acc)
     abs(acc - r) <= 1e-6 * max(one(T), abs(acc)) ||
         throw(ErrorException("Verlinde sum $(acc) is not an integer; this is a bug, please report it"))
@@ -238,7 +252,7 @@ eigenvalue of the full monodromy. Returns zero on an inadmissible triple, as the
 """
 function monodromy(a::Spin, b::Spin, c::Spin; k = nothing, q = nothing, T::Type = ComplexF64)
     r = rmatrix(a, b, c; k = k, q = q, T = T)
-    return r * r
+    return r .* r
 end
 
 """
@@ -252,14 +266,16 @@ The braid matrix: the change of basis that carries `((a b)_e c)_d` to `((a c)_{e
 — conjugate by the F-matrix into the basis where the braiding is diagonal, apply it there, and come back.
 The two F-matrices share their column labels (both index `f ∈ b⊗c` with `a⊗f ∋ d`), which is what makes
 the middle factor a diagonal of R-phases and the whole thing one `O(n³)` pass with no Racah sums.
+Rows carry incoming channels `e`; columns carry outgoing channels `e′`. For a column vector of
+incoming amplitudes, the outgoing amplitudes are `transpose(B) * state`.
 
 `inverse = true` gives the same construction with `R⁻¹`, so that
 
     bmatrix(a, c, b, d; k, inverse = true) * bmatrix(a, b, c, d; k) == I
 
-at **any** `q`. At a level `B` is also unitary, because the braiding is a phase there; at real `q` it is
-not, and should not be — `U_q(sl₂)` off the unit circle is not a unitary category, the R-matrix is a
-positive real number rather than a phase. Measured over 107 matrices at k = 2…14: unitarity and the
+at **any** `q`. At a level `B` is also unitary, because the R-eigenvalues are phases there. At generic
+positive real `q`, those eigenvalues are real and need not have unit modulus, so `B` is generally not
+unitary. Measured over 107 matrices at k = 2…14: unitarity and the
 inverse relation both to **4.4e-16**.
 
 ```julia
@@ -268,21 +284,28 @@ B * B' ≈ I
 ```
 """
 function bmatrix(a::Spin, b::Spin, c::Spin, d::Spin;
-                 k = nothing, q = nothing, T::Type = ComplexF64, inverse::Bool = false)
-    F1, es, fs = fmatrix(a, b, c, d; k = k, q = q)
-    F2, es2, fs2 = fmatrix(a, c, b, d; k = k, q = q)
+                 k = nothing, q = nothing, T::Type{TT} = ComplexF64, inverse::Bool = false) where {TT}
+    _check_phase_q(q)
+    if real(TT) === BigFloat
+        F1, es, fs = fmatrix(a, b, c, d; k = k, q = q, T = BigFloat)
+        F2, es2, fs2 = b == c ? (F1,es,fs) : fmatrix(a, c, b, d; k = k, q = q, T = BigFloat)
+    else
+        F1, es, fs = fmatrix(a, b, c, d; k = k, q = q)
+        F2, es2, fs2 = b == c ? (F1,es,fs) : fmatrix(a, c, b, d; k = k, q = q)
+    end
     fs == fs2 || throw(ErrorException(
         "the two F-matrices disagree on their intermediate labels ($fs vs $fs2); this is a bug"))
-    B = zeros(T, length(es), length(es2))
+    E = _phase_eltype(TT,k,q)
+    B = zeros(E, length(es), length(es2))
     (isempty(es) || isempty(es2)) && return B, es, es2
     @inbounds for (l, f) in enumerate(fs)
-        r = rmatrix(b, c, f; k = k, q = q)
+        r = E === ComplexF64 ? rmatrix(b,c,f;k=k,q=q) : rmatrix(b,c,f;k=k,q=q,T=E)
         # `inv`, not `conj`: they agree only where |R| = 1.
         inverse && (r = inv(r))
         for j in eachindex(es2)
             w = r * F2[j, l]
             for i in eachindex(es)
-                B[i, j] += T(F1[i, l] * w)
+                B[i, j] += E(F1[i, l] * w)
             end
         end
     end

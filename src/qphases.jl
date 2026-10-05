@@ -6,21 +6,31 @@
 """
     QPhase
 
-Represents an exact fractional q-phase: `sign * q^(q_pow)`.
+Represents the formal monomial `sign * q^(q_pow)`, with `sign` in `(-1, 0, 1)`.
+It retains the chosen q branch, not a level. Rational powers act on the formal
+exponent and the real sign; they need not equal a principal power after evaluation.
 """
 struct QPhase
     sign::Int8
     q_pow::Rational{Int}
+    function QPhase(sign, q_pow)
+        sign in (-1,0,1) || throw(ArgumentError("QPhase sign must be -1, 0 or 1"))
+        new(Int8(sign), iszero(sign) ? 0//1 : Rational{Int}(q_pow))
+    end
 end
 
 # --- Basic identities ---
 Base.iszero(p::QPhase) = p.sign == 0
 Base.one(::Type{QPhase}) = QPhase(Int8(1), 0//1)
 Base.zero(::Type{QPhase}) = QPhase(Int8(0), 0//1)
+Base.one(::QPhase) = one(QPhase)
+Base.zero(::QPhase) = zero(QPhase)
+Base.isone(p::QPhase) = p.sign == 1 && iszero(p.q_pow)
 Base.sign(p::QPhase) = p.sign
 Base.copy(p::QPhase) = QPhase(p.sign, p.q_pow)
 
 Base.:(==)(a::QPhase, b::QPhase) = (iszero(a) && iszero(b)) || (a.sign == b.sign && a.q_pow == b.q_pow)
+Base.hash(p::QPhase, h::UInt) = hash((p.sign,p.q_pow),h)
 
 # --- unary operators ---
 Base.:-(p::QPhase) = QPhase(Int8(-p.sign), p.q_pow)
@@ -40,13 +50,19 @@ end
 Base.:/(a::QPhase, b::QPhase) = a * inv(b)
 
 function Base.:^(p::QPhase, n::Integer)
-    iszero(p) && return n == 0 ? one(QPhase) : zero(QPhase)
+    if iszero(p)
+        n < 0 && throw(DivideError())
+        return n == 0 ? one(QPhase) : zero(QPhase)
+    end
     new_sign = iseven(n) ? Int8(1) : p.sign
     return QPhase(new_sign, p.q_pow * n)
 end
 
 function Base.:^(p::QPhase, r::Rational)
-    iszero(p) && return r == 0 ? one(QPhase) : zero(QPhase)
+    if iszero(p)
+        r < 0 && throw(DivideError())
+        return r == 0 ? one(QPhase) : zero(QPhase)
+    end
     # Prevent complex numbers natively appearing from fractional powers of negative signs
     if p.sign == -1 && iseven(denominator(r))
         throw(DomainError(r, "Cannot take fractional power with an even denominator of a negative QPhase exactly within real signs."))
@@ -82,7 +98,6 @@ end
 
 # --- QPhase * CyclotomicMonomial ---
 function Base.:*(phase::QPhase, m::CyclotomicMonomial)
-    # Assuming ZERO_MONOMIAL is defined in your constants
     (iszero(phase) || iszero(m)) && return ZERO_MONOMIAL 
     
     if denominator(phase.q_pow) == 1
@@ -93,7 +108,7 @@ function Base.:*(phase::QPhase, m::CyclotomicMonomial)
             m.max_d     
         )
     else
-        throw(ArgumentError("Cannot absorb fractional QPhase (q^$(phase.q_pow)) into a discrete CyclotomicMonomial. Multiply fractional phases against the parent CompositeExactResult instead."))
+        throw(ArgumentError("Cannot absorb fractional QPhase (q^$(phase.q_pow)) into a CyclotomicMonomial; retain the phase separately."))
     end
 end
 
@@ -103,10 +118,9 @@ Base.:/(m::CyclotomicMonomial, phase::QPhase) = m * inv(phase)
 # --- QPhase * CompositeExactResult ---
 # Only integer powers of q = ζ lie in ℚ(ζ_{2(k+2)}); they multiply every factor exactly.
 function Base.:*(phase::QPhase, comp::CompositeExactResult{T}) where T
-    iszero(phase) && return zero(comp)
+    (iszero(phase) || isempty(comp.terms)) && return zero(comp)
     denominator(phase.q_pow) == 1 || throw(ArgumentError(
         "q^($(phase.q_pow)) is not an element of ℚ(ζ$(to_subscript(2 * (comp.k + 2)))); only integer powers of q can multiply an exact result."))
-    isempty(comp.terms) && return comp
     ζ = gen(parent(first(values(comp.terms))))
     f = Int(phase.sign) * ζ^Int(numerator(phase.q_pow))
     return CompositeExactResult{T}(comp.k, Dict{CyclotomicMonomial, T}(rad => f * val for (rad, val) in comp.terms))
@@ -155,20 +169,24 @@ Returns the R-matrix phase.
 Formula: R = (-1)^{j_1 + j_2 - j_3} q^{j_3(j_3+1) - j_1(j_1+1) - j_2(j_2+1)}. 
 The default is the classical value. `rmatrix(Symbolic(), ...)` returns a `QPhase`.
 At a level, `exact=true` retains the exact `QPhase` representation.
+Numerical level phases are complex even when `T` or `Level(k; T=...)` names a real type.
 """
 function rmatrix(j1::Spin, j2::Spin, j3::Spin; 
                  k=nothing, q=nothing, exact::Bool=false, T::Type=ComplexF64)
     
     q = _evaluation_q(k,q,exact)
+    k isa AbstractVector && return [rmatrix(j1,j2,j3;k=kk,exact=exact,T=T) for kk in k]
+    _check_phase_q(q)
+    E = _phase_eltype(T,k,q)
     J1, J2, J3 = doubled(j1, j2, j3)
     
     # check admissibility 
     if !_δ(J1, J2, J3)
-        return exact ? (isnothing(k) ? 0 : zero(QPhase)) : T(0)
+        return exact ? (isnothing(k) ? 0 : zero(QPhase)) : E(0)
     end
     
     if !isnothing(k) && !_qδ(J1, J2, J3, Int(k))
-        return exact ? zero(QPhase) : T(0)
+        return exact ? zero(QPhase) : E(0)
     end
 
     p = (J3*(J3+2) - J1*(J1+2) - J2*(J2+2)) ÷ 2
@@ -183,15 +201,40 @@ function rmatrix(j1::Spin, j2::Spin, j3::Spin;
     
     # level k
     if !isnothing(k)
-        h = k + 2
-        phase_angle = p / (2h)
-        return T(s * cispi(phase_angle))
+        return E(s * _level_phase(p,Int(k),real(E)))
     end
     
     # generic q
     if !isnothing(q)
-        return T(s * qhalfpow(q, p))
+        v = s * qhalfpow(_phase_parameter(q,T), p)
+        return E(v)
     end
+end
+
+@inline function _check_phase_q(q)
+    q === nothing || (q isa Number && isfinite(q) && !iszero(q)) ||
+        throw(DomainError(q,"q must be finite and nonzero"))
+    return nothing
+end
+
+@inline function _phase_eltype(::Type{T},k,q) where {T}
+    k === nothing || return Complex{real(float(T))}
+    (q === nothing || _is_classical(q)) && return T
+    Q = typeof(float(q))
+    return promote_type(T, q isa Real && q < 0 ? Complex{real(Q)} : Q)
+end
+
+"q^(p/2) at a level, reducing large integer exponents before floating-point division."
+@inline function _level_phase(p::Int,k::Int,::Type{R}) where {R}
+    h = k+2
+    r = -2h <= p <= 2h ? p : rem(p,4h)
+    return cispi(R(r)/R(2h))
+end
+
+"Preserve the input precision, widening the parameter before a BigFloat phase calculation."
+function _phase_parameter(q, ::Type{T}) where {T}
+    real(T) === BigFloat && return q isa Real ? BigFloat(q) : Complex{BigFloat}(q)
+    return q
 end
 
 """
@@ -199,18 +242,21 @@ end
 
 `q^{p/2}` for an integer `p` — the half-integral power every braiding phase in the package ends in.
 
-The point is to keep a positive real `q` on the real axis. Going through `complex(q)^(p/2)` evaluates
-`exp((p/2)·log q)`, whose relative error grows with `|p|` rather than with `log|p|`: at `p = −1620`
-(`rmatrix(20, 20, 5)` at `q = 0.7`) that is `2.5e−14`, against `7e−18` for the real `pow`, and it also
-leaves a `−0.0im` on a value that is real. Off the positive real axis the exponential form is kept: the
-error there is dominated by how accurately `arg q` can be multiplied by `p`, which repeated squaring does
-not improve (measured `3.7e−14` against `4.2e−14` at the same `p`), so the extra code would buy nothing.
-
-The branch is the principal one in both cases, and they agree: raising a fixed number to an integer power
-cannot cross the cut, so `(√q)^p` and `exp((p/2)·log q)` are the same value.
+Positive real q uses a real power, avoiding unnecessary complex logarithms.
+On the negative real axis, including an imaginary part of either signed zero,
+the package takes arg(q)=π: the magnitude is a real power and i^p is applied
+by exact sign changes and component swaps. Away from that axis the principal
+complex power is used.
 """
 function qhalfpow(q::Number, p::Integer)
     pp = Int(p)
+    if real(q) < 0 && iszero(imag(q))
+        iseven(pp) && return complex(float(real(q))^(pp ÷ 2))
+        r = float(-real(q))
+        v = r^(pp / 2)
+        z = zero(v)
+        return mod(pp,4) == 1 ? complex(z,v) : complex(z,-v)
+    end
     if (q isa Real || iszero(imag(q))) && real(q) > 0
         r = float(real(q))
         return iseven(pp) ? r^(pp ÷ 2) : r^(pp / 2)

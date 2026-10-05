@@ -25,12 +25,12 @@ const _ZERO_PRODUCT_RULE = FactorialSum((), false, (), false, Int8(0), 0, -1)
     _product_value(pairs, k, q, exact, T; workspace) -> value
 
 `Π [n]!^{c}` wherever the symbols evaluate. `pairs` may be empty, which is the value 1, and `nothing`
-stands for the empty product, which is 0 in whatever carrier the target names.
+represents zero in the target's result type.
 
-Numeric products use direct monomial evaluation: there is no sum to certify, so table lookups avoid
-the fixed overhead of the factorial-rule summation machinery. `Symbolic()` returns the rule, while an
-exact level value is built from its q-factorial content in the real basis. The interface remains shared
-with the symbols, with arithmetic suited to each target.
+Machine-precision products use direct tables or split products before reaching this fallback.
+Generic q then uses the scaled factorial-rule evaluator, preserving the input and requested precision.
+`Symbolic()` returns the rule; an exact level value uses its q-factorial content in the real basis.
+Classical exact and numerical level fallbacks retain the monomial projectors.
 """
 function _product_value(pairs, k, q, exact::Bool, ::Type{T}; workspace = nothing) where {T}
     if exact && !isnothing(k)
@@ -45,6 +45,21 @@ function _product_value(pairs, k, q, exact::Bool, ::Type{T}; workspace = nothing
         # place a user checks a package's arithmetic by eye, the right trade.
         return classical_value(pairs === nothing ? _ZERO_PRODUCT_RULE : _qfact_rule(pairs), T;
                                workspace = workspace)
+    end
+    if k === nothing && !exact && !_is_classical(q)
+        # The monomial projector can overflow q² before a representable answer
+        # is formed. Reuse the scaled rule path for non-machine inputs and the
+        # cases declined by the fast product kernels; T remains a precision floor.
+        s = pairs === nothing ? _ZERO_PRODUCT_RULE : _qfact_rule(pairs)
+        if q in (-1, im, -im)
+            # Preserve the legacy projector's treatment of special roots,
+            # which the generic summation evaluator deliberately rejects.
+            R = real(T)
+            qq = R === BigFloat ? (q isa Real ? BigFloat(q) : Complex{BigFloat}(q)) : q
+            v = project_analytic(_pairs_mono(pairs), qq)
+            return convert(promote_type(T,typeof(v)),v)
+        end
+        return analytic_value(s,q,T;workspace=workspace)
     end
     return qeval(_pairs_mono(pairs); k = k, q = q, exact = exact, T = T)
 end
@@ -79,6 +94,7 @@ error grows like n·|log q|·u. `nothing` where neither form applies (a negative
 """
 function _qint_analytic(n::Int, q::Union{Float64,ComplexF64})
     q isa Float64 && !(q > 0) && return nothing
+    (0x1p-300 < abs(q) < 0x1p300) || return nothing
     L = log(q)
     if abs(2n * L) < 1
         return q^(1 - n) * (expm1(2n * L) / expm1(2L))
@@ -324,7 +340,8 @@ function _qnumber_float(what::Symbol, a::Int, b::Int, k, q)
     elseif q isa Union{Float64,ComplexF64}
         if what === :int
             v = _qint_analytic(a, q)
-            return v === nothing ? nothing : v^b
+            # Inverting an overflowed [n] would lose a representable subnormal.
+            return v === nothing || !isfinite(v) || (iszero(v) && b < 0) ? nothing : v^b
         elseif what === :fact
             f = _qfact_split(a, q)
             return f === nothing ? nothing : _split_value(f[1], f[2], b)
@@ -386,7 +403,8 @@ function qint end
 Base.@constprop :aggressive @inline function qint(n::Integer, p::Integer = 1; k = nothing, q = nothing, exact::Bool = false,
               T::Type{TT} = Float64, workspace = nothing) where {TT}
     q = _evaluation_q(k, q, exact)
-    if !exact && T === Float64 && !(k isa AbstractVector)
+    if !exact && T === Float64 && !(k isa AbstractVector) &&
+       (q === nothing || real(typeof(float(q))) !== BigFloat)
         v = _qnumber_float(:int, Int(n), Int(p), k, q)
         v === nothing || return v
         # a Float64 target lands on a Float64 or, at complex q, a ComplexF64: saying so keeps the
@@ -407,7 +425,8 @@ function qfact end
 Base.@constprop :aggressive @inline function qfact(n::Integer, p::Integer = 1; k = nothing, q = nothing, exact::Bool = false,
                T::Type{TT} = Float64, workspace = nothing) where {TT}
     q = _evaluation_q(k, q, exact)
-    if !exact && T === Float64 && !(k isa AbstractVector)
+    if !exact && T === Float64 && !(k isa AbstractVector) &&
+       (q === nothing || real(typeof(float(q))) !== BigFloat)
         v = _qnumber_float(:fact, Int(n), Int(p), k, q)
         v === nothing || return v
         # a Float64 target lands on a Float64 or, at complex q, a ComplexF64: saying so keeps the
@@ -428,7 +447,8 @@ function qbinomial end
 Base.@constprop :aggressive @inline function qbinomial(n::Integer, m::Integer; k = nothing, q = nothing, exact::Bool = false,
                    T::Type{TT} = Float64, workspace = nothing) where {TT}
     q = _evaluation_q(k, q, exact)
-    if !exact && T === Float64 && !(k isa AbstractVector)
+    if !exact && T === Float64 && !(k isa AbstractVector) &&
+       (q === nothing || real(typeof(float(q))) !== BigFloat)
         v = _qnumber_float(:binomial, Int(n), Int(m), k, q)
         v === nothing || return v
         # a Float64 target lands on a Float64 or, at complex q, a ComplexF64: saying so keeps the

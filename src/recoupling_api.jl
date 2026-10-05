@@ -198,19 +198,21 @@ function qdim end
 
 # The docstring sits on the bare `function qdim end` above: a docstring written directly on a
 # `Base.@constprop` definition is not attached by Julia 1.10, which broke the documentation build.
-# Constant propagation of the default `exact = false` lets inference drop the exact branch, so a numeric
-# call returns a concrete Float64 instead of a boxed Union with `ExactX` — the last allocation on this path.
-Base.@constprop :aggressive function qdim(j::Spin; k=nothing,q=nothing,exact::Bool=false,
+# Constant propagation drops the exact branch for ordinary calls; inlining keeps the numerical
+# result unboxed even though generic real and complex q share this wrapper.
+Base.@constprop :aggressive @inline function qdim(j::Spin; k=nothing,q=nothing,exact::Bool=false,
                                           T::Type{TT}=Float64) where {TT}
     q = _evaluation_q(k,q,exact)
     J = doubled(j)
-    # [J+1] = [J+1]!/[J]! — no sum, so the real basis reaches it through the ψ exponents directly.
-    exact && !isnothing(k) && return _qfact_exactx([(J+1) => 1, J => -1],Int(k))
-    if !exact && T === Float64 && !(k isa AbstractVector)        # [J+1] from the tables, no monomial
-        v = _qnumber_float(:int, J + 1, 1, k, q)
+    J >= 0 || throw(DomainError(j,"spin must be nonnegative"))
+    n = J+1
+    if !exact && T === Float64 && !(k isa AbstractVector) &&
+       (q === nothing || real(typeof(float(q))) !== BigFloat)
+        v = _qnumber_float(:int,n,1,k,q)
         v === nothing || return v
+        return _product_value(_qint_pairs(n,1),k,q,exact,T)::Union{Float64,ComplexF64}
     end
-    return qeval(qdim_mono(J);k=k,q=q,exact=exact,T=T)
+    return _product_value(_qint_pairs(n,1),k,q,exact,T)
 end
 
 #---- clear caches ---
@@ -221,6 +223,7 @@ function clear_exact_caches!()
 end
 
 function clear_sieve_caches!()
+    @lock _SIN_LOCK empty!(_SIN_TABLE)
     @lock ROU_TABLE_LOCK empty!(ROU_TABLE_CACHE)
     @lock QINT_TABLES_LOCK empty!(QINT_TABLES)
     empty!(QINT_F64_TABLES)
@@ -241,8 +244,8 @@ end
     empty_caches!()
 
 Clear the cached level-k tables (numeric, root-of-unity, q-integer, modular and exact cyclotomic).
-Useful for freeing memory in long sessions or before benchmarking. The small classical prime-power
-sieve is kept, because it is read without a lock.
+Useful for freeing numerical-table memory in long sessions or before benchmarking. Reusable symbolic
+polynomials and number fields are retained, as is the small classical prime-power sieve.
 """
 function empty_caches!()
     clear_analytic_caches!()
