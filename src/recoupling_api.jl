@@ -228,6 +228,7 @@ function clear_sieve_caches!()
     @lock QINT_TABLES_LOCK empty!(QINT_TABLES)
     empty!(QINT_F64_TABLES)
     empty!(LEVEL_HALF_PHASES)   # qcg.jl
+    empty!(LEVEL_HALF_PHASES_LO)
     clear_cg_caches!()          # qcg_columns.jl
     empty!(LEVEL_ZERO_TABLES)
     empty!(CLASSICAL_F64_TABLES)

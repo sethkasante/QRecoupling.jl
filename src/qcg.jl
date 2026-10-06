@@ -72,6 +72,15 @@ _level_half_phases(k::Int) = get_level!(LEVEL_HALF_PHASES, k) do
     end
 end
 
+"The low parts of `_level_half_phases`: phase = hi + lo to about u², for the compensated level pass."
+const LEVEL_HALF_PHASES_LO = LevelCache{Vector{ComplexF64}}()
+_level_half_phases_lo(k::Int) = get_level!(LEVEL_HALF_PHASES_LO, k) do
+    h = k + 2
+    setprecision(BigFloat, 128) do
+        [(z = cispi(BigFloat(r) / (2h)); ComplexF64(z - ComplexF64(z))) for r in 0:4h-1]
+    end
+end
+
 "e^{iπr/(2h)} in the precision of `R`, rounded once."
 _half_phase(::Type{Float64}, k::Int, r::Int) = @inbounds _level_half_phases(k)[mod(r, 4(k + 2)) + 1]
 _half_phase(::Type{R}, k::Int, r::Int) where {R} = cispi(R(mod(r, 4(k + 2))) / R(2(k + 2)))
@@ -92,6 +101,77 @@ end
         m, e = _renorm(m, e)
     end
     return m, e
+end
+
+"The prefactor Π [n]!^c (rooted if the rule says so) of a level rule, formed in double words."
+function _weighted_level_prefactor(s::FactorialSum, tab::QIntTables{Float64})
+    ph, pl, pe = 1.0, 0.0, 0
+    for (n, c) in s.pre
+        ph, pl, pe = _split_mul_dw(ph, pl, pe, tab, Int(n), Int(c))
+        ph, pl, pe = _renorm_dw(ph, pl, pe)
+    end
+    if s.sqrt_pre
+        isodd(pe) && ((ph, pl, pe) = (2ph, 2pl, pe - 1))
+        ph, pl = _dw_sqrt(ph, pl); pe ÷= 2
+    end
+    return _ascaled(ph + pl, pe)
+end
+
+"""
+    _weighted_level_pass_dw(s, w, e2, k) -> (value, relbound, κ)
+
+The compensated tier of [`_weighted_level_pass`](@ref) for `Float64` output. The plain pass builds each
+term in a double word and rounds it before adding, so its error is about u·κ. Here the term, its phase and
+the running sum all stay in double words, and the error is about n·u²·κ for n terms: the tier is accepted
+up to κ ≈ 10¹⁵ for typical term counts, where the plain pass stops near 10³. The accumulated sum and
+prefactor are rounded for the final scaled product.
+"""
+function _weighted_level_pass_dw(s::FactorialSum, w::Int, e2::Int, k::Int)
+    tab = qint_tables(Float64, k)
+    hi = _level_half_phases(k); lo = _level_half_phases_lo(k); P = 4(k + 2)
+    srh = srl = sih = sil = 0.0             # the sum (real and imaginary double words), in units of 2^E
+    mass = 0.0; E = typemin(Int)
+    r = 2 * mod(w * s.zlo, 2(k + 2))
+    for z in s.zlo:s.zhi
+        mh, ml, e = 1.0, 0.0, 0
+        for f in s.fac
+            mh, ml, e = _split_mul_dw(mh, ml, e, tab, _arg(f, z), Int(f.c))
+            mh < 0x1p-500 && ((mh, ml, e) = _renorm_dw(mh, ml, e))
+        end
+        mh, ml, e = _renorm_dw(mh, ml, e)
+        s.alternating && isodd(z) && ((mh, ml) = (-mh, -ml))
+        @inbounds c = hi[mod(r, P) + 1]
+        @inbounds cl = lo[mod(r, P) + 1]
+        trh, trl = _dw_mul(mh, ml, real(c), real(cl))
+        tih, til = _dw_mul(mh, ml, imag(c), imag(cl))
+        m = abs(mh)
+        if e > E
+            if E != typemin(Int)            # bring the sum down to the larger exponent (exact scalings)
+                d = E - e
+                srh = ldexp(srh, d); srl = ldexp(srl, d); sih = ldexp(sih, d); sil = ldexp(sil, d)
+                mass = ldexp(mass, d)
+            end
+            E = e
+        elseif e < E
+            d = e - E
+            trh = ldexp(trh, d); trl = ldexp(trl, d); tih = ldexp(tih, d); til = ldexp(til, d)
+            m = ldexp(m, d)
+        end
+        srh, srl = _dw_add(srh, srl, trh, trl)
+        sih, sil = _dw_add(sih, sil, tih, til)
+        mass += m
+        r += 2w
+    end
+    accm = complex(srh + srl, sih + sil)
+    iszero(accm) && return _ascaled(accm), Inf, Inf
+    acc = _ascaled(accm, E)
+    pre = _weighted_level_prefactor(s, tab)
+    v = _amul(_amul(AnalyticScaled(_half_phase(Float64, k, e2), 0), AnalyticScaled(complex(pre.m), pre.e)), acc)
+    s.sign0 < 0 && (v = _aneg(v))
+    κ = mass / abs(accm)
+    n = s.zhi - s.zlo + 1
+    # each term: a product of double-word table entries and one double-word phase; each addition 3u².
+    return v, (32 + 2n) * κ * eps(Float64)^2 + 16 * eps(Float64), κ
 end
 
 """
@@ -122,16 +202,7 @@ function _weighted_level_pass(s::FactorialSum, w::Int, e2::Int, k::Int, ::Type{R
         r += 2w
     end
     if R === Float64
-        ph, pl, pe = 1.0, 0.0, 0
-        for (n, c) in s.pre
-            ph, pl, pe = _split_mul_dw(ph, pl, pe, tab, Int(n), Int(c))
-            ph, pl, pe = _renorm_dw(ph, pl, pe)
-        end
-        if s.sqrt_pre
-            isodd(pe) && ((ph, pl, pe) = (2ph, 2pl, pe - 1))
-            ph, pl = _dw_sqrt(ph, pl); pe ÷= 2
-        end
-        pre = _ascaled(ph + pl, pe)
+        pre = _weighted_level_prefactor(s, tab)
     else
         pm, pe = one(R), 0
         for (n, c) in s.pre
@@ -194,8 +265,8 @@ function _weighted_level_zero(s::FactorialSum, w::Int, k::Int)
 end
 
 """
-Level value of a weighted rule: the Float64 pass when its bound certifies it,
-then arbitrary precision at doubling widths. Numerical cancellation triggers
+Level value of a weighted rule: the plain pass, a double-word pass for Float64 output,
+then an optional recurrence and arbitrary precision at doubling widths. Numerical cancellation triggers
 an algebraic zero test; agreement near zero at two widths is not a proof.
 """
 function _weighted_level_value(s::FactorialSum, w::Int, e2::Int, k::Int, ::Type{T}; near_edge = nothing) where {T}
@@ -203,6 +274,10 @@ function _weighted_level_value(s::FactorialSum, w::Int, e2::Int, k::Int, ::Type{
     if R !== BigFloat
         v, relb, _ = _weighted_level_pass(s, w, e2, k, R)
         isfinite(relb) && relb <= RTOL_PLAIN && return Complex{R}(_avalue(v))
+        if R === Float64                       # compensated tier: the same sum in double words
+            v, relb, _ = _weighted_level_pass_dw(s, w, e2, k)
+            isfinite(relb) && relb <= RTOL_PLAIN && return Complex{R}(_avalue(v))
+        end
         # near-edge tier: the coefficient from its Casimir column, O(column) and free of the sum's cancellation
         if near_edge !== nothing
             vr = near_edge()

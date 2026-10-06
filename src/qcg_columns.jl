@@ -136,6 +136,12 @@ end
 # magnitudes for growth tests and rescaling, from the high words: no square root in the loop
 @inline _mag(x::DWNum) = abs(x.hi)
 @inline _mag(z::Complex{DWNum}) = abs(real(z).hi) + abs(imag(z).hi)
+# For comparing neighbours: |re| + |im| varies by √2 with the phase, which can hide growth. `_size` is
+# monotone in the modulus (its square for complex entries; the recurrence keeps entries below 2^500).
+@inline _size(x::DWNum) = abs(x.hi)
+@inline _size(z::Complex{DWNum}) = abs2(real(z).hi) + abs2(imag(z).hi)
+@inline _modulus(x::DWNum) = abs(x.hi)
+@inline _modulus(z::Complex{DWNum}) = hypot(real(z).hi, imag(z).hi)
 
 const CG_EST = 64.0     # the n·u² constant of the error estimate; measured errors are ≤ 1/20 of it
 
@@ -165,22 +171,25 @@ function _cg_sector!(work::CGWork{V}, T::CGTables, J1::Int, J2::Int, M::Int) whe
 end
 
 """
-    _cg_twosided!(w, a, ia, d, λ, n) -> meet
+    _cg_twosided!(w, a, ia, d, λ, n) -> (meet, mismatch)
 
 The symmetric three-term recurrence a[k] w[k+1] + (d[k] − λ) w[k] + a[k−1] w[k−1] = 0 with w[0] = w[n+1] = 0,
 up to scale: forward from 1 to the first local maximum, backward from n to it (each in the direction in which
-the solution grows), the left part scaled to match. Returns the meeting index. Both the Casimir columns (in m1)
-and the dual rows (in j) are this recurrence.
+the solution grows), the left part scaled to match. Returns the meeting index and the relative disagreement
+of the two runs one step past it, which is at rounding level when both ran in their stable direction and
+large when one of them did not (a column that is not single-humped). Both the Casimir columns (in m1) and
+the dual rows (in j) are this recurrence.
 """
 function _cg_twosided!(w::Vector{V}, a::Vector{V}, ia::Vector{V}, d::Vector{V}, λ, n::Int) where {V}
     big = 2.0^500
     meet = 1
+    mismatch = 0.0
     w[1] = one(V)
-    n == 1 && return meet
+    n == 1 && return meet, mismatch
     # forward from 1, to the first local maximum
     w[2] = -((d[1] - λ) * w[1]) * ia[1]
     meet = n
-    if _mag(w[2]) < _mag(w[1])
+    if _size(w[2]) < _size(w[1])
         meet = 1
     else
         @inbounds for k in 2:n-1
@@ -188,12 +197,13 @@ function _cg_twosided!(w::Vector{V}, a::Vector{V}, ia::Vector{V}, d::Vector{V}, 
             if _mag(w[k+1]) > big
                 for i in 1:k+1; w[i] = _aldexp(w[i], -500); end
             end
-            _mag(w[k+1]) < _mag(w[k]) && (meet = k; break)
+            _size(w[k+1]) < _size(w[k]) && (meet = k; break)
         end
     end
     # backward from n down to the meeting point, then the left part scaled to it
     if meet < n
         fm = w[meet]
+        fnext = w[meet+1]                  # the forward run's value one step past the meeting point
         w[n] = one(V)
         w[n-1] = -((d[n] - λ) * w[n]) * ia[n-1]
         @inbounds for k in n-1:-1:meet+1
@@ -204,8 +214,11 @@ function _cg_twosided!(w::Vector{V}, a::Vector{V}, ia::Vector{V}, d::Vector{V}, 
         end
         sc = w[meet] / fm
         @inbounds for i in 1:meet-1; w[i] *= sc; end
+        # both runs computed w[meet+1]; they agree when each ran uphill
+        mismatch = Float64(_modulus(fnext * sc - w[meet+1]) / _modulus(w[meet]))
+        isfinite(mismatch) || (mismatch = Inf)
     end
-    return meet
+    return meet, mismatch
 end
 
 "Scale `w` to `out` by a certified value `(m, e)` at index `i`; for a level, where the entries are complex."
@@ -263,7 +276,7 @@ fusion rule at a level.
 """
 function _cg_column!(work::CGWork{V}, T::CGTables, J1::Int, J2::Int, J::Int, M::Int, lo::Int, n::Int) where {V}
     λ = _cgint(T, J + 1)^2
-    meet = _cg_twosided!(work.w, work.a, work.ia, work.d, λ, n)
+    meet, mismatch = _cg_twosided!(work.w, work.a, work.ia, work.d, λ, n)
     cancel = 1.0
     T.exact || @inbounds for k in 1:n
         cancel = max(cancel, (work.dmag[k] + _mag(λ)) / _mag(work.d[k] - λ))
@@ -277,7 +290,8 @@ function _cg_column!(work::CGWork{V}, T::CGTables, J1::Int, J2::Int, J::Int, M::
     else
         _cg_normalise!(work.out, work.w, n, n)                # C(hi) > 0
     end
-    _cg_estimates!(work.est, work.out, n, meet, seedrel, isfinite(cancel) ? cancel : Inf)
+    # `mismatch`: the two runs disagree when the solution is not single-humped; charged to every entry
+    _cg_estimates!(work.est, work.out, n, meet, seedrel + mismatch, isfinite(cancel) ? cancel : Inf)
     return nothing
 end
 
@@ -338,7 +352,7 @@ function _cg_row!(work::CGWork{V}, T::CGTables, J1::Int, M1::Int, J2::Int, M2::I
     # backward branch would start from a false boundary condition (measured: wrong top entries at k = 10).
     T.k >= 0 && jhi != J1 + J2 && return false
     _cg_row_coefficients!(work, T, J1, M1, J2, M2, jlo, n)
-    meet = _cg_twosided!(work.w, work.a, work.ia, work.d, zero(DWNum), n)
+    meet, mismatch = _cg_twosided!(work.w, work.a, work.ia, work.d, zero(DWNum), n)
     cancel = 1.0
     T.exact || @inbounds for k in 1:n
         cancel = max(cancel, work.dmag[k] / _mag(work.d[k]))
@@ -355,7 +369,8 @@ function _cg_row!(work::CGWork{V}, T::CGTables, J1::Int, M1::Int, J2::Int, M2::I
     else
         _cg_normalise!(work.out, work.w, n, n)                # the stretched coefficient is positive
     end
-    _cg_estimates!(work.est, work.out, n, meet, seedrel, isfinite(cancel) ? cancel : Inf)
+    # `mismatch`: the two runs disagree when the solution is not single-humped; charged to every entry
+    _cg_estimates!(work.est, work.out, n, meet, seedrel + mismatch, isfinite(cancel) ? cancel : Inf)
     return true
 end
 

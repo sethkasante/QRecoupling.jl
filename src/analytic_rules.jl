@@ -197,7 +197,12 @@ mutable struct AnalyticRuleTable{T}
     roots::Vector{AnalyticScaled{T}}  # √Ψ_d on the package's branch; complex q only
     condmax::Vector{Float64}          # prefix maxima of the q-integer condition; see `_prefactor_cond`
     accurate::Bool                    # entries rounded from double words: each within half an ulp
+    balanced_inv::Vector{AnalyticScaled{T}}  # 1/Ψ_d and 1/√Ψ_d, filled on first use by the double-word
+    roots_inv::Vector{AnalyticScaled{T}}     # complex prefactor (zero where the factor vanishes)
 end
+AnalyticRuleTable(q,bits,circle,ints,inverses,facts,balanced,roots,condmax,accurate) =
+    AnalyticRuleTable(q,bits,circle,ints,inverses,facts,balanced,roots,condmax,accurate,
+                      similar(ints,0),similar(ints,0))
 AnalyticRuleTable(q,bits,circle,ints,inverses,facts,balanced,roots,condmax) =
     AnalyticRuleTable(q,bits,circle,ints,inverses,facts,balanced,roots,condmax,false)
 
@@ -211,6 +216,9 @@ imaginary part and fixes the branch at `+i√|Ψ_d|` (otherwise 21 of 72 symbols
 change of `q`).
 """
 _on_unit_circle(::Real) = false
+"Whether `q` is purely imaginary, where every Ψ_d with d ≥ 3 is exactly real; see `_table_roots`."
+_imaginary_axis(::Real) = false
+_imaginary_axis(q::Complex) = iszero(real(q)) && !iszero(imag(q))
 @inline function _on_unit_circle(q::Complex)
     a = Float64(real(q) * real(q) + imag(q) * imag(q))
     return abs(a - 1.0) <= 8 * eps(Float64)
@@ -250,9 +258,33 @@ it is the only transcendental in a complex-q prefactor and does not depend on th
 function _table_roots(tab::AnalyticRuleTable)
     length(tab.roots) == length(tab.ints) && return tab.roots
     psi = _table_balanced(tab)
-    r = tab.circle ? [_asqrt(_deimag(p)) for p in psi] : [_asqrt(p) for p in psi]
+    r = if tab.circle
+        [_asqrt(_deimag(p)) for p in psi]
+    elseif _imaginary_axis(tab.q)
+        # q = it: Ψ_d is real for d ≥ 3 (Ψ₂ = q + 1/q is imaginary), and a negative one sits on the cut.
+        # The same rule as on the circle, so that every precision and the family path agree.
+        [d == 2 ? _asqrt(psi[d]) : _asqrt(_deimag(psi[d])) for d in eachindex(psi)]
+    else
+        [_asqrt(p) for p in psi]
+    end
     tab.roots = r
     return r
+end
+
+"Reciprocals of a table of factors; a vanishing factor keeps a zero entry, which callers must not use."
+_table_reciprocals(v::Vector{<:AnalyticScaled}) =
+    (unit = _ascaled(one(first(v).m)); [iszero(x.m) ? x : _adiv(unit,x) for x in v])
+
+function _table_balanced_inv(tab::AnalyticRuleTable)
+    length(tab.balanced_inv) == length(tab.ints) && return tab.balanced_inv
+    tab.balanced_inv = _table_reciprocals(_table_balanced(tab))
+    return tab.balanced_inv
+end
+
+function _table_roots_inv(tab::AnalyticRuleTable)
+    length(tab.roots_inv) == length(tab.ints) && return tab.roots_inv
+    tab.roots_inv = _table_reciprocals(_table_roots(tab))
+    return tab.roots_inv
 end
 
 function _analytic_table(q::T,N::Int) where T
@@ -546,11 +578,20 @@ function _analytic_prefactor(s,tab)
     # branch at +i√|Ψ_d|, which is continuous in arg q, matches `Level(k)` as θ → π/h, and still cancels in
     # coherence identities.
     cut=1.0
-    oncut=tab.circle
+    oncut=tab.circle || _imaginary_axis(q)
+    # In double words a division costs several multiplications, and this product is most of a call that the
+    # branch guard sends here. Negative powers multiply by cached reciprocals instead: the same factors and
+    # roots, one extra u² rounding each, within the two roundings already charged per factor.
+    recip=real(typeof(q)) === DWNum
+    ipsi=recip ? _table_balanced_inv(tab) : psi
+    isq=recip ? _table_roots_inv(tab) : sq
     @inbounds for d in 2:Dmax
         e=E[d]; e==0 && continue
         a,bb=split_exp(e)
-        if a!=0; r=_amul_power(r,psi[d],a); pr+=a*_totient(d); nroots+=1; end
+        if a!=0
+            r=(recip && a<0 && !iszero(ipsi[d].m)) ? _amul_power(r,ipsi[d],-a) : _amul_power(r,psi[d],a)
+            pr+=a*_totient(d); nroots+=1
+        end
         bb==0 && continue
         pd+=bb*_totient(d); nroots+=1
         if !oncut
@@ -559,7 +600,7 @@ function _analytic_prefactor(s,tab)
                 cut=min(cut,Float64(abs(imag(z))/abs(z)))
             end
         end
-        sv=_amul_power(sv,sq[d],bb)
+        sv=(recip && bb<0 && !iszero(isq[d].m)) ? _amul_power(sv,isq[d],-bb) : _amul_power(sv,sq[d],bb)
     end
     ph=pr+pd//2
     return _amul(_amul(r,sv),_aexp_pow(q,ph)),abs(Float64(ph)),nroots,cut

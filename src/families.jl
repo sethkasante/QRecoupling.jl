@@ -313,9 +313,10 @@ function ComplexQ(q::Number, N::Int)
     # predicate, that `analytic_rules.jl` applies to the scalar path. A column and `q6j` must agree on it:
     # they disagreed by an exact sign on 8 of the suite's unit-circle entries before this was added.
     circle = _on_unit_circle(qq) || _negative_real_axis(qq)
+    axis = _imaginary_axis(qq)                 # Ψ_d real for d ≥ 3; the same rule as the scalar path
     spsi = Vector{CDWord}(undef, max(N, 1))
     @inbounds for d in 1:N
-        spsi[d] = _dwsqrt(circle ? _re_only(psi[d]) : psi[d])
+        spsi[d] = _dwsqrt((circle || (axis && d != 2)) ? _re_only(psi[d]) : psi[d])
     end
     divs = [Int[] for _ in 0:N]
     @inbounds for d in 1:N, n in d:d:N
