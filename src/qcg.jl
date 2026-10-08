@@ -59,27 +59,45 @@ _weighted_symbolic_error(f) = ArgumentError(
     "Use `At(q)` or `Level(k)` for numerical values.")
 
 """
-    _level_half_phases(k) -> Vector{ComplexF64}
+    _level_half_phase_parts(k) -> (hi, lo)
 
-e^{iπr/(2h)} for r = 0, …, 4h − 1, h = k + 2, each correctly rounded: integer powers of q = e^{iπ/h} at
-even r, and q^{e2/2} at any r. Built once per level, from 128-bit values.
+High and low parts of e^{iπr/(2h)} for r = 0, …, 4h − 1, h = k + 2. Integer powers of q = e^{iπ/h}
+use even r, and q^{e2/2} can use any r. Compute the first quadrant at 128 bits and obtain the others
+by exact quarter turns. Both parts are published together in the level cache.
 """
-const LEVEL_HALF_PHASES = LevelCache{Vector{ComplexF64}}()
-_level_half_phases(k::Int) = get_level!(LEVEL_HALF_PHASES, k) do
+const LEVEL_HALF_PHASES = LevelCache{Tuple{Vector{ComplexF64},Vector{ComplexF64}}}()
+_level_half_phase_parts(k::Int) = get_level!(LEVEL_HALF_PHASES, k) do
     h = k + 2
+    hi = Vector{ComplexF64}(undef, 4h)
+    lo = similar(hi)
     setprecision(BigFloat, 128) do
-        [ComplexF64(cispi(BigFloat(r) / (2h))) for r in 0:4h-1]
+        # Evaluate the axes explicitly to retain cispi's signed-zero convention.
+        for t in 0:3
+            z = cispi(BigFloat(t) / 2)
+            hi[t*h+1] = ComplexF64(z)
+            lo[t*h+1] = ComplexF64(z - hi[t*h+1])
+        end
+        for r in 1:h-1
+            z = cispi(BigFloat(r) / (2h))
+            a = ComplexF64(z); b = ComplexF64(z - a)
+            @inbounds begin
+                hi[r+1] = a; lo[r+1] = b
+                hi[h+r+1] = complex(-imag(a), real(a))
+                lo[h+r+1] = complex(-imag(b), real(b))
+                hi[2h+r+1] = -a; lo[2h+r+1] = -b
+                hi[3h+r+1] = complex(imag(a), -real(a))
+                lo[3h+r+1] = complex(imag(b), -real(b))
+            end
+        end
     end
+    return hi, lo
 end
 
-"The low parts of `_level_half_phases`: phase = hi + lo to about u², for the compensated level pass."
-const LEVEL_HALF_PHASES_LO = LevelCache{Vector{ComplexF64}}()
-_level_half_phases_lo(k::Int) = get_level!(LEVEL_HALF_PHASES_LO, k) do
-    h = k + 2
-    setprecision(BigFloat, 128) do
-        [(z = cispi(BigFloat(r) / (2h)); ComplexF64(z - ComplexF64(z))) for r in 0:4h-1]
-    end
-end
+"The high parts of the cached half-step phases, rounded once to Float64."
+_level_half_phases(k::Int) = first(_level_half_phase_parts(k))
+
+"The low parts of the cached half-step phases, so phase = hi + lo to about u²."
+_level_half_phases_lo(k::Int) = last(_level_half_phase_parts(k))
 
 "e^{iπr/(2h)} in the precision of `R`, rounded once."
 _half_phase(::Type{Float64}, k::Int, r::Int) = @inbounds _level_half_phases(k)[mod(r, 4(k + 2)) + 1]
@@ -120,7 +138,7 @@ end
 """
     _weighted_level_pass_dw(s, w, e2, k) -> (value, relbound, κ)
 
-The compensated tier of [`_weighted_level_pass`](@ref) for `Float64` output. The plain pass builds each
+The compensated evaluation of [`_weighted_level_pass`](@ref) for `Float64` output. The plain pass builds each
 term in a double word and rounds it before adding, so its error is about u·κ. Here the term, its phase and
 the running sum all stay in double words, and the error is about n·u²·κ for n terms: the tier is accepted
 up to κ ≈ 10¹⁵ for typical term counts, where the plain pass stops near 10³. The accumulated sum and
@@ -128,7 +146,7 @@ prefactor are rounded for the final scaled product.
 """
 function _weighted_level_pass_dw(s::FactorialSum, w::Int, e2::Int, k::Int)
     tab = qint_tables(Float64, k)
-    hi = _level_half_phases(k); lo = _level_half_phases_lo(k); P = 4(k + 2)
+    hi, lo = _level_half_phase_parts(k); P = 4(k + 2)
     srh = srl = sih = sil = 0.0             # the sum (real and imaginary double words), in units of 2^E
     mass = 0.0; E = typemin(Int)
     r = 2 * mod(w * s.zlo, 2(k + 2))
@@ -265,19 +283,21 @@ function _weighted_level_zero(s::FactorialSum, w::Int, k::Int)
 end
 
 """
-Level value of a weighted rule: the plain pass, a double-word pass for Float64 output,
-then an optional recurrence and arbitrary precision at doubling widths. Numerical cancellation triggers
+Level value of a weighted rule: try the double-word pass first for Float64 output, then the plain pass,
+an optional recurrence and arbitrary precision at doubling widths. Numerical cancellation triggers
 an algebraic zero test; agreement near zero at two widths is not a proof.
 """
 function _weighted_level_value(s::FactorialSum, w::Int, e2::Int, k::Int, ::Type{T}; near_edge = nothing) where {T}
     R = real(float(T))
     if R !== BigFloat
-        v, relb, _ = _weighted_level_pass(s, w, e2, k, R)
-        isfinite(relb) && relb <= RTOL_PLAIN && return Complex{R}(_avalue(v))
-        if R === Float64                       # compensated tier: the same sum in double words
+        # The specialized double-word accumulation is cheaper than the general scaled plain loop.
+        # Both passes share their phase table, so this order adds no cold-cache setup.
+        if R === Float64
             v, relb, _ = _weighted_level_pass_dw(s, w, e2, k)
             isfinite(relb) && relb <= RTOL_PLAIN && return Complex{R}(_avalue(v))
         end
+        v, relb, _ = _weighted_level_pass(s, w, e2, k, R)
+        isfinite(relb) && relb <= RTOL_PLAIN && return Complex{R}(_avalue(v))
         # near-edge tier: the coefficient from its Casimir column, O(column) and free of the sum's cancellation
         if near_edge !== nothing
             vr = near_edge()
