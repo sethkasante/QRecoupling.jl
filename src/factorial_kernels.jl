@@ -326,10 +326,14 @@ escalate precision. `fallback()` handles factorials outside the level tables. Wi
 labels), escalation first tries the column recurrence.
 """
 function value_at_level(s::FactorialSum, k::Int, ::Type{T}; fallback, labels = nothing, family = nothing, workspace = nothing) where {T}
-    v, status, segs = level_pass1(s, k, qint_tables(T, k); family=family, workspace=workspace)
+    tab = qint_tables(T, k)
+    vs, small = _small_level(s, k, tab, family)
+    small == SMALL_ACCEPTED && return vs
+    small == SMALL_DECLINED && _small_level_zero(s, k, family) && return zero(T)
+    v, status, segs = level_pass1(s, k, tab; family=family, workspace=workspace)
     status === :done && return v
     status === :fallback && return fallback()
-    return level_escalate(s, segs, k, T, level_zero_table(k); labels=labels, workspace=workspace)
+    return level_escalate(s, segs, k, T, level_zero_table(k); labels=labels, family=family, workspace=workspace)
 end
 
 """
@@ -424,6 +428,186 @@ end
 @inline _certifies(value, bound, rtol) =
     !iszero(value) && isfinite(value) && isfinite(bound) && 0 <= bound <= rtol * abs(value)
 
+# ---- short sums ----
+#
+# When the factorials of a sum are few and of moderate size, [n]! and 1/[n]! are `Float64` values far inside
+# the exponent range, and a product of them needs no separate exponent. `_small_pass` runs the operations of
+# the plain pass of `_sum_at_level` on these values, in the same order, with each exponent folded into its
+# factor. Floating-point products, quotients and square roots do not depend on the scaling while nothing
+# overflows or underflows, so the value is bit for bit that of the plain pass, at a fraction of its fixed
+# cost. A budget of binary exponents keeps every partial product in range.
+
+"Exponent budget of one product: its factors may reach at most 2^SMALL_BITS and at least 2^-SMALL_BITS."
+const SMALL_BITS = 900
+"Largest term, relative to the first, that the short pass keeps; the plain pass rescales far above it."
+const SMALL_TERM_MAX = 2.0^64
+"Results outside [2^-800, 2^800] go to the plain pass, which carries its exponent separately."
+const SMALL_RANGE = 2.0^800
+
+const SMALL_ACCEPTED = 0      # the value passed its acceptance test
+const SMALL_OUTSIDE = 1       # the rule is not in the class of the short pass
+const SMALL_DECLINED = 2      # in the class, but the estimate did not pass
+const SMALL_CANCELLED = 3     # the same, for a classical sum whose term ratios are exact integer quotients
+
+"""
+    _small_pass(s, z0, z1, tab, rtol) -> (value, status)
+
+The plain pass over the single segment `z0:z1` for a `Float64` sum with unit slopes and exponents ±1 whose
+products fit the exponent budget, accepted at `rtol`. With status `SMALL_ACCEPTED` the value is the one
+`_sum_at_level` computes for that segment; any other status leaves the sum to the general evaluation.
+"""
+@inline function _small_pass(s::FactorialSum, z0::Int, z1::Int, tab::QIntTables{Float64}, rtol::Float64)
+    T = Float64
+    u = _unit(T)
+    ff, gf, fe, ge = tab.ff, tab.gf, tab.fe, tab.ge
+    nmax = length(ff) - 1
+    outside = (zero(T), SMALL_OUTSIDE)
+    P = one(T); np = 0; up = 0; down = 0
+    @inbounds for (n, c) in s.pre
+        0 <= n <= nmax || return outside
+        if c == 1
+            P *= ff[n+1]; e = fe[n+1]
+        elseif c == -1
+            P *= gf[n+1]; e = ge[n+1]
+        else
+            return outside
+        end
+        up += max(e, 0); down += max(1 - e, 0)     # the factor lies in [2^(e-1), 2^e)
+        np += 1
+    end
+    (up <= SMALL_BITS && down <= SMALL_BITS) || return outside
+    relpre = _gamma(T, 2np)
+    if s.sqrt_pre
+        P = sqrt(P)
+        relpre = (relpre / 2) + u
+    end
+    M0 = one(T); nf = 0; kn = 0; kd = 0; m = 1; up = 0; down = 0
+    @inbounds for f in s.fac
+        (abs(f.a) == 1 && abs(f.c) == 1) || return outside
+        n0 = _arg(f, z0); n1 = _arg(f, z1)
+        (0 <= n0 <= nmax && 0 <= n1 <= nmax) || return outside
+        if f.c == 1
+            M0 *= ff[n0+1]; e = fe[n0+1]
+        else
+            M0 *= gf[n0+1]; e = ge[n0+1]
+        end
+        up += max(e, 0); down += max(1 - e, 0)
+        (f.a == 1) == (f.c > 0) ? (kn += 1) : (kd += 1)
+        m = max(m, n0 + 1, n1 + 1)
+        nf += 1
+    end
+    (up <= SMALL_BITS && down <= SMALL_BITS) || return outside
+    intr = false                                 # the test of `_integer_ratios`
+    if tab.classical
+        pw = one(T)
+        for _ in 1:max(kn, kd)
+            pw *= m
+        end
+        intr = pw < 2.0^53
+    end
+    cstep = intr ? 2 : 2nf + 1
+    t = one(T); ssum = one(T); W = zero(T); SS = zero(T); j = 0
+    if intr
+        for z in z0:z1-1
+            j += 1
+            a, b = _int_ratio(s, z)
+            t *= T(a) / T(b)
+            ssum += t
+            at = abs(t)
+            W = fma(T(j), at, W); SS += abs(ssum)
+            at > SMALL_TERM_MAX && return outside
+        end
+    else
+        _, plan = _ratio_plan(s, length(tab.q))
+        qq = tab.qq
+        rsign = s.alternating ? -one(T) : one(T)
+        @inbounds for z in z0:z1-1
+            j += 1
+            r = rsign
+            for (a, o) in plan
+                r *= qq[a*z+o]
+            end
+            t *= r
+            ssum += t
+            at = abs(t)
+            W = fma(T(j), at, W); SS += abs(ssum)
+            at > SMALL_TERM_MAX && return outside
+        end
+    end
+    declined = (zero(T), intr ? SMALL_CANCELLED : SMALL_DECLINED)
+    iszero(ssum) && return declined
+    g = _gamma(T, cstep * (z1 - z0))
+    relfirst = _gamma(T, 2nf)
+    sgn = (s.alternating && isodd(z0)) ? -one(T) : one(T)
+    x = sgn * ssum * M0
+    E = abs(M0) * (cstep * u * W / (1 - g)^2 + u / (1 - u) * SS) + abs(ssum * M0) * (relfirst + u)
+    xp = x * P
+    bound = (E * abs(P) * (1 + relpre) + abs(xp) * (relpre + u)) * BOUND_SLACK(T)
+    v = s.sign0 * xp
+    inv(SMALL_RANGE) < abs(v) < SMALL_RANGE || return outside
+    _certifies(v, bound, rtol) || return declined
+    return (v, SMALL_ACCEPTED)
+end
+
+"""
+The short pass for a standard symbol at level `k`, whose caller has checked admissibility: one segment,
+cut at the level as in `level_pass1`. Other rules are classified first and do not take it.
+"""
+@inline function _small_level(s::FactorialSum, k::Int, tab::QIntTables{T}, family) where {T}
+    (family === nothing || is_empty_sum(s)) && return (zero(T), SMALL_OUTSIDE)
+    return _small_try(s, s.zlo, family === Val(:threej) ? s.zhi : min(s.zhi, k), tab)
+end
+
+"Factor from a 6j entry to the symbol of `family` (1 for the 6j itself and for rules without a family)."
+@inline _family_scale(::Nothing, Q, J) = 1.0
+@inline _family_scale(::Val{:sixj}, Q, J) = 1.0
+@inline _family_scale(family::Val, Q, J) = (d = _family_factor(family, Q, J); d[1] + d[2])
+
+"""
+An exact zero of a short level sum that the short pass declined, decided before the later stages: the
+structural proofs first, then integer arithmetic (`_level_integer_zero`). `false` means not shown to vanish.
+"""
+function _small_level_zero(s::FactorialSum, k::Int, family)
+    z1 = family === Val(:threej) ? s.zhi : min(s.zhi, k)
+    segs = (s.zlo:z1,)
+    ((z1 == s.zhi && pairwise_zero(s)) || reflection_zero(s, segs, k)) && return true
+    return _level_integer_zero(s, s.zlo, z1, k) === true
+end
+
+"Exact confirmation of a level zero: in integers when the sum allows it, otherwise in the number field."
+function _level_exact_zero(s::FactorialSum, segs, k::Int)
+    z = length(segs) == 1 ? _level_integer_zero(s, first(segs[1]), last(segs[1]), k) : nothing
+    return z === nothing ? iszero(exact_x(s, k)) : z
+end
+
+"The short pass under the current policy; tables of other types have none."
+@inline function _small_try(s::FactorialSum, z0::Int, z1::Int, tab::QIntTables{Float64})
+    mode = POLICY[]
+    mode === :compensated_only && return (0.0, SMALL_OUTSIDE)      # that policy has no plain pass to reproduce
+    return _small_pass(s, z0, z1, tab, mode === :strict || mode === :strict_lazy ? RTOL_CERTIFIED : RTOL_PLAIN)
+end
+@inline _small_try(s::FactorialSum, z0::Int, z1::Int, tab::QIntTables{T}) where {T} = (zero(T), SMALL_OUTSIDE)
+
+"""
+    _small_exact_zero(s) -> Bool or nothing
+
+Whether a classical sum with integer term ratios vanishes, by Horner nesting in checked 128-bit integers.
+`nothing` when an intermediate does not fit. For a short sum this settles an exact zero in a few
+multiplications, where the general evaluation would run every later stage first.
+"""
+function _small_exact_zero(s::FactorialSum)
+    P = Int128(1); Q = Int128(1)
+    for z in s.zhi-1:-1:s.zlo
+        a, b = _int_ratio(s, z)
+        bq, o1 = Base.Checked.mul_with_overflow(Int128(b), Q)
+        ap, o2 = Base.Checked.mul_with_overflow(Int128(a), P)
+        P, o3 = Base.Checked.add_with_overflow(bq, ap)
+        (o1 | o2 | o3) && return nothing
+        Q = bq
+    end
+    return iszero(P)
+end
+
 """
 Evaluation policy for `Float64` level and classical values:
 
@@ -451,16 +635,18 @@ tiers, then `BigFloat`, doubling until the estimate meets the target. Keep off w
 `BigFloat` precision is shared.
 """
 function level_escalate(s::FactorialSum, segs, k::Int, ::Type{T}, ztab::LevelZeroTable;
-                        labels = nothing, workspace = nothing) where {T}
-    # The recurrence comes first when available; it accepts entries using its own error estimate.
+                        labels = nothing, family = nothing, workspace = nothing) where {T}
+    # The two structural tests are proofs and cost a few comparisons, so they come before everything else.
+    (pairwise_zero(s) || reflection_zero(s, segs, k)) && return zero(T)
+    # The recurrence, when available, accepts entries using its own error estimate. `labels` are those of
+    # the 6j symbol; an F or G symbol is that entry times its dimension factor.
     if T === Float64 && labels !== nothing       # the symbol as one entry of its column: O(distance), no κ
         v = sixj_entry(labels, k, _column_workspace(workspace))
-        v === nothing || return T(v)
+        v === nothing || return T(v * _family_scale(family, LevelQ(qint_tables(Float64, k), k), labels))
     end
-    # the pairwise test is a proof and costs a few comparisons; the modular screen is a pass over every term
-    (pairwise_zero(s) || reflection_zero(s, segs, k)) && return zero(T)
+    # the modular screen is a pass over every term; a candidate is settled exactly
     if is_cancellation_zero(s, segs, k, ztab) !== false
-        iszero(exact_x(s, k)) && return zero(T)
+        _level_exact_zero(s, segs, k) && return zero(T)
     end
     target = _target_digits(T)
     if T === Float64                             # K-word tiers: κ up to ~1e30 (K = 3) and ~1e46 (K = 4)
