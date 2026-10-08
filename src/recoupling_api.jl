@@ -36,9 +36,10 @@ _deprecated_eager() = @warn("`eager=true` is deprecated and now uses the standar
                             labels=labels, family=family, workspace=workspace)
     elseif _is_classical(q)
         return exact ? classical_exact(s) :
-                       classical_value(s,T; labels=labels,workspace=workspace)
+                       classical_value(s,T; labels=labels,family=family,workspace=workspace)
     end
-    return analytic_value(s,q,T;workspace=workspace,labels=labels)
+    # the analytic evaluator reads `labels` as those of a bare 6j symbol
+    return analytic_value(s,q,T;workspace=workspace,labels=family === Val(:sixj) ? labels : nothing)
 end
 
 """
@@ -114,7 +115,7 @@ function fsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
     Js = doubled(j1, j2, j3, j4, j5, j6)
     s = fsymbol_sum(Js...)
     return _symbol_value(s, () -> _qδtet(Js...,Int(k)), k,q,exact,T;
-                         family=Val(:f),workspace=workspace)
+                         family=Val(:f),workspace=workspace,labels=Js)
 end
 
 """
@@ -137,7 +138,7 @@ function gsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
     Js = doubled(j1, j2, j3, j4, j5, j6)
     s = gsymbol_sum(Js...)
     return _symbol_value(s, () -> _qδtet(Js...,Int(k)), k,q,exact,T;
-                         family=Val(:g),workspace=workspace)
+                         family=Val(:g),workspace=workspace,labels=Js)
 end
 
 """
@@ -230,6 +231,7 @@ function clear_sieve_caches!()
     empty!(LEVEL_HALF_PHASES)   # high and low phase parts in qcg.jl
     clear_cg_caches!()          # qcg_columns.jl
     empty!(LEVEL_ZERO_TABLES)
+    empty!(LEVEL_PHI)
     empty!(CLASSICAL_F64_TABLES)
     empty!(CLASSICAL_MOD_TABLES)
     empty!(GENERIC_MOD_TABLES)
