@@ -119,6 +119,17 @@ for f in (:q6j, :q3j_factorial, :fsymbol, :gsymbol, :rmatrix, :tetrahedron, :the
             throw(ArgumentError("evaluation target conflicts with explicit evaluation keywords"))
         return $f(args...; fixed...,kw...)
     end
+    # `Level{T}`: a type passed as a keyword is a `DataType` field of a named tuple, so the call it reaches
+    # is dispatched at run time. The default type is therefore left to the callee's own default.
+    @eval function $f(t::Level{T}, args::Vararg{Any,N}; kw...) where {T,N}
+        if isempty(kw)
+            T === Float64 && return $f(args...; k = t.k)     # an explicit `T` keyword is not seen statically
+            return $f(args...; k = t.k, T = T)
+        end
+        any(key -> key === :k || key === :q || key === :T, keys(kw)) &&
+            throw(ArgumentError("evaluation target conflicts with explicit evaluation keywords"))
+        return $f(args...; k = t.k, T = T, kw...)
+    end
 end
 
 """

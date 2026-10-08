@@ -123,16 +123,23 @@ end
 
 "The prefactor Π [n]!^c (rooted if the rule says so) of a level rule, formed in double words."
 function _weighted_level_prefactor(s::FactorialSum, tab::QIntTables{Float64})
+    ph, pl, pe = _weighted_level_prefactor_dw(s, tab)
+    return _ascaled(ph + pl, pe)
+end
+
+"The same prefactor as an unnormalised double word `(ph + pl)·2^pe`. Mantissas lie in [1/2, 1), so a product
+is renormalised only if it has become very small; powers of two do not change a rounding."
+@inline function _weighted_level_prefactor_dw(s::FactorialSum, tab::QIntTables{Float64})
     ph, pl, pe = 1.0, 0.0, 0
     for (n, c) in s.pre
         ph, pl, pe = _split_mul_dw(ph, pl, pe, tab, Int(n), Int(c))
-        ph, pl, pe = _renorm_dw(ph, pl, pe)
+        ph < 0x1p-500 && ((ph, pl, pe) = _renorm_dw(ph, pl, pe))
     end
     if s.sqrt_pre
         isodd(pe) && ((ph, pl, pe) = (2ph, 2pl, pe - 1))
         ph, pl = _dw_sqrt(ph, pl); pe ÷= 2
     end
-    return _ascaled(ph + pl, pe)
+    return ph, pl, pe
 end
 
 """
@@ -150,30 +157,30 @@ function _weighted_level_pass_dw(s::FactorialSum, w::Int, e2::Int, k::Int)
     srh = srl = sih = sil = 0.0             # the sum (real and imaginary double words), in units of 2^E
     mass = 0.0; E = typemin(Int)
     r = 2 * mod(w * s.zlo, 2(k + 2))
+    # Terms and sum are aligned by exact powers of two and never renormalised on the way, which changes no
+    # rounding: a term's mantissa stays above 2^-500, and the final value is normalised once.
     for z in s.zlo:s.zhi
         mh, ml, e = 1.0, 0.0, 0
         for f in s.fac
             mh, ml, e = _split_mul_dw(mh, ml, e, tab, _arg(f, z), Int(f.c))
             mh < 0x1p-500 && ((mh, ml, e) = _renorm_dw(mh, ml, e))
         end
-        mh, ml, e = _renorm_dw(mh, ml, e)
         s.alternating && isodd(z) && ((mh, ml) = (-mh, -ml))
-        @inbounds c = hi[mod(r, P) + 1]
-        @inbounds cl = lo[mod(r, P) + 1]
+        ir = mod(r, P) + 1
+        @inbounds c = hi[ir]
+        @inbounds cl = lo[ir]
         trh, trl = _dw_mul(mh, ml, real(c), real(cl))
         tih, til = _dw_mul(mh, ml, imag(c), imag(cl))
         m = abs(mh)
         if e > E
-            if E != typemin(Int)            # bring the sum down to the larger exponent (exact scalings)
-                d = E - e
-                srh = ldexp(srh, d); srl = ldexp(srl, d); sih = ldexp(sih, d); sil = ldexp(sil, d)
-                mass = ldexp(mass, d)
+            if E != typemin(Int)            # bring the sum down to the larger exponent
+                p2 = ldexp(1.0, E - e)
+                srh *= p2; srl *= p2; sih *= p2; sil *= p2; mass *= p2
             end
             E = e
         elseif e < E
-            d = e - E
-            trh = ldexp(trh, d); trl = ldexp(trl, d); tih = ldexp(tih, d); til = ldexp(til, d)
-            m = ldexp(m, d)
+            p2 = ldexp(1.0, e - E)
+            trh *= p2; trl *= p2; tih *= p2; til *= p2; m *= p2
         end
         srh, srl = _dw_add(srh, srl, trh, trl)
         sih, sil = _dw_add(sih, sil, tih, til)
@@ -182,9 +189,9 @@ function _weighted_level_pass_dw(s::FactorialSum, w::Int, e2::Int, k::Int)
     end
     accm = complex(srh + srl, sih + sil)
     iszero(accm) && return _ascaled(accm), Inf, Inf
-    acc = _ascaled(accm, E)
-    pre = _weighted_level_prefactor(s, tab)
-    v = _amul(_amul(AnalyticScaled(_half_phase(Float64, k, e2), 0), AnalyticScaled(complex(pre.m), pre.e)), acc)
+    ph, pl, pe = _weighted_level_prefactor_dw(s, tab)
+    @inbounds phase = hi[mod(e2, P) + 1]
+    v = _ascaled((phase * complex(ph + pl)) * accm, Base.checked_add(pe, E))
     s.sign0 < 0 && (v = _aneg(v))
     κ = mass / abs(accm)
     n = s.zhi - s.zlo + 1
@@ -332,9 +339,9 @@ end
     if !isnothing(k)
         exact && throw(_weighted_exact_error(f))
         kk = Int(k)
-        qk = _level_q(T, kk)
-        admissible(kk) || return zero(promote_type(T, typeof(qk)))
-        is_empty_sum(s) && return zero(promote_type(T, typeof(qk)))
+        Z = promote_type(T, Complex{real(float(T))})        # the type of a value at q = e^{iπ/(k+2)}
+        admissible(kk) || return zero(Z)
+        is_empty_sum(s) && return zero(Z)
         return _weighted_level_value(s, weight..., kk, T;
                                      near_edge = near_edge === nothing ? nothing : () -> near_edge(nothing, kk))
     elseif _is_classical(q)
@@ -429,6 +436,15 @@ for f in (:q3j, :qcg)
         any(key -> key in (:k, :q) || haskey(fixed, key), keys(kw)) &&
             throw(ArgumentError("evaluation target conflicts with explicit evaluation keywords"))
         return $f(args...; fixed..., kw...)
+    end
+    @eval function $f(t::Level{T}, args::Vararg{Any,N}; kw...) where {T,N}      # type-stable, as in targets.jl
+        if isempty(kw)
+            T === Float64 && return $f(args...; k = t.k)     # an explicit `T` keyword is not seen statically
+            return $f(args...; k = t.k, T = T)
+        end
+        any(key -> key === :k || key === :q || key === :T, keys(kw)) &&
+            throw(ArgumentError("evaluation target conflicts with explicit evaluation keywords"))
+        return $f(args...; k = t.k, T = T, kw...)
     end
     # A collection of label tuples (5 or 6 labels each). One workspace per worker keeps the tables of the
     # shared q; the results are complex off the positive real axis, so the element type is taken from them.

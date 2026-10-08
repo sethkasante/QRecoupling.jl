@@ -132,12 +132,105 @@ function is_cancellation_zero(s::FactorialSum, segs, k::Int, tab::LevelZeroTable
     return true
 end
 
+# ---- an exact zero in the integer group ring ----
+#
+# With t_{z+1}/t_z = ±N_z/D_z, products of q-integers, a sum over one segment is its first term times
+# A / Π_y D_y, where A = Σ_z (±ζ^w)^(z-z0) (Π_{y<z} N_y)(Π_{y≥z} D_y). When numerator and denominator have
+# equally many factors, each [x] can be replaced by ζ^x − ζ^(−x): the common power of ζ − ζ^(−1) drops out
+# of the question whether A vanishes. A is then an integer combination of powers of ζ = e^{iπ/h}, held as a
+# vector of 2h integers, and multiplying by ζ^x − ζ^(−x) is two shifts and a subtraction. The nesting
+# G_z = L_z ± ζ^w N_z G_{z+1}, L_z = D_z L_{z+1}, gives A = G_{z0}, and A = 0 exactly when the polynomial
+# with these coefficients is divisible by the cyclotomic polynomial Φ_{2h}.
+
+const LEVEL_PHI = LevelCache{Vector{Int}}()
+"Coefficients of Φ_{2h}, h = k + 2, from the constant term up."
+_level_phi(k::Int) = get_level!(LEVEL_PHI, k) do
+    p = phi_q(2 * (k + 2))
+    Int[Int(coeff(p, i)) for i in 0:degree(p)]
+end
+
+"v ← (ζ^x − ζ^(−x)) v on the cyclic group of order length(v), through the scratch vector `tmp`."
+@inline function _binomial_mul!(v::Vector{Int}, tmp::Vector{Int}, x::Int)
+    n = length(v)
+    x = mod(x, n)
+    @inbounds for j in 1:n
+        a = j - x; a < 1 && (a += n)
+        b = j + x; b > n && (b -= n)
+        tmp[j] = v[a] - v[b]
+    end
+    copyto!(v, tmp)
+    return v
+end
+
+"""
+    _level_integer_zero(s, z0, z1, k, w = 0) -> Bool or nothing
+
+Whether Σ_{z=z0}^{z1} (±1)^z ζ^{wz} t_z vanishes at ζ = e^{iπ/(k+2)}, decided in integers. The rule needs
+unit slopes, exponents ±1, as many numerator as denominator factors in its term ratio, nonzero denominators,
+and few enough steps for the coefficients to stay inside 64 bits; otherwise `nothing`. Both answers are
+proofs.
+"""
+function _level_integer_zero(s::FactorialSum, z0::Int, z1::Int, k::Int, w::Int = 0)
+    h = k + 2; n = 2h
+    nsteps = z1 - z0
+    nsteps >= 0 || return nothing
+    kn = 0; kd = 0
+    for f in s.fac
+        (abs(f.a) == 1 && abs(f.c) == 1) || return nothing
+        (f.a == 1) == (f.c > 0) ? (kn += 1) : (kd += 1)
+    end
+    kn == kd || return nothing
+    # each factor at most doubles the coefficients: |G_z| ≤ (z1 − z + 1)·2^(kn (z1 − z))
+    kn * nsteps + (8 * sizeof(Int) - leading_zeros(nsteps + 1)) <= 61 || return nothing
+    G = zeros(Int, n); L = zeros(Int, n); tmp = Vector{Int}(undef, n)
+    G[1] = 1; L[1] = 1
+    wshift = mod(w, n)
+    for z in z1-1:-1:z0
+        for f in s.fac
+            x = _arg(f, z); f.a == 1 && (x += 1)
+            if (f.a == 1) == (f.c > 0)
+                _binomial_mul!(G, tmp, x)
+            else
+                0 < x < h || return nothing           # a vanishing denominator: not a regular segment
+                _binomial_mul!(L, tmp, x)
+            end
+        end
+        # G ← L ± ζ^w G
+        @inbounds for j in 1:n
+            a = j - wshift; a < 1 && (a += n)
+            tmp[j] = s.alternating ? L[j] - G[a] : L[j] + G[a]
+        end
+        copyto!(G, tmp)
+    end
+    # ζ^h = −1 folds the coefficients to degree below h; then the remainder modulo Φ_{2h}
+    @inbounds for j in 1:h
+        G[j] -= G[j+h]
+    end
+    phi = _level_phi(k); d = length(phi) - 1
+    @inbounds for i in h:-1:d+1
+        c = G[i]
+        iszero(c) && continue
+        for t in 0:d
+            p, o1 = Base.Checked.mul_with_overflow(c, phi[t+1])
+            r, o2 = Base.Checked.sub_with_overflow(G[i-d+t], p)
+            (o1 | o2) && return nothing
+            G[i-d+t] = r
+        end
+    end
+    @inbounds for i in 1:d
+        iszero(G[i]) || return false
+    end
+    return true
+end
+
 "Is the value exactly zero at level k (empty, all terms vanishing, or cancelling)?"
 is_zero_at_level(s::FactorialSum, k::Int) = is_zero_at_level(s, k, level_zero_table(k))
 
 function is_zero_at_level(s::FactorialSum, k::Int, tab::LevelZeroTable)
     result = _level_zero_screen(s, k, tab)
-    return result === nothing ? iszero(exact_x(s, k)) : result
+    result === nothing || return result
+    _, segs = classify_at_level(s, k)
+    return _level_exact_zero(s, segs, k)
 end
 
 "Proved zero/nonzero, or `nothing` when exact confirmation is needed. No exact-field work here."
@@ -210,10 +303,14 @@ struct QIntTables{T}
     classical::Bool   # [n] = n: term ratios are ratios of integers
     qq::Vector{T}     # [q; qi] and [ql; qil] in one array, so a ratio factor is one load at an affine index
     qql::Vector{T}
+    ff::Vector{T}     # fm · 2^fe and gm · 2^ge as plain numbers, for products short enough to need no
+    gf::Vector{T}     # separate exponent (`_small_pass`); `Float64` tables only
 end
 
-QIntTables{T}(q, qi, ql, qil, fm, fe, fml, gm, ge, gml, classical::Bool) where {T} =
-    QIntTables{T}(q, qi, ql, qil, fm, fe, fml, gm, ge, gml, classical, vcat(q, qi), vcat(ql, qil))
+function QIntTables{T}(q, qi, ql, qil, fm, fe, fml, gm, ge, gml, classical::Bool) where {T}
+    ff, gf = T === Float64 ? (ldexp.(fm, fe), ldexp.(gm, ge)) : (T[], T[])
+    return QIntTables{T}(q, qi, ql, qil, fm, fe, fml, gm, ge, gml, classical, vcat(q, qi), vcat(ql, qil), ff, gf)
+end
 
 """
     split_factorials(T, qhi) -> (fm, fe)
@@ -344,7 +441,12 @@ function _integer_ratios(s::FactorialSum, segs, tab::QIntTables)
             m = max(m, _arg(f, first(seg)) + 1, _arg(f, last(seg)) + 1)
         end
     end
-    return float(m)^max(kn, kd) < 2.0^53
+    # m^max(kn, kd) < 2^53. Products of integers below 2^53 are exact, and one that reaches 2^53 stays there.
+    x = 1.0
+    for _ in 1:max(kn, kd)
+        x *= m
+    end
+    return x < 2.0^53
 end
 
 "Numerator and denominator of the term ratio t_{z+1}/t_z as integers (sign in the numerator)."

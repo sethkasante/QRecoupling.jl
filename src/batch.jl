@@ -32,10 +32,13 @@ selecting a standard-symbol family shortcut and owns its workspace for the whole
 """
 function _value_prefetched(s::FactorialSum, k::Int, tab::QIntTables{T}, fallback::F;
                            labels=nothing, family=nothing, workspace=nothing) where {T,F}
+    vs, small = _small_level(s, k, tab, family)
+    small == SMALL_ACCEPTED && return vs
+    small == SMALL_DECLINED && _small_level_zero(s, k, family) && return zero(T)
     v, st, segs = level_pass1(s,k,tab; family=family,workspace=workspace)
     st === :done && return v
     st === :fallback && return T(fallback())
-    return level_escalate(s,segs,k,T,level_zero_table(k); labels=labels,workspace=workspace)
+    return level_escalate(s,segs,k,T,level_zero_table(k); labels=labels,family=family,workspace=workspace)
 end
 
 function _run(work::F, n::Int, threads) where {F}
@@ -118,8 +121,7 @@ function _level_batch!(out, rule::R, fallback::F, L, k::Int, ::Type{T}, threads,
             else
                 out[i] = _value_prefetched(s,k,tab,
                                            ()->_family_fallback(family,J[i],k,T);
-                                           labels=family === Val(:sixj) ? J[i] : nothing,
-                                           family=family,workspace=work)
+                                           labels=J[i],family=family,workspace=work)
             end
         end
     end
@@ -145,7 +147,7 @@ function _classical_batch(rule::R, labels, ::Type{T}, threads; family = nothing)
         rest = _family_pass!(out, sc, family, ClassicalQ(), threads)
         _run_workspace(rest,n,threads) do i,work
             out[i] = classical_value(_family_rule(family, J[i]), T;
-                                     labels=family === Val(:sixj) ? J[i] : nothing,workspace=work)
+                                     labels=J[i],family=family,workspace=work)
         end
     end
     return out

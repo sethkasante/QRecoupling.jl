@@ -285,102 +285,8 @@ function classical_exact_float(s::FactorialSum)
     return s.sign0 * sg * ldexp(mp * mt * mr, ep + et + er + sP - sQ)
 end
 
-# ---- short sums with small arguments ----
-#
-# For small n, n! and 1/n! are `Float64` values far inside the exponent range, so a product of a few of them
-# needs no separate exponent. `_small_classical` runs the operations of the plain pass on these values, with
-# each exponent folded into its factor. Floating-point products, quotients and square roots do not depend on
-# the scaling while nothing overflows or underflows, so the value is bit for bit that of `_sum_at_level`, at
-# a fraction of the fixed cost. A budget of binary exponents keeps every partial product in range.
-
-"Largest factorial argument of the short path."
-const SMALL_NMAX = 64
-"Exponent budget of one product: factors of one sign may add up to at most this many bits."
-const SMALL_BITS = 900
-"Largest term, relative to the first, that the short path keeps; the plain pass rescales far above it."
-const SMALL_TERM_MAX = 2.0^64
-"Results outside [2^-800, 2^800] go to the plain pass, which carries its exponent separately."
-const SMALL_RANGE = 2.0^800
-
-# n! and 1/n! as the plain pass sees them (mantissa · 2^exponent of the classical table), and the number of
-# bits e with 2^-e < 1/n! and n! < 2^e.
-const SMALL_FACT, SMALL_INVFACT, SMALL_EXP = let tab = ClassicalTables(Float64, SMALL_NMAX)
-    ntuple(i -> ldexp(tab.fm[i], tab.fe[i]), SMALL_NMAX + 1), ntuple(i -> ldexp(tab.gm[i], tab.ge[i]), SMALL_NMAX + 1),
-    ntuple(i -> max(tab.fe[i], 1 - tab.ge[i]), SMALL_NMAX + 1)
-end
-
-"""
-    _small_classical(s, rtol) -> Float64 or nothing
-
-The plain pass for a `Float64` classical sum whose factorial arguments are at most `SMALL_NMAX` and whose
-products fit the exponent budget, accepted at `rtol`. `nothing` when the rule is outside that class or the
-estimate does not pass; the caller then runs the general evaluation. A returned value is the one the plain
-pass of the general evaluation computes.
-"""
-@inline function _small_classical(s::FactorialSum, rtol::Float64)
-    T = Float64
-    u = _unit(T)
-    P = one(T); np = 0; bpos = 0; bneg = 0
-    @inbounds for (n, c) in s.pre
-        0 <= n <= SMALL_NMAX || return nothing
-        if c == 1
-            P *= SMALL_FACT[n+1]; bpos += SMALL_EXP[n+1]
-        elseif c == -1
-            P *= SMALL_INVFACT[n+1]; bneg += SMALL_EXP[n+1]
-        else
-            return nothing
-        end
-        np += 1
-    end
-    (bpos <= SMALL_BITS && bneg <= SMALL_BITS) || return nothing
-    relpre = _gamma(T, 2np)
-    if s.sqrt_pre
-        P = sqrt(P)
-        relpre = (relpre / 2) + u
-    end
-    z0 = s.zlo; z1 = s.zhi
-    M0 = one(T); nf = 0; kn = 0; kd = 0; m = 1; bpos = 0; bneg = 0
-    @inbounds for f in s.fac
-        (abs(f.a) == 1 && abs(f.c) == 1) || return nothing
-        n0 = _arg(f, z0); n1 = _arg(f, z1)
-        (0 <= n0 <= SMALL_NMAX && 0 <= n1 <= SMALL_NMAX) || return nothing
-        if f.c == 1
-            M0 *= SMALL_FACT[n0+1]; bpos += SMALL_EXP[n0+1]
-        else
-            M0 *= SMALL_INVFACT[n0+1]; bneg += SMALL_EXP[n0+1]
-        end
-        (f.a == 1) == (f.c > 0) ? (kn += 1) : (kd += 1)
-        m = max(m, n0 + 1, n1 + 1)
-        nf += 1
-    end
-    (bpos <= SMALL_BITS && bneg <= SMALL_BITS) || return nothing
-    pw = one(T)                                  # the test of `_integer_ratios`: exact integer quotients
-    for _ in 1:max(kn, kd)
-        pw *= m
-    end
-    pw < 2.0^53 || return nothing
-    t = one(T); ssum = one(T); W = zero(T); SS = zero(T); j = 0
-    for z in z0:z1-1
-        j += 1
-        a, b = _int_ratio(s, z)
-        t *= T(a) / T(b)
-        ssum += t
-        at = abs(t)
-        W = fma(T(j), at, W); SS += abs(ssum)
-        at > SMALL_TERM_MAX && return nothing
-    end
-    iszero(ssum) && return nothing
-    g = _gamma(T, 2 * (z1 - z0))
-    relfirst = _gamma(T, 2nf)
-    sgn = (s.alternating && isodd(z0)) ? -one(T) : one(T)
-    x = sgn * ssum * M0
-    E = abs(M0) * (2 * u * W / (1 - g)^2 + u / (1 - u) * SS) + abs(ssum * M0) * (relfirst + u)
-    xp = x * P
-    bound = (E * abs(P) * (1 + relpre) + abs(xp) * (relpre + u)) * BOUND_SLACK(T)
-    v = s.sign0 * xp
-    (inv(SMALL_RANGE) < abs(v) < SMALL_RANGE && _certifies(v, bound, rtol)) || return nothing
-    return v
-end
+"The classical table of the short pass (`_small_pass`): arguments up to 64, held outside the cache."
+const CLASSICAL_SMALL = ClassicalTables(Float64, 64)
 
 """
     classical_value(s, T) -> T
@@ -389,14 +295,13 @@ The symbol described by rule `s` at q = 1. Cancellation is measured, exact zeros
 come back as zero, and when too few digits survive a `Float64` result is  
 recomputed exactly (Horner nesting in integers); other types escalate in `BigFloat`.
 """
-function classical_value(s::FactorialSum, ::Type{T}; labels = nothing, workspace=nothing) where {T}
+function classical_value(s::FactorialSum, ::Type{T}; labels = nothing, family = nothing, workspace=nothing) where {T}
     is_empty_sum(s) && return zero(T)
     if T === Float64
-        mode = POLICY[]
-        if mode !== :compensated_only        # that policy has no plain pass to reproduce
-            vs = _small_classical(s, mode === :strict || mode === :strict_lazy ? RTOL_CERTIFIED : RTOL_PLAIN)
-            vs === nothing || return vs
-        end
+        vs, small = _small_try(s, s.zlo, s.zhi, CLASSICAL_SMALL)
+        small == SMALL_ACCEPTED && return vs
+        # a short sum that cancels: decide an exact zero in integers before the later stages
+        small == SMALL_CANCELLED && _small_exact_zero(s) === true && return zero(T)
     end
     N = max_argument(s)
     segs = (s.zlo:s.zhi,)
@@ -406,7 +311,8 @@ function classical_value(s::FactorialSum, ::Type{T}; labels = nothing, workspace
     pess = _bound_pessimism(s, segs, classical_tables(Float64, N))
     if T === Float64 && labels !== nothing       # the symbol as one entry of its column: O(distance), no κ
         vr = sixj_entry(labels, ClassicalQ(), _column_workspace(workspace))
-        vr === nothing || return T(vr)           # a returned value is certified far from zero
+        # a returned value is certified far from zero; an F or G symbol is the 6j times its dimension factor
+        vr === nothing || return T(vr * _family_scale(family, ClassicalQ(), labels))
     end
     (pairwise_zero(s) || is_classical_zero(s)) && return zero(T)
     if T === Float64
