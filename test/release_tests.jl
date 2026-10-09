@@ -46,4 +46,31 @@
         expected = Float64(-inv(BigFloat(q)+inv(BigFloat(q))))
         @test q6j(1//2,1//2,0,1//2,1//2,0; q) ≈ expected rtol=1e-13 atol=nextfloat(0.0)
     end
+
+    # The imaginary-axis branch must agree across precision and scalar/family routes.
+    q = 0.999im
+    ref = setprecision(() -> q6j(ONES...; q=Complex{BigFloat}(q), T=BigFloat), BigFloat, 256)
+    @test q6j(ONES...; q) ≈ ref rtol=1e-12
+    F, es, fs = fmatrix(2, 3//2, 2, 3//2; q)
+    @test F ≈ [fsymbol(2, 3//2, e, 2, 3//2, f; q) for e in es, f in fs] rtol=1e-12
+
+    # F/G recurrence fallbacks must retain their dimension factors.
+    l = (381,296,365,393,260,389) .// 2
+    for f in (fsymbol, gsymbol)
+        ref = setprecision(() -> f(l...; k=800, T=BigFloat), BigFloat, 256)
+        @test f(l...; k=800) ≈ ref rtol=1e-13
+    end
+    @test q6j(Level(10), cancelled...) === 0.0
+    @test q6j(2,2,2,3//2,3//2,3//2) === 0.0
+
+    # Eviction must preserve results when a level table is rebuilt.
+    cache = QR.QINT_F64_TABLES; limit = QR.LEVEL_CACHE_LIMIT[]
+    try
+        empty!(cache); QR.LEVEL_CACHE_LIMIT[] = 200_000
+        values = [q6j(Level(k), ONES...) for k in (700,800,900)]
+        @test cache.bytes <= 200_000
+        @test values == [q6j(Level(k), ONES...) for k in (700,800,900)]
+    finally
+        QR.LEVEL_CACHE_LIMIT[] = limit; empty_caches!()
+    end
 end

@@ -13,7 +13,7 @@ authors:
   - family-names: Asante
     given-names: Seth K.
     affiliation: "Department of Mathematics and Statistics, University of New Brunswick"
-version: 0.5.0
+version: 0.5.1
 doi: 10.5281/zenodo.19446095
 repository-code: "https://github.com/sethkasante/QRecoupling.jl"
 url: "https://sethkasante.github.io/QRecoupling.jl/"

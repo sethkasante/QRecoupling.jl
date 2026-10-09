@@ -25,4 +25,10 @@
     for f in (qcg,q3j)
         @test_throws ArgumentError f(NTuple{6,Int}[]; k=3,q=0.8)
     end
+    # Previously inaccurate large-spin level coupling, including the recurrence fallback.
+    l = (709//2, 650//2, 257//2, -425//2, 476//2, -51//2)
+    ref = setprecision(() -> q3j(Level(1601; T=BigFloat), l...), BigFloat, 256)
+    @test q3j(Level(1601), l...) ≈ ref rtol=1e-13
+    cg = setprecision(() -> qcg(Level(1601; T=BigFloat), l[1], l[4], l[2], l[5], l[3]), BigFloat, 256)
+    @test QR._cg_entry(nothing, 1601, 709, -425, 650, 476, 257) ≈ cg rtol=1e-13
 end

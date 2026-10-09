@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.1
+
+- Fixed large-spin level `qcg`/`q3j` accuracy and inconsistent phases at purely imaginary q.
+- Improved small-spin evaluation, compensated coupling passes, recurrence fallbacks and exact zero checks.
+- Reduced phase-table setup costs and limited table-cache retention during parameter sweeps.
+
 ## v0.5.0
 
 - Added `qcg`, `qcg_matrix` and `qcg_row`, with recurrence-based evaluation of coupling families.
