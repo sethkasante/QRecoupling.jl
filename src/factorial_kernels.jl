@@ -446,8 +446,9 @@ const SMALL_RANGE = 2.0^800
 
 const SMALL_ACCEPTED = 0      # the value passed its acceptance test
 const SMALL_OUTSIDE = 1       # the rule is not in the class of the short pass
-const SMALL_DECLINED = 2      # in the class, but the estimate did not pass
+const SMALL_DECLINED = 2      # in the class, and the sum cancelled to rounding noise: worth an exact zero test
 const SMALL_CANCELLED = 3     # the same, for a classical sum whose term ratios are exact integer quotients
+const SMALL_REJECTED = 4      # in the class, with digits left but too few: the general evaluation continues
 
 """
     _small_pass(s, z0, z1, tab, rtol) -> (value, status)
@@ -545,8 +546,10 @@ products fit the exponent budget, accepted at `rtol`. With status `SMALL_ACCEPTE
     bound = (E * abs(P) * (1 + relpre) + abs(xp) * (relpre + u)) * BOUND_SLACK(T)
     v = s.sign0 * xp
     inv(SMALL_RANGE) < abs(v) < SMALL_RANGE || return outside
-    _certifies(v, bound, rtol) || return declined
-    return (v, SMALL_ACCEPTED)
+    _certifies(v, bound, rtol) && return (v, SMALL_ACCEPTED)
+    # A sum that kept some digits is not an exact zero, and an exact test would cost more than the passes
+    # that follow. Only a sum at the level of its own rounding noise is sent to that test.
+    return 4 * bound >= abs(v) ? declined : (zero(T), SMALL_REJECTED)
 end
 
 """
