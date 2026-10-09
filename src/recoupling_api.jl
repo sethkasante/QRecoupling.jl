@@ -226,7 +226,7 @@ end
 function clear_sieve_caches!()
     @lock _SIN_LOCK empty!(_SIN_TABLE)
     @lock ROU_TABLE_LOCK empty!(ROU_TABLE_CACHE)
-    @lock QINT_TABLES_LOCK empty!(QINT_TABLES)
+    @lock QINT_TABLES_LOCK (empty!(QINT_TABLES); QINT_TABLES_BYTES[] = 0)
     empty!(QINT_F64_TABLES)
     empty!(LEVEL_HALF_PHASES)   # high and low phase parts in qcg.jl
     clear_cg_caches!()          # qcg_columns.jl
@@ -247,7 +247,9 @@ end
 
 Clear the cached level-k tables (numeric, root-of-unity, q-integer, modular and exact cyclotomic).
 Useful for freeing numerical-table memory in long sessions or before benchmarking. Reusable symbolic
-polynomials and number fields are retained, as is the small classical prime-power sieve.
+polynomials and number fields are retained, as is the small classical prime-power sieve. The per-level
+numerical caches also empty themselves when one passes `QRecoupling.LEVEL_CACHE_LIMIT[]` bytes (512 MiB by
+default), so a sweep over many levels does not exhaust memory.
 """
 function empty_caches!()
     clear_analytic_caches!()

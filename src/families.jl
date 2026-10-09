@@ -204,7 +204,10 @@ Tables for a column at real `q`, cached on `(q, N)`. A column, an F-matrix or a 
 table once; without the cache the BigFloat build dominates and costs more than the loop it replaces
 (measured 26–297 µs against a 0.5–2.9 µs fill).
 """
-const REALQ_CACHE = LRU{Tuple{Float64,Int},Any}(maxsize = 64)
+# At most 64 tables, and at most about 256 MiB: a table counts once for every 4 MiB it holds, so a sweep
+# with large spins and a new `q` at every step cannot fill memory.
+_table_weight(t) = max(1, cld(Base.summarysize(t), 4 * 2^20))
+const REALQ_CACHE = LRU{Tuple{Float64,Int},Any}(maxsize = 64, by = _table_weight)
 const REALQ_LOCK = ReentrantLock()
 
 function real_q_tables(q::Real, N::Int)
@@ -377,7 +380,7 @@ end
 Tables for a column at complex `q`, cached on `(q, N)` exactly as [`real_q_tables`](@ref) is: the 256-bit
 build costs far more than the fill it replaces, so a matrix or a batch at one `q` must pay it once.
 """
-const COMPLEXQ_CACHE = LRU{Tuple{ComplexF64,Int},Any}(maxsize = 64)
+const COMPLEXQ_CACHE = LRU{Tuple{ComplexF64,Int},Any}(maxsize = 64, by = _table_weight)
 const COMPLEXQ_LOCK = ReentrantLock()
 
 function complex_q_tables(q::Number, N::Int)
@@ -753,7 +756,7 @@ function _entry_value(Q::LevelQ, X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3
         js = canonical_spins(X2 // 2, J2 // 2, J3 // 2, L1 // 2, L2 // 2, L3 // 2)
         return real(project_discrete(q6j_dcr(js...), k, Float64))
     end
-    return level_escalate(s, segs, k, Float64, level_zero_table(k))
+    return level_escalate(s, segs, k, Float64)
 end
 _entry_value(::ClassicalQ, X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int) =
     classical_value(sixj_sum(X2, J2, J3, L1, L2, L3), Float64)

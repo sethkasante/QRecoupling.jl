@@ -55,13 +55,22 @@ end
 # the whole vector and index it; writers build the table under a lock, publish a grown copy atomically,
 # and never mutate a vector a reader can hold. This matters once many threads evaluate across levels,
 # where a lock per lookup was the bottleneck.
+#
+# A table grows with its level, so a sweep over many levels (one symbol at k = 1, 2, …, or spins and level
+# scaled together) would otherwise keep every table it has built: tens of gigabytes by k ~ 10⁴. Each cache
+# therefore holds at most `LEVEL_CACHE_LIMIT[]` bytes. When a new table would pass that, the cache starts
+# again from this table alone; callers that still hold an older table keep it until they are done.
+
+"Bytes one level cache may hold before it is emptied to make room (set before computing; default 512 MiB)."
+const LEVEL_CACHE_LIMIT = Ref(512 * 2^20)
 
 mutable struct LevelCache{V}
     @atomic slots::Vector{Union{Nothing,V}}
     lock::ReentrantLock
+    bytes::Int                      # size of the cached tables, kept under the lock
 end
 
-LevelCache{V}() where {V} = LevelCache{V}(Vector{Union{Nothing,V}}(nothing, 0), ReentrantLock())
+LevelCache{V}() where {V} = LevelCache{V}(Vector{Union{Nothing,V}}(nothing, 0), ReentrantLock(), 0)
 
 function get_level!(build::F, c::LevelCache{V}, k::Int) where {F,V}
     k >= 0 || throw(DomainError(k, "level/cache index must be nonnegative"))
@@ -77,7 +86,11 @@ function get_level!(build::F, c::LevelCache{V}, k::Int) where {F,V}
             t !== nothing && return t::V
         end
         v = build()::V
-        fresh = if k + 1 > length(sl)                 # grow only when the level is out of range
+        size = Base.summarysize(v)
+        fresh = if c.bytes + size > LEVEL_CACHE_LIMIT[] && c.bytes > 0
+            c.bytes = 0                               # over the limit: keep only the new table
+            Vector{Union{Nothing,V}}(nothing, max(k + 1, 16))
+        elseif k + 1 > length(sl)                     # grow only when the level is out of range
             g = Vector{Union{Nothing,V}}(nothing, max(k + 1, 2 * length(sl), 16))
             copyto!(g, 1, sl, 1, length(sl))
             g
@@ -85,6 +98,7 @@ function get_level!(build::F, c::LevelCache{V}, k::Int) where {F,V}
             copy(sl)                                  # never mutate a vector a reader may hold
         end
         fresh[k+1] = v
+        c.bytes += size
         @atomic c.slots = fresh
         return v
     end
@@ -93,6 +107,7 @@ end
 function Base.empty!(c::LevelCache{V}) where {V}
     @lock c.lock begin
         @atomic c.slots = Vector{Union{Nothing,V}}(nothing, 0)
+        c.bytes = 0
     end
     return c
 end
@@ -373,13 +388,26 @@ end
 
 const QINT_F64_TABLES = LevelCache{QIntTables{Float64}}()
 const QINT_TABLES = Dict{Tuple{DataType,Int,Int},Any}()
+const QINT_TABLES_BYTES = Ref(0)            # size of the tables in QINT_TABLES, kept under its lock
 const QINT_TABLES_LOCK = ReentrantLock()
 
 qint_tables(::Type{Float64}, k::Int) = get_level!(() -> QIntTables(Float64, k), QINT_F64_TABLES, k)
 
 function qint_tables(::Type{T}, k::Int) where {T}
     key = (T, k, T === BigFloat ? precision(BigFloat) : 0)
-    tab = @lock QINT_TABLES_LOCK get!(() -> QIntTables(T, k), QINT_TABLES, key)
+    tab = @lock QINT_TABLES_LOCK begin
+        t = get(QINT_TABLES, key, nothing)
+        if t === nothing
+            t = QIntTables(T, k)
+            size = Base.summarysize(t)
+            # the same limit as the level caches: wide tables are large, and one is built per level and precision
+            if QINT_TABLES_BYTES[] + size > LEVEL_CACHE_LIMIT[]
+                empty!(QINT_TABLES); QINT_TABLES_BYTES[] = 0
+            end
+            QINT_TABLES[key] = t; QINT_TABLES_BYTES[] += size
+        end
+        t
+    end
     return tab::QIntTables{T}
 end
 

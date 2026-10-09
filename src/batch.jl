@@ -38,7 +38,7 @@ function _value_prefetched(s::FactorialSum, k::Int, tab::QIntTables{T}, fallback
     v, st, segs = level_pass1(s,k,tab; family=family,workspace=workspace)
     st === :done && return v
     st === :fallback && return T(fallback())
-    return level_escalate(s,segs,k,T,level_zero_table(k); labels=labels,family=family,workspace=workspace)
+    return level_escalate(s,segs,k,T; labels=labels,family=family,workspace=workspace)
 end
 
 function _run(work::F, n::Int, threads) where {F}

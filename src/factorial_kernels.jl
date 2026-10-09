@@ -333,7 +333,7 @@ function value_at_level(s::FactorialSum, k::Int, ::Type{T}; fallback, labels = n
     v, status, segs = level_pass1(s, k, tab; family=family, workspace=workspace)
     status === :done && return v
     status === :fallback && return fallback()
-    return level_escalate(s, segs, k, T, level_zero_table(k); labels=labels, family=family, workspace=workspace)
+    return level_escalate(s, segs, k, T; labels=labels, family=family, workspace=workspace)
 end
 
 """
@@ -634,7 +634,12 @@ Finishes an `:escalate` case: identities or exact confirmation resolve zeros; no
 tiers, then `BigFloat`, doubling until the estimate meets the target. Keep off worker threads where
 `BigFloat` precision is shared.
 """
-function level_escalate(s::FactorialSum, segs, k::Int, ::Type{T}, ztab::LevelZeroTable;
+level_escalate(s::FactorialSum, segs, k::Int, ::Type{T}, ztab::LevelZeroTable; kw...) where {T} =
+    level_escalate(s, segs, k, T; ztab = ztab, kw...)
+
+# The zero table is fetched only if the modular screen is reached: most escalated sums return from the
+# recurrence, and building a table per level would dominate a sweep over levels.
+function level_escalate(s::FactorialSum, segs, k::Int, ::Type{T}; ztab::Union{Nothing,LevelZeroTable} = nothing,
                         labels = nothing, family = nothing, workspace = nothing) where {T}
     # The two structural tests are proofs and cost a few comparisons, so they come before everything else.
     (pairwise_zero(s) || reflection_zero(s, segs, k)) && return zero(T)
@@ -645,7 +650,7 @@ function level_escalate(s::FactorialSum, segs, k::Int, ::Type{T}, ztab::LevelZer
         v === nothing || return T(v * _family_scale(family, LevelQ(qint_tables(Float64, k), k), labels))
     end
     # the modular screen is a pass over every term; a candidate is settled exactly
-    if is_cancellation_zero(s, segs, k, ztab) !== false
+    if is_cancellation_zero(s, segs, k, ztab === nothing ? level_zero_table(k) : ztab) !== false
         _level_exact_zero(s, segs, k) && return zero(T)
     end
     target = _target_digits(T)
