@@ -144,18 +144,19 @@ struct ExactX
     p::QQPolyRingElem          # P, reduced mod Ψ_h
     sqclass::Vector{Int}       # ψ indices under the root
     r::QQPolyRingElem          # R = ∏_{e ∈ sqclass} ψ_e, reduced mod Ψ_h
+    rule::Union{Nothing,FactorialSum}   # where the value came from, for display; arithmetic drops it
 
-    function ExactX(k::Integer, p::QQPolyRingElem, cls::Vector{Int}, r::QQPolyRingElem)
+    function ExactX(k::Integer, p::QQPolyRingElem, cls::Vector{Int}, r::QQPolyRingElem; rule = nothing)
         kk = Int(k)
         S, _ = _qqx()
         # At a level the radicand can reduce to a rational square: fold it into P, so equal values compare
         # equal and no `√(1)` is carried.
-        iszero(p) && return new(kk, p, Int[], S(1))
+        iszero(p) && return new(kk, p, Int[], S(1), nothing)
         if !isempty(cls) && degree(r) <= 0
             s = _rat_sqrt(Rational{BigInt}(coeff(r, 0)))
-            s === nothing || return new(kk, p * QQ(numerator(s), denominator(s)), Int[], S(1))
+            s === nothing || return new(kk, p * QQ(numerator(s), denominator(s)), Int[], S(1), rule)
         end
-        return new(kk, p, cls, r)
+        return new(kk, p, cls, r, rule)
     end
 end
 
@@ -247,7 +248,7 @@ function exact_x(s::FactorialSum, k::Integer)
         rp = _redq(rp * _toqq(psi_x(e)), Ψ)
     end
     iszero(rp) && throw(DomainError(kk, "the radical of the rule vanishes at level $kk"))
-    return ExactX(kk, p, copy(v.rad), rp)
+    return ExactX(kk, p, copy(v.rad), rp; rule = s)
 end
 
 # ---------------------------------------------------------------------------------

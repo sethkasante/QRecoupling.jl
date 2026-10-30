@@ -2,6 +2,8 @@
 
 ## v0.6.0 (in development)
 
+- Added `qform`: values written in quantum integers, the same form at every generic q, simplified at a level by the relations among its q-integers, so that terms can merge and zeros appear.
+- `ExactX` values print in quantum integers, including the results of arithmetic, with long sums cut short and a radical beside them when one exists and is short. `x_form` and `v.x_value` still give the polynomial.
 - **Breaking:** removed `Exact(k; form = :canonical)` with `CompositeExactResult`, the `eager` keyword, the one-argument `xvalue`, and exact level evaluation of monomials and DCRs. See [Migration](docs/src/migration.md).
 
 ## Unreleased

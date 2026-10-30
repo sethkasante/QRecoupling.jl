@@ -108,66 +108,92 @@ function _xpoly_show(f; maxdeg::Int = XPOLY_MAX_DEGREE, maxchars::Int = XPOLY_MA
     return str === nothing ? _xpoly_summary(f) : str
 end
 
-"`degree 208, 105 terms, ≤144 bits`, the shape of a polynomial without the polynomial."
-function _xpoly_dims(f)
+"Largest field degree at which printing looks for a radical, and the longest radical it will print."
+const QFORM_RADICAL_DEGREE = 16
+const QFORM_RADICAL_CHARS = 80
+
+"Roughly how long a form reads before its sum is cut short."
+const QFORM_DISPLAY_MAX = 80
+
+"""
+A polynomial in x = [2] as `(coefficient, labels)` terms: the leading x^m goes with [m+1], which is monic of
+degree m, and [n+1] = x[n] − [n−1] gives the rest. Labels fold to n ≤ h/2 and [h] = 0 drops out.
+"""
+function _xpoly_terms(f, h::Int)
     d = degree(f)
-    d < 0 && return "0"
     cs = [Rational{BigInt}(coeff(f, i)) for i in 0:d]
-    den = BigInt(1)
-    for c in cs
-        den = lcm(den, denominator(c))
+    us = Vector{Vector{BigInt}}(undef, d + 1)                # us[m+1] holds the coefficients of [m+1]
+    for m in 0:d
+        us[m+1] = m == 0 ? BigInt[1] : m == 1 ? BigInt[0, 1] :
+                  [(i >= 2 ? us[m][i-1] : big(0)) - (i <= m - 1 ? us[m-1][i] : big(0)) for i in 1:m+1]
     end
-    bits = maximum(c -> ndigits(numerator(c * den); base = 2), cs; init = 0)
-    out = "degree $d, $(count(!iszero, cs)) terms, ≤$bits bits"
-    return den == 1 ? out : "(" * out * ")/" * string(den)
+    labels = Dict{Int,Rational{BigInt}}()
+    for m in d:-1:0
+        a = cs[m+1]
+        iszero(a) && continue
+        cs[1:m+1] .-= a .* us[m+1]
+        (m + 1) % h == 0 && continue
+        n, t = _fold_label(m + 1, h)
+        labels[n] = get(labels, n, 0 // big(1)) + t * a
+    end
+    return [(labels[n], n == 1 ? Pair{Int,Int}[] : [n => 1]) for n in sort!(collect(keys(labels)); rev = true)
+            if !iszero(labels[n])]
 end
 
-"Longest square class the sizes line writes out; past it the count says as much and fits."
-const SQCLASS_MAX_SHOWN = 6
-
-"The class under the root, as ψ indices or — past a handful of them — as how many there are."
-function _sqclass_str(cls::Vector{Int})
-    isempty(cls) && return "1"
-    length(cls) > SQCLASS_MAX_SHOWN && return string(length(cls)) * " ψ factors"
-    return join(["ψ" * to_subscript(e) for e in cls], "·")
+"A sum of labelled terms over a common factor, as text."
+function _q_sum_str(terms; most::Int)
+    isempty(terms) && return "0"
+    top = big(0); bot = big(1)
+    for (c, _) in terms
+        top = gcd(top, numerator(c)); bot = lcm(bot, denominator(c))
+    end
+    scale = top // bot
+    return _q_fraction(scale, Pair{Int,Int}[], _q_sum([(c / scale, p) for (c, p) in terms]; most = most))
 end
 
-"Is either half of `P(x)·√(R(x))` past what the display will write out?"
-function _xform_long(v::ExactX)
-    iszero(v.p) && return false
-    _xpoly_fits(v.p) === nothing && return true
-    return !isempty(v.sqclass) && _xpoly_fits(v.r) === nothing
-end
-
-"The sizes of `P` and `R`, one line each, for the lines under a schematic form."
-function _xform_dims(v::ExactX)
-    isempty(v.sqclass) && return ["P: " * _xpoly_dims(v.p) * ",  R = 1"]
-    return ["P: " * _xpoly_dims(v.p),
-            "R: " * _xpoly_dims(v.r) * ",  " * _sqclass_str(v.sqclass)]
+"`P(x)·√(R(x))` in q-integers, for a value with no rule behind it, such as the result of arithmetic."
+function _xvalue_str(v::ExactX; most::Int)
+    h = v.k + 2
+    text = _q_sum_str(_xpoly_terms(v.p, h); most = most)
+    isempty(v.sqclass) && return _unwrap(text)
+    return text * " √(" * _unwrap(_q_sum_str(_xpoly_terms(v.r, h); most = most)) * ")"
 end
 
 """
-The `P(x)·√(R(x))` line printing shows: always available, computes nothing. A constant radicand is written
-`√2`, not `√(2)`.
+The value in q-integers: from its rule when it has one, which merges the labels at the level, and from
+`P(x)·√(R(x))` otherwise. A long sum is cut after as many terms as fit.
 """
-function _xform_str(v::ExactX)
+function _qform_str(v::ExactX)
     iszero(v.p) && return "0"
-    # Past the budget the honest line is the *shape* of the value, `P(x)·√(R(x))`, with the sizes on the
-    # line below: a reader takes nothing from three screens of digits, and `v.x_value` gives both halves
-    # in full to anyone who wants them.
-    _xform_long(v) && return isempty(v.sqclass) ? "P(x)" : "P(x) · √(R(x))"
-    ps = _xpoly_show(v.p)
-    isempty(v.sqclass) && return ps
-    rs = _xpoly_show(v.r)
-    root = occursin(" ", rs) || occursin("x", rs) ? "√(" * rs * ")" : "√" * rs
-    ps == "1" && return root
-    ps == "-1" && return "−" * root
-    need = occursin(" ", ps) && !startswith(ps, "(")
-    return (need ? "(" * ps * ")" : ps) * " · " * root
+    f = nothing
+    if v.rule !== nothing
+        try
+            f = qform(v.rule; k = v.k)
+        catch e
+            e isa ArgumentError || rethrow()                 # terms of different valuations at this level
+        end
+    end
+    render = f === nothing || iszero(f) ? (m -> _xvalue_str(v; most = m)) : (m -> _qform_body(f; most = m))
+    most = QFORM_SHOWN_TERMS
+    text = render(most)
+    while most > 1 && length(text) > QFORM_DISPLAY_MAX
+        most -= 1
+        text = render(most)
+    end
+    return text
+end
+
+"The radical to print beside a value, when one exists at a field degree worth trying and it is short."
+function _radical_str(v::ExactX)
+    euler_phi(2 * (v.k + 2)) ÷ 2 <= QFORM_RADICAL_DEGREE || degree(v.p) <= 0 || return nothing
+    kind, e, _ = _radical_view(v; maxlen = QFORM_RADICAL_CHARS, degree_limit = QFORM_RADICAL_DEGREE)
+    kind === :ok || return nothing
+    text = string(e)
+    return length(text) <= QFORM_RADICAL_CHARS ? text : nothing
 end
 
 function Base.show(io::IO, v::ExactX)
-    print(io, "ExactX(k = ", v.k, ", ", _xform_str(v), ")")
+    print(io, "ExactX(k = ", v.k, ", ", _qform_str(v), ")")
 end
 
 "The value's degree when that is cheap to know, `0` when it is only worth a sentence."
@@ -218,8 +244,8 @@ function _radical_view(v::ExactX; maxlen::Int = 80,
 end
 
 """
-Printing an `ExactX` does no arithmetic: it shows the stored `P(x)·√(R(x))`, or its shape and sizes past
-the length budget. `radical(v)`, `Float64(v)`, or `IOContext(io, :approximate => true)` give more.
+Printing an `ExactX` shows its value in q-integers, cut short when it is long, and the radical when one exists
+and is short. `radical(v)`, `x_form(v)` and `v.x_value` give the other forms in full.
 """
 function Base.show(io::IO, ::MIME"text/plain", v::ExactX)
     h = v.k + 2
@@ -230,19 +256,13 @@ function Base.show(io::IO, ::MIME"text/plain", v::ExactX)
         print(io, lines[1], "\n  = 0")
         return
     end
-    push!(lines, "  = " * _xform_str(v))
-    if _xform_long(v)
-        for l in _xform_dims(v)
-            push!(lines, "    " * l)
-        end
-        push!(lines, "    `v.x_value` gives (P, R) in full")
-    end
-    if get(io, :approximate, false)
-        nv = numeric_value(v)
-        push!(lines, nv === nothing ?
-              "  (the value cancels beyond " * string(EVAL_MAX_BITS) * " bits at x = 2cos(π/" *
-              string(h) * "); for a number use q6j(…; k = " * string(v.k) * "))" :
-              "  ≈ " * string(Float64(nv)))
-    end
+    nv = numeric_value(v)
+    push!(lines, nv === nothing ?
+          "  (the value cancels beyond " * string(EVAL_MAX_BITS) * " bits at x = 2cos(π/" *
+          string(h) * "); for a number use q6j(…; k = " * string(v.k) * "))" :
+          "  ≈ " * string(Float64(nv)))
+    push!(lines, "  = " * _qform_str(v))
+    r = _radical_str(v)
+    r === nothing || push!(lines, "  = " * r)
     print(io, join(lines, "\n"))
 end

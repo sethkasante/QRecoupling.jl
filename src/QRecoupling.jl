@@ -50,6 +50,7 @@ include("queries.jl")
 include("targets.jl")
 include("qcg.jl")       # quantum Clebsch–Gordan coefficients and the quantum 3j symbol: weighted rules
 include("qcg_columns.jl") # coupling columns by the Casimir recurrence: qcg_matrix and the near-edge tier
+include("qform.jl")     # values written in quantum integers, generic and at a level
 
 
 # Export physics tqft and recoupling symbols api
@@ -64,6 +65,7 @@ export Level, Exact, At, Classical, Symbolic
 # exact values in x = q + 1/q: generic q, and identities proved for every level at once
 export prove_identity, x_form, XValue, phi_form
 export ExactX, ExactXSum, RadExpr, NoRadical, radical, numeric_value
+export qform, QForm
 
 # structural queries and batches
 export all_6j, iszero_at, issingular_at, level_spectrum

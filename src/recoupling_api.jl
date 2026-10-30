@@ -218,6 +218,7 @@ function clear_sieve_caches!()
     clear_cg_caches!()          # qcg_columns.jl
     empty!(LEVEL_ZERO_TABLES)
     empty!(LEVEL_PHI)
+    empty!(LEVEL_RELATIONS)     # qform.jl
     empty!(CLASSICAL_F64_TABLES)
     empty!(CLASSICAL_MOD_TABLES)
     empty!(GENERIC_MOD_TABLES)

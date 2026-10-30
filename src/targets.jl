@@ -40,14 +40,14 @@ Level(k; T::Type = Float64) = Level{T,typeof(k)}(k)
 result types without constructing a level field. Use `Symbolic()` to retain q.
 
 `Exact(k)` requests exact level values. It returns an [`ExactX`](@ref): the value in the real basis
-`x = q + q⁻¹ = 2cos(π/(k+2))`, printed as the polynomial in `x` it is stored as. [`radical`](@ref) rewrites it
-in nested square roots where they exist. It is closed under `*`, `inv` and `^`, and sums of it are
+`x = q + q⁻¹ = 2cos(π/(k+2))`, stored as a polynomial in `x` and printed in quantum integers, as
+[`qform`](@ref). [`radical`](@ref) rewrites it in nested square roots where they exist. It is closed under `*`, `inv` and `^`, and sums of it are
 [`ExactXSum`](@ref). The arithmetic is deterministic; modular screening alone never establishes an exact zero.
 Exact braiding phases retain their `QPhase` form.
 
 ```julia
 q6j(Exact(), 1, 1, 1, 1, 1, 1)                     # 1//6
-q6j(Exact(3), 1, 1, 1, 1, 1, 1)                    # x − 2 at x = 2cos(π/5)
+q6j(Exact(3), 1, 1, 1, 1, 1, 1)                    # −1/[2]², stored as x − 2 at x = 2cos(π/5)
 radical(q6j(Exact(3), 1, 1, 1, 1, 1, 1))           # (√5 − 3)/2, the Fibonacci level
 ```
 """

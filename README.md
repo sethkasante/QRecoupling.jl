@@ -21,7 +21,7 @@ js = (1, 1, 1, 1, 1, 1)
 q6j(js...)                      # classical value ≈ 1/6
 q6j(Exact(), js...)             # exact classical rational = 1//6
 q6j(Level(10), js...)           # value at q = exp(iπ/12)
-v = q6j(Exact(10), js...)       # x-form: (2x² − 7)/3
+v = q6j(Exact(10), js...)       # ([5] − 1)/[4]!  =  (2√3 − 3)/3
 radical(v)                     # explicitly request (2√3 − 3)/3
 q6j(At(0.8 + 0.2im), js...)     # numerical complex deformation
 

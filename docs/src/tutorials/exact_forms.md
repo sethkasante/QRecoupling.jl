@@ -42,7 +42,7 @@ Generic square roots specify an algebraic expression. To evaluate with the packa
 
 ## Stored x-form and explicit radicals
 
-`Exact(k)` displays the stored `P(x)√R(x)` form. Printing does not run radical extraction or compute a numerical approximation. Large polynomials are summarized by size; their exact coefficients remain available.
+`Exact(k)` prints in quantum integers, the form [`qform`](@ref) gives, with long sums cut short. A radical is printed beside it when one exists at a field degree up to 16 and is short. The value itself is stored as `P(x)√R(x)`, and its exact coefficients remain available.
 
 ```@example exact_forms
 v.x_value               # named pair (P, R) of stored polynomials

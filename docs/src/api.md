@@ -69,6 +69,8 @@ The [exact-forms tutorial](tutorials/exact_forms.md#API-reference) documents `Sy
 RadExpr
 phi_form
 prove_identity
+qform
+QForm
 ```
 
 The following helpers return polynomial coefficients without expanding the display. They require the `QRecoupling.` qualifier.

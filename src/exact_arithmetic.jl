@@ -406,7 +406,7 @@ evaluate_exact(s::ExactXSum, ::Type{T} = ComplexF64) where {T} = T(float(s, Floa
 
 function Base.show(io::IO, s::ExactXSum)
     isempty(s.terms) && return print(io, "ExactXSum(k = ", s.k, ", 0)")
-    parts = [_xform_str(_term(s, S)) for S in sort!(collect(keys(s.terms)))]
+    parts = [_qform_str(_term(s, S)) for S in sort!(collect(keys(s.terms)))]
     print(io, "ExactXSum(k = ", s.k, ", ", join(parts, " + "), ")")
 end
 
@@ -426,18 +426,9 @@ function Base.show(io::IO, ::MIME"text/plain", s::ExactXSum)
         print(io, lines[1], "\n  = 0")
         return
     end
-    long = false
     for (i, S) in enumerate(sort!(collect(keys(s.terms))))
-        t = _term(s, S)
-        push!(lines, (i == 1 ? "  = " : "  + ") * _xform_str(t))
-        if _xform_long(t)
-            long = true
-            for l in _xform_dims(t)
-                push!(lines, "      " * l)
-            end
-        end
+        push!(lines, (i == 1 ? "  = " : "  + ") * _qform_str(_term(s, S)))
     end
-    long && push!(lines, "    `v.x_value` gives each (P, R) in full")
     if get(io, :approximate, false)
         v = numeric_value(s)
         push!(lines, v === nothing ? "  (the value could not be certified numerically)" :
