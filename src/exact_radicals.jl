@@ -323,7 +323,7 @@ Whether **this** value has a closed form in real nested square roots. Weaker tha
 value at `k = 5`, say).
 
 ```julia
-has_radical_form(q6j(Exact(5; form = :x), 1, 1, 1, 1, 1, 1))
+has_radical_form(q6j(Exact(5), 1, 1, 1, 1, 1, 1))
 ```
 """
 function has_radical_form(v::ExactX)
@@ -461,7 +461,7 @@ the value's degree is past `degree_limit` (`degree_limit = 0` lifts that cap). [
 without a length limit, with a reason instead of `nothing`.
 
 ```julia
-radical_form(q6j(Exact(3; form = :x), 1, 1, 1, 1, 1, 1))   # −(3 − √5)/2, the Fibonacci level
+radical_form(q6j(Exact(3), 1, 1, 1, 1, 1, 1))   # −(3 − √5)/2, the Fibonacci level
 ```
 """
 function radical_form(v::ExactX; maxlen::Int = 80,

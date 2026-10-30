@@ -7,7 +7,7 @@
 #      are divisor counts, and a square class is an 𝔽₂ vector over an explicit basis.
 #   2. A level is the quotient by the monic Ψ_h = ψ_{2h} (degree φ(2h)/2), so level values stay integral.
 #   3. An identity proved in ℤ[x] holds for every q, hence every level: `prove_identity` is a proof.
-#  Degrees grow like ~10j², so large spins at a fixed level use the cleared kernel of `exact_cleared.jl`.
+#  Degrees grow like ~10j², so large spins are cheaper at a fixed level, reduced modulo Ψ_h.
 # ---------------------------------------------------------------------------------
 
 const X_LOCK = ReentrantLock()
@@ -300,7 +300,7 @@ end
     xvalue(rad, num, den = 1) -> XValue
 
 The `XValue` constructor — not to be confused with [`x_form`](@ref), which expands a symbolic value
-into one. This spelling stays; the one-argument `xvalue(v)` is the deprecated name of `x_form`.
+into one.
 
 Normalising constructor: cancels `gcd(num, den)`, makes `den` primitive with positive leading coefficient,
 and sorts the radical indices. A zero numerator gives the canonical zero.
@@ -460,7 +460,7 @@ Base.:*(a::XValue, b::XSum) = XSum(a) * b
 
 The exact value of a factorial rule as an element of `ℚ(x)` times one square root, `x = q + q⁻¹`. Prefactor
 and first term are ψ exponents (divisor counts); the sum is the cleared recursion P ← B·Q ± A·P, Q ← B·Q over
-ℤ[x], as in `exact_cleared.jl`.
+ℤ[x].
 """
 function generic_value(s::FactorialSum; modulus = nothing, level = nothing)
     R, _ = xring()

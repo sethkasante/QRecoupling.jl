@@ -18,7 +18,6 @@ include("qphases.jl")
 
 include("projection_classical.jl")
 include("projection_discrete.jl")
-include("projection_exact.jl")
 include("projection_analytic.jl")
 
 include("modular_arithmetic.jl")
@@ -29,7 +28,6 @@ include("factorial_kernels.jl")
 include("multiword.jl")
 include("classical_sums.jl")
 include("classical_exact.jl")
-include("exact_cleared.jl")   # exact level values from the rule, without field arithmetic
 include("families.jl")
 include("fmatrix.jl")       # the associativity matrix, from shared column coefficients
 include("workspace.jl")

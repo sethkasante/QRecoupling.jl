@@ -115,20 +115,6 @@ end
 Base.:*(m::CyclotomicMonomial, phase::QPhase) = phase * m
 Base.:/(m::CyclotomicMonomial, phase::QPhase) = m * inv(phase)
 
-# --- QPhase * CompositeExactResult ---
-# Only integer powers of q = ζ lie in ℚ(ζ_{2(k+2)}); they multiply every factor exactly.
-function Base.:*(phase::QPhase, comp::CompositeExactResult{T}) where T
-    (iszero(phase) || isempty(comp.terms)) && return zero(comp)
-    denominator(phase.q_pow) == 1 || throw(ArgumentError(
-        "q^($(phase.q_pow)) is not an element of ℚ(ζ$(to_subscript(2 * (comp.k + 2)))); only integer powers of q can multiply an exact result."))
-    ζ = gen(parent(first(values(comp.terms))))
-    f = Int(phase.sign) * ζ^Int(numerator(phase.q_pow))
-    return CompositeExactResult{T}(comp.k, Dict{CyclotomicMonomial, T}(rad => f * val for (rad, val) in comp.terms))
-end
-
-Base.:*(comp::CompositeExactResult, phase::QPhase) = phase * comp
-Base.:/(comp::CompositeExactResult, phase::QPhase) = comp * inv(phase)
-
 
 # --- Helpers ---- 
 

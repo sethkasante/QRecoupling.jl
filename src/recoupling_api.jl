@@ -3,12 +3,6 @@
 # ---------------------------------------------
 
 
-"Exact zero in ℚ(ζ_{2(k+2)}), in the same form as `project_exact` returns for a vanishing symbol."
-function _exact_zero(k::Int)
-    _, ζ = cyclotomic_field(2 * (k + 2), "ζ")
-    return CompositeExactResult(k, ZERO_MONOMIAL, zero(ζ))
-end
-
 """
 Level-k evaluation of a recoupling symbol from its factorial rule `s`. Inadmissible labels give zero.
 Numeric and exact values use the factorial rule directly; `dcr()` supplies the numerical fallback.
@@ -18,15 +12,12 @@ function _level_value(s::FactorialSum, admissible::Bool, dcr, k::Int, exact::Boo
                      labels = nothing, family=nothing, workspace=nothing) where {T}
     k >= 0 || throw(DomainError(k, "level must be nonnegative"))
     admissible || return exact ? zero(ExactX, k) : zero(T)
-    # `exact = true` is the real basis, ℚ[x]/Ψ_h — the same value `Exact(k)` returns. The cyclotomic
-    # carrier is reachable as `Exact(k; form = :canonical)` and is deprecated.
+    # `exact = true` is the real basis, ℚ[x]/Ψ_h — the same value `Exact(k)` returns.
     exact && return exact_x(s, k)
     return value_at_level(s, k, T; fallback = () -> project_discrete(dcr(), k, T), labels=labels, family=family, workspace=workspace)
 end
 
 
-"Warn once: eager is now a compatibility alias for the standard evaluator."
-_deprecated_eager() = @warn("`eager=true` is deprecated and now uses the standard factorial-rule evaluator; remove the keyword. It will be removed in later version", maxlog=1)
 
 "Evaluate one symbol rule, constructing its DCR only for projections that need it."
 @inline function _symbol_value(s::FactorialSum, admissible::A, k, q, exact, ::Type{T};
@@ -50,13 +41,11 @@ Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exc
 `exact=true` requests an exact classical or level value. `q6j(Symbolic(), ...)`
 retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
-`eager=true` is deprecated and uses the same evaluator.
 """
 function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
                   k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64,
-                  workspace=nothing, eager::Bool=false) where {TT}
+                  workspace=nothing) where {TT}
     q = _evaluation_q(k,q,exact)
-    eager && _deprecated_eager()
     k isa AbstractVector && workspace !== nothing &&
         throw(ArgumentError("workspace is for scalar calls; level sweeps do not accept caller-owned scratch"))
     k isa AbstractVector && return _sweep_levels(q6j, (j1, j2, j3, j4, j5, j6), k;
@@ -78,13 +67,11 @@ Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exc
 `exact=true` requests an exact classical or level value. `q3j_factorial(Symbolic(), ...)`
 retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
-`eager=true` is deprecated and uses the same evaluator.
 """
 function q3j_factorial(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin=-m1-m2;
                   k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64,
-                  workspace=nothing, eager::Bool=false) where {TT}
+                  workspace=nothing) where {TT}
     q = _evaluation_q(k,q,exact)
-    eager && _deprecated_eager()
     k isa AbstractVector && workspace !== nothing &&
         throw(ArgumentError("workspace is for scalar calls; level sweeps do not accept caller-owned scratch"))
     k isa AbstractVector && return _sweep_levels(q3j_factorial, (j1, j2, j3, m1, m2, m3), k;
@@ -219,7 +206,6 @@ end
 #---- clear caches ---
 
 function clear_exact_caches!()
-    @lock EXACT_PHI_LOCK empty!(EXACT_PHI_CACHE)
     return nothing
 end
 

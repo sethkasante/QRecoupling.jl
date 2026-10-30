@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.6.0 (in development)
+
+- **Breaking:** removed `Exact(k; form = :canonical)` with `CompositeExactResult`, the `eager` keyword, the one-argument `xvalue`, and exact level evaluation of monomials and DCRs. See [Migration](docs/src/migration.md).
+
 ## Unreleased
 
 - Exact zero decisions in numerical evaluation and zero queries no longer use Nemo. Long sums at a level, sums with several segments and weighted sums are decided in big integers, up to about 100 times faster than through the exact field.

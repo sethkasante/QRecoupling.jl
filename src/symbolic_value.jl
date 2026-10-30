@@ -86,18 +86,10 @@ formal algebraic expression; numerical evaluation uses the rule's branch convent
 x_form(v::SymbolicValue) = deepcopy(_cached_x_form(v))
 x_form(s::FactorialSum) = generic_value(_validate_rule(s))
 
-"Warn once: the expansion is `x_form`, and `xvalue` is the `XValue` constructor it was confused with."
-_deprecated_xvalue() = @warn("`xvalue(v)` is deprecated; the expansion in x is `x_form(v)` " *
-                             "(`v.x_value` is a different thing: the stored (P, R) of an `Exact(k)` " *
-                             "value). It will be removed later.", maxlog = 1)
-xvalue(v::SymbolicValue) = (_deprecated_xvalue(); x_form(v))
-xvalue(s::FactorialSum) = (_deprecated_xvalue(); x_form(s))
-
 phi_form(v::SymbolicValue; kwargs...) = phi_form(v.dcr; kwargs...)
 splits_completely(v::SymbolicValue) = splits_completely(phi_form(v))
 
-# Numerical projections use the rule directly; the legacy exact projector consumes a DCR.
-project_exact(v::SymbolicValue, k::Integer; kwargs...) = project_exact(v.dcr, k; kwargs...)
+# Numerical projections use the rule directly.
 project_discrete(v::SymbolicValue, k::Integer, ::Type{T} = Float64) where {T} =
     qeval(v.rule;k=k,T=T)
 project_analytic(v::SymbolicValue, q) = qeval(v.rule;q=q)

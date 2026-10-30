@@ -132,3 +132,18 @@ end
     @test precision(numeric_value(v; bits = 256)) == 256
     @test iszero(numeric_value(zero(v)))
 end
+
+@testset "removed in v0.6" begin
+    @test_throws MethodError Exact(10; form = :canonical)
+    @test_throws MethodError q6j(1, 1, 1, 1, 1, 1; eager = true)
+    @test_throws MethodError QR.xvalue(q6j(Symbolic(), 1, 1, 1, 1, 1, 1))
+    @test !isdefined(QR, :CompositeExactResult) && !isdefined(QR, :project_exact)
+    m = QR.qint_mono(3)
+    @test_throws ArgumentError qeval(m; k = 10, exact = true)
+    @test_throws ArgumentError qeval(QR.q6j_dcr(2, 2, 2, 2, 2, 2); k = 10, exact = true)
+    # what stays: numerical and classical evaluation of the same objects
+    @test qeval(m; k = 10) ≈ qint(3; k = 10)
+    @test qeval(m; q = 1, exact = true) == 3
+    @test string(Exact(10)) == "Exact(10)"
+end
+

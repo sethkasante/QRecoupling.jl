@@ -391,13 +391,11 @@ m → −m, and (j₂ j₃ j₁; m₂ m₃ m₁)_q = q^{m₂} (j₁ j₂ j₃; m
 
 From v0.5, the deformation-dependent weights are included; classical values are unchanged.
 `Exact()` is supported; `Exact(k)` and `Symbolic()` are not available yet.
-`eager=true` remains a deprecated alias for the standard evaluator.
 """
 function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = -m1 - m2;
              k = nothing, q = nothing, exact::Bool = false, T::Type{TT} = Float64,
-             workspace = nothing, eager::Bool = false) where {TT}
+             workspace = nothing) where {TT}
     q = _evaluation_q(k, q, exact)
-    eager && _deprecated_eager()
     k isa AbstractVector && workspace !== nothing &&
         throw(ArgumentError("workspace is for scalar calls; level sweeps do not accept caller-owned scratch"))
     k isa AbstractVector && return [q3j(j1, j2, j3, m1, m2, m3; k = kk, exact = exact, T = T) for kk in k]

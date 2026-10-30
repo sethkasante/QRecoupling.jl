@@ -1,5 +1,20 @@
 # Migration
 
+## To v0.6
+
+### Removed after their deprecation
+
+| Removed | Use instead |
+|---|---|
+| `Exact(k; form = :canonical)` and the `CompositeExactResult` values it returned | `Exact(k)`, which returns `ExactX` |
+| `form = :x` | `Exact(k)`, which is the same thing |
+| `eager = true` | Remove the keyword |
+| `QRecoupling.xvalue(value)` with one argument | `x_form(value)` |
+| `qeval(m; k, exact = true)` for a monomial or DCR | `qeval(Exact(k), rule)` with a `FactorialSum` |
+| `QRecoupling.project_exact`, `QRecoupling.evaluate_exact` on the removed type | `Exact(k)` and `numeric_value` |
+
+The three-argument `QRecoupling.xvalue(rad, num, den)`, numerical evaluation of monomials and DCRs, and exact classical evaluation of them are unchanged.
+
 ## To v0.5
 
 ### `q3j` is the quantum 3j symbol
@@ -31,7 +46,7 @@ These names are no longer exported. They still exist: call them as `QRecoupling.
 |---|---|
 | Cyclotomic/DCR layer (compatibility; planned for retirement) | `CyclotomicMonomial`, `DCR`, `build_dcr!`, `add_qint!`, `add_qfact!`, `build_series`, `qint_mono`, `qfact_mono`, `qbinomial_mono`, `symbolic_terms`, `project_discrete`, `project_exact`, `project_analytic`, `project_classical`, `project_classical_exact` |
 | Symbol interface, for adding symbols | `QSymbol`, `SixJ`, `ThreeJ`, `FSymbol`, `GSymbol`, `Tetrahedron`, `ThetaValue`, `symbol_rule`, `level_admissible`, `symbol_family`, `symbol_of`, `nlabels` |
-| Lower-level exact access | `exact_x` (use `Exact(k)`), `generic_sixj` (use `x_form(q6j(Symbolic(), …))`), `xvalue` (deprecated; use `x_form`), `radical_form`, `has_radical_form`, `radical_levels`, `xpolynomial`, `radicand` (use `v.x_value`), `splits_completely` |
+| Lower-level exact access | `exact_x` (use `Exact(k)`), `generic_sixj` (use `x_form(q6j(Symbolic(), …))`), `xvalue` (the `XValue` constructor; use `x_form` to expand), `radical_form`, `has_radical_form`, `radical_levels`, `xpolynomial`, `radicand` (use `v.x_value`), `splits_completely` |
 | Modular data helpers | `level_labels`, `central_charge`, `total_qdim`, `gauss_sum`, `monodromy`, `verlinde` |
 | Other | `EvalTarget` |
 
@@ -86,11 +101,11 @@ v
 
 This also applies to `k=10, exact=true` for the recoupling and product functions. Read coefficients with `v.x_value`, `QRecoupling.xpolynomial`, and `QRecoupling.radicand`, request nested square roots with `radical(v)` (or `v.rad`), and convert numerically with `Float64`, `BigFloat`, or `numeric_value`. Printing shows the stored x-form; radicals and numerical approximations are explicit requests. `radical` returns `RadExpr` or a reasoned `NoRadical` result.
 
-`Exact(k; form=:canonical)` retains the deprecated cyclotomic representation for compatibility. `form=:deferred`, `ExactLevelWorkspace`, `canonicalize_exact`, and dedicated Biedenharn–Elliott verifier functions from development drafts are not current APIs. Write identities from the public exact arithmetic as in the [identity tutorial](tutorials/identities.md). Raw DCR/monomial projection remains a separate compatibility path; it is not automatically converted into an x-form by `qeval(Symbolic(), object)`.
+`Exact(k; form=:canonical)` retained the former cyclotomic representation until v0.6. `form=:deferred`, `ExactLevelWorkspace`, `canonicalize_exact`, and dedicated Biedenharn–Elliott verifier functions from development drafts are not current APIs. Write identities from the public exact arithmetic as in the [identity tutorial](tutorials/identities.md). Raw DCR/monomial projection remains a separate compatibility path; it is not automatically converted into an x-form by `qeval(Symbolic(), object)`.
 
 ### Symbolic output is bounded and lazy
 
-Use `x_form(value)` to expand a symbolic rule. The earlier `QRecoupling.xvalue(value)` spelling is deprecated; `value.x_value` on an exact level result instead exposes its stored polynomials.
+Use `x_form(value)` to expand a symbolic rule. The earlier `QRecoupling.xvalue(value)` spelling was removed in v0.6; `value.x_value` on an exact level result instead exposes its stored polynomials.
 
 Symbolic expressions display their finite factorial rule in x without carrying out the sum, for both small and large labels. Radicals use ψ factors. `x_form(value)` explicitly expands and caches the generic formula, returning an owned copy.
 
