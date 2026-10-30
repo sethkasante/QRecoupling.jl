@@ -194,7 +194,7 @@ function _fast_rat_inplace(m::CyclotomicMonomial,sieve::Vector{Int},buf::BigInt)
         p <= 1 && continue  # Φ_d(1) = 1 
 
         ae = Culong(abs(e))
-        ccall((:__gmpz_ui_pow_ui, :libgmp), Cvoid,
+        ccall((:__gmpz_ui_pow_ui, Base.GMP.libgmp), Cvoid,
               (Ref{BigInt}, Culong, Culong), buf, Culong(p), ae)
 
         e > 0 ? MPZ.mul!(num, num, buf) : MPZ.mul!(den, den, buf)
@@ -272,14 +272,14 @@ function project_classical_exact(dcr::DCR)
         K_p = min_exps[p] < 0 ? -min_exps[p] : 0
 
         if K_p > 0
-            ccall((:__gmpz_ui_pow_ui, :libgmp), Cvoid,
+            ccall((:__gmpz_ui_pow_ui, Base.GMP.libgmp), Cvoid,
                   (Ref{BigInt}, Culong, Culong), buf, Culong(p), Culong(K_p))
             MPZ.mul!(D_glob, D_glob, buf)
         end
 
         pow = curr_exps[p] + K_p
         if pow > 0
-            ccall((:__gmpz_ui_pow_ui, :libgmp), Cvoid,
+            ccall((:__gmpz_ui_pow_ui, Base.GMP.libgmp), Cvoid,
                   (Ref{BigInt}, Culong, Culong), buf, Culong(p), Culong(pow))
             MPZ.mul!(N_0, N_0, buf)
         end
@@ -300,7 +300,7 @@ function project_classical_exact(dcr::DCR)
 
         for (d, e) in r.phi_exps
             p = sieve[d];  p <= 1 && continue
-            ccall((:__gmpz_ui_pow_ui, :libgmp), Cvoid,
+            ccall((:__gmpz_ui_pow_ui, Base.GMP.libgmp), Cvoid,
                   (Ref{BigInt}, Culong, Culong), buf, Culong(p), Culong(abs(e)))
             e > 0 ? MPZ.mul!(r_num, r_num, buf) : MPZ.mul!(r_den, r_den, buf)
         end
