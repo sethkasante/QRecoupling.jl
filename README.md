@@ -113,19 +113,16 @@ The fast paths are Float64 and machine-size labels. High-degree exact sums and B
 
 ## Citation
 
-For the original cyclotomic framework, cite Seth K. Asante,
-[Deferred Cyclotomic Representation for Stable and Exact Evaluation of q-Hypergeometric Series](https://doi.org/10.21468/SciPostPhysCore.9.3.059), SciPost Phys. Core **9**, 059 (2026). The v0.4 factorial-rule numeric and exact implementations extend that framework.
+To cite the package, use Seth K. Asante, [QRecoupling.jl: numerical and exact computation of classical and quantum recoupling coefficients](https://arxiv.org/abs/2610.24074), arXiv:2610.24074 (2026).
 
 ```bibtex
-@article{Asante2026dcr,
-      title={Deferred cyclotomic representation for stable and exact evaluation of q-hypergeometric series},
+@article{Asante2026qrecoupling,
+      title={QRecoupling.jl: numerical and exact computation of classical and quantum recoupling coefficients},
       author={Asante, Seth K.},
-      journal={SciPost Phys. Core},
-      volume={9},
-      pages={059},
       year={2026},
-      doi={10.21468/SciPostPhysCore.9.3.059},
-      eprint={2604.13196},
-      archivePrefix={arXiv}
+      doi={10.48550/arXiv.2610.24074},
+      eprint={2610.24074},
+      archivePrefix={arXiv},
+      primaryClass={cs.MS}
 }
 ```

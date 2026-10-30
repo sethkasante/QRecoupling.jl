@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Exact zero decisions in numerical evaluation and zero queries no longer use Nemo. Long sums at a level, sums with several segments and weighted sums are decided in big integers, up to about 100 times faster than through the exact field.
+- `numeric_value`, `float` and `big` accept classical exact values.
+- CI also runs on Windows and macOS.
+- Added `benchmark/minimal.jl`, a short timed and checked benchmark. The article describing the package is now the preferred citation.
+
 ## v0.5.1
 
 - Fixed large-spin level `qcg`/`q3j` accuracy and inconsistent phases at purely imaginary q.

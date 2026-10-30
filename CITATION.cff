@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: >-
-  If you use QRecoupling.jl, please cite the software (this record) and the article describing
-  its cyclotomic framework (the preferred citation below).
+  If you use QRecoupling.jl, please cite the article describing the package (the preferred citation
+  below) and the software (this record).
 type: software
 title: "QRecoupling.jl: numerical and exact computation of classical and quantum recoupling coefficients"
 abstract: >-
@@ -30,20 +30,16 @@ keywords:
   - Julia
 preferred-citation:
   type: article
-  title: "Deferred cyclotomic representation for stable and exact evaluation of q-hypergeometric series"
+  title: "QRecoupling.jl: numerical and exact computation of classical and quantum recoupling coefficients"
   authors:
     - family-names: Asante
       given-names: Seth K.
-  journal: "SciPost Physics Core"
-  volume: 9
-  issue: 3
-  start: "059"
   year: 2026
-  month: 9
-  doi: 10.21468/SciPostPhysCore.9.3.059
-  url: "https://doi.org/10.21468/SciPostPhysCore.9.3.059"
+  month: 10
+  doi: 10.48550/arXiv.2610.24074
+  url: "https://arxiv.org/abs/2610.24074"
   repository-code: "https://github.com/sethkasante/QRecoupling.jl"
   identifiers:
     - type: other
-      value: "arXiv:2604.13196"
+      value: "arXiv:2610.24074"
       description: arXiv preprint
