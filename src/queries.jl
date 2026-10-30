@@ -74,9 +74,8 @@ function iszero_at(f::Function, k::Integer, labels::AbstractVector; threads = no
             Threads.@spawn work(c)
         end
     end
-    # Exact polynomial caches and field arithmetic follow the serial exact-batch policy.
     for i in eachindex(pending)
-        pending[i] && (out[i] = iszero(exact_x(_rule_for(f, labels[i]...), k)))
+        pending[i] && (out[i] = _level_confirm_zero(_rule_for(f, labels[i]...), k))
     end
     return out isa BitVector ? out : BitVector(out)
 end
@@ -177,10 +176,10 @@ function level_spectrum(f::Function, args::Spin...; k = 2:100, cancellation::Boo
             Threads.@spawn work(c)
         end
     end
-    # exact confirmations, serially (exact polynomial caches and field arithmetic follow the serial policy)
+    # exact confirmations
     for i in eachindex(K)
         pending[i] || continue
-        iszero(exact_x(_rule_for(f, args...), Int(K[i]))) && (out[i] = :cancels)
+        _level_confirm_zero(_rule_for(f, args...), Int(K[i])) && (out[i] = :cancels)
     end
     return out
 end

@@ -74,3 +74,61 @@
         QR.LEVEL_CACHE_LIMIT[] = limit; empty_caches!()
     end
 end
+
+@testset "zero decisions in integers" begin
+    # cyclotomic polynomials, including prime powers and several primes
+    @test QR._cyclotomic_coeffs(1) == [-1, 1]
+    @test QR._cyclotomic_coeffs(12) == [1, 0, -1, 0, 1]
+    @test QR._cyclotomic_coeffs(30) == [1, 1, 0, -1, -1, -1, 0, 1, 1]
+    for n in (7, 16, 36, 105, 210)
+        p = QR.phi_q(n)
+        @test QR._cyclotomic_coeffs(n) == [Int(QR.coeff(p, i)) for i in 0:QR.degree(p)]
+    end
+
+    # the big-integer test against the exact field, on one segment and across gaps
+    rule(l...) = QR._rule_for(q6j, l...)
+    for (l, k) in (((1, 5//2, 5//2, 5//2, 3, 3), 10), ((1, 1, 1, 1, 1, 1), 10), ((5, 5, 5, 5, 5, 5), 20),
+                   ((5, 5, 5, 5, 5, 5), 21), ((4, 4, 4, 4, 4, 4), 7), ((6, 6, 6, 6, 6, 6), 5), ((3, 3, 3, 4, 4, 4), 4))
+        s = rule(l...)
+        st, segs = QR.classify_at_level(s, k)
+        st === :finite || continue
+        @test QR._level_ring_zero(s, segs, k) == iszero(QR.exact_x(s, k))
+    end
+
+    # a rule with slopes and exponents the machine-word test does not take
+    s = FactorialSum(0:3; factors = [(2, 1, 1), (-1, 3, -2), (1, 0, -1), (1, 2, -1)], alternating = true)
+    for k in 1:12
+        st, segs = QR.classify_at_level(s, k)
+        st === :finite || continue
+        @test QR._level_ring_zero(s, segs, k) == iszero(QR.exact_x(s, k))
+    end
+
+    # long sums decided by the theorem: six equal odd spins cancel at k = 4j, not at k = 4j + 1
+    for j in (17, 41)
+        s = rule(ntuple(_ -> j, 6)...)
+        @test QR._level_ring_zero(s, last(QR.classify_at_level(s, 4j)), 4j)
+        @test !QR._level_ring_zero(s, last(QR.classify_at_level(s, 4j + 1)), 4j + 1)
+    end
+
+    # a phase can carry the zero: without alternation, w = h is the alternating sum
+    s = rule(1, 5//2, 5//2, 5//2, 3, 3)
+    t = FactorialSum(s.zlo:s.zhi; factors = [(f.a, f.b, f.c) for f in s.fac], alternating = false)
+    @test QR._level_ring_zero(t, (s.zlo:s.zhi,), 10, 12)
+    @test !QR._level_ring_zero(t, (s.zlo:s.zhi,), 10, 0)
+    @test QR._weighted_level_zero(t, 12, 10)
+
+    # queries take the same route
+    @test iszero_at(10, 1, 5//2, 5//2, 5//2, 3, 3)
+    @test iszero_at(10, [(1, 5//2, 5//2, 5//2, 3, 3), (1, 1, 1, 1, 1, 1)]) == [true, false]
+    @test level_spectrum(1, 5//2, 5//2, 5//2, 3, 3; k = 8:12, prove = true)[3] === :cancels
+end
+
+@testset "conversions of classical exact values" begin
+    v = q3j(Exact(), 2, 2, 0, 1, -1, 0)                  # −√(1/5)
+    @test float(v) === Float64(v) === q3j(2, 2, 0, 1, -1, 0)
+    @test big(v) == BigFloat(v)
+    @test float(typeof(v)) === Float64
+    @test numeric_value(v; bits = 256) ≈ -sqrt(big(1) / 5) atol = big(2.0)^-250
+    @test precision(numeric_value(v; bits = 256)) == 256
+    @test iszero(numeric_value(zero(v)))
+end

@@ -195,12 +195,18 @@ function generic_mod_tables(N::Int)
     end
 end
 
-"Is the sum the zero function of q? Nonzero residues prove it is not; see the section comment above."
-function is_generic_zero(s::FactorialSum, tabs = nothing)
+"Could the sum be the zero function of q? `false` is a proof that it is not; see the section comment above."
+function _generic_zero_candidate(s::FactorialSum, tabs = nothing)
     is_empty_sum(s) && return true
     pairwise_zero(s) && return true
     tabs === nothing && (tabs = generic_mod_tables(max_argument(s)))
-    return _sum_vanishes_mod(s, tabs) && iszero(generic_value(s))
+    return _sum_vanishes_mod(s, tabs)
+end
+
+"Is the sum the zero function of q? Nonzero residues prove it is not; see the section comment above."
+function is_generic_zero(s::FactorialSum, tabs = nothing)
+    _generic_zero_candidate(s, tabs) || return false
+    return is_empty_sum(s) || pairwise_zero(s) || iszero(generic_value(s))
 end
 
 # ---- exact evaluation by Horner nesting (replaces BigFloat escalation for Float64 results) ----

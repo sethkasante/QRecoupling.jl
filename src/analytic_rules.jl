@@ -1017,8 +1017,8 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
     end
     # Every fixed-precision tier has failed. If the sum is the zero function of q there is no bound for
     # any precision to certify, and the ladder below would only double its bits until it gave up; the
-    # generic-q filter and exact polynomial check decide that first.
-    !weighted && is_generic_zero(s) && return zero(T)
+    # generic-q filter and the exact check at the supplied q decide that first.
+    !weighted && _generic_zero_candidate(s) && _analytic_sum_iszero(s,input_q,0) && return zero(T)
     # Rebuild from the supplied q at each precision, never from rounded table
     # entries. A tier that certifies its own bound is accepted on its own: the
     # machine-precision value is not a reliable witness, so requiring the two to

@@ -246,7 +246,7 @@ end
 
 """
 Prove that the weighted sum vanishes at a level, after two inconclusive precision passes: a nonzero residue
-modulo a prime excludes a zero; a zero residue is confirmed in the cyclotomic field.
+modulo a prime excludes a zero; a zero residue is confirmed in integers.
 """
 function _weighted_level_zero(s::FactorialSum, w::Int, k::Int)
     tab = level_zero_table(k)
@@ -269,24 +269,10 @@ function _weighted_level_zero(s::FactorialSum, w::Int, k::Int)
         phase = mont_mul(m, phase, step)
     end
     iszero(acc) || return false
-    # A modular zero alone is not a proof. This rare path uses exact arithmetic;
+    # A modular zero alone is not a proof. This rare path decides it in integers;
     # the square-root prefactor is not needed for deciding whether the sum is zero.
-    _, ζ = cyclotomic_field(order, "ζ")
-    facts = Vector{typeof(ζ)}(undef, N + 1); facts[1] = one(ζ)
-    qi = inv(ζ); den = ζ - qi
-    for n in 1:N
-        facts[n+1] = facts[n] * divexact(ζ^n - qi^n, den)
-    end
-    step_exact = ζ^mod(w, order)
-    phase_exact = ζ^mod(w * s.zlo, order)
-    total = zero(ζ)
-    for z in s.zlo:s.zhi
-        term = phase_exact
-        for f in s.fac; term *= facts[_arg(f, z)+1]^Int(f.c); end
-        total += s.alternating && isodd(z) ? -term : term
-        phase_exact *= step_exact
-    end
-    return iszero(total)
+    z = _level_integer_zero(s, s.zlo, s.zhi, k, w)
+    return z === nothing ? _level_ring_zero(s, (s.zlo:s.zhi,), k, w) : z
 end
 
 """

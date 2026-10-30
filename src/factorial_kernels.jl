@@ -580,7 +580,7 @@ end
 "Exact confirmation of a level zero: in integers when the sum allows it, otherwise in the number field."
 function _level_exact_zero(s::FactorialSum, segs, k::Int)
     z = length(segs) == 1 ? _level_integer_zero(s, first(segs[1]), last(segs[1]), k) : nothing
-    return z === nothing ? iszero(exact_x(s, k)) : z
+    return z === nothing ? _level_ring_zero(s, segs, k) : z
 end
 
 "The short pass under the current policy; tables of other types have none."

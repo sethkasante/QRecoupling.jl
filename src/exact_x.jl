@@ -391,3 +391,15 @@ function numeric_value(v::ExactX; bits::Integer=precision(BigFloat))
     result=setprecision(() -> p * sqrt(r), BigFloat, max(precision(p), precision(r)))
     return setprecision(()->BigFloat(result),BigFloat,target)
 end
+
+"""
+    numeric_value(v::ClassicalResult; bits=precision(BigFloat)) -> BigFloat
+
+The classical exact value σ√r, rounded to `bits` bits.
+"""
+function numeric_value(v::ClassicalResult; bits::Integer=precision(BigFloat))
+    bits > 0 || throw(ArgumentError("bits must be positive"))
+    target=Int(bits)
+    result=setprecision(() -> v.sign * sqrt(BigFloat(v.sq_val)), BigFloat, target+32)
+    return setprecision(()->BigFloat(result),BigFloat,target)
+end

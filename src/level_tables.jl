@@ -157,12 +157,60 @@ end
 # G_z = L_z ± ζ^w N_z G_{z+1}, L_z = D_z L_{z+1}, gives A = G_{z0}, and A = 0 exactly when the polynomial
 # with these coefficients is divisible by the cyclotomic polynomial Φ_{2h}.
 
+"""
+Coefficients of the cyclotomic polynomial Φ_n, from the constant term up, in machine integers. Starting from
+Φ_1 = x − 1, each prime p of n gives Φ_{mp}(x) = Φ_m(x^p) / Φ_m(x), and Φ_n(x) = Φ_{rad(n)}(x^{n/rad(n)}).
+"""
+function _cyclotomic_coeffs(n::Int)
+    n >= 1 || throw(DomainError(n, "the order must be positive"))
+    phi = [-1, 1]
+    rad = 1
+    rest = n
+    p = 2
+    while rest > 1
+        if p * p > rest
+            p = rest                                  # what remains is prime
+        end
+        if rem(rest, p) == 0
+            while rem(rest, p) == 0
+                rest ÷= p
+            end
+            phi = _cyclotomic_step(phi, p)
+            rad *= p
+        end
+        p += 1
+    end
+    stretch = n ÷ rad
+    stretch == 1 && return phi
+    out = zeros(Int, (length(phi) - 1) * stretch + 1)
+    @inbounds for i in eachindex(phi)
+        out[(i-1)*stretch+1] = phi[i]
+    end
+    return out
+end
+
+"Φ_m(x^p) / Φ_m(x) by exact division, for a prime p not dividing m."
+function _cyclotomic_step(phi::Vector{Int}, p::Int)
+    d = length(phi) - 1
+    a = zeros(Int, d * p + 1)
+    @inbounds for i in 0:d
+        a[i*p+1] = phi[i+1]
+    end
+    q = zeros(Int, d * (p - 1) + 1)
+    @inbounds for i in length(q):-1:1                 # Φ_m is monic
+        c = a[i+d]
+        q[i] = c
+        iszero(c) && continue
+        for t in 0:d
+            a[i+t] -= c * phi[t+1]
+        end
+    end
+    return q
+end
+
 const LEVEL_PHI = LevelCache{Vector{Int}}()
 "Coefficients of Φ_{2h}, h = k + 2, from the constant term up."
-_level_phi(k::Int) = get_level!(LEVEL_PHI, k) do
-    p = phi_q(2 * (k + 2))
-    Int[Int(coeff(p, i)) for i in 0:degree(p)]
-end
+_level_phi(k::Int) = get_level!(() -> _cyclotomic_coeffs(2 * (k + 2)), LEVEL_PHI, k)
 
 "v ← (ζ^x − ζ^(−x)) v on the cyclic group of order length(v), through the scratch vector `tmp`."
 @inline function _binomial_mul!(v::Vector{Int}, tmp::Vector{Int}, x::Int)
@@ -238,6 +286,143 @@ function _level_integer_zero(s::FactorialSum, z0::Int, z1::Int, k::Int, w::Int =
     return true
 end
 
+# ---- the same test for any regular sum, in big integers ----
+#
+# `_level_integer_zero` covers short sums with unit slopes. The nesting works for every rule whose contributing
+# terms have one valuation at the level, with three changes. Coefficients are big integers. The ratio between
+# consecutive contributing terms is read from the factorial arguments, which also spans a gap between two
+# segments. And the factors [jh], which vanish at the level, occur equally often above and below the line, so
+# they leave their limit [jh]/[h] = (−1)^(j−1) j. The vector has h coefficients, since ζ^h = −1.
+
+"The q-integers x and their count: the ratio t_{z1}/t_{z0} as lists of numerator and denominator arguments."
+function _ratio_arguments!(num::Vector{Int}, den::Vector{Int}, s::FactorialSum, z0::Int, z1::Int)
+    empty!(num); empty!(den)
+    for f in s.fac
+        n0 = _arg(f, z0); n1 = _arg(f, z1)
+        n0 == n1 && continue
+        target = (n1 > n0) == (f.c > 0) ? num : den
+        for _ in 1:abs(f.c), x in (min(n0, n1)+1):max(n0, n1)
+            push!(target, x)
+        end
+    end
+    sort!(num); sort!(den)
+    return num, den
+end
+
+"Remove the arguments common to two sorted lists."
+function _cancel_common!(a::Vector{Int}, b::Vector{Int})
+    i = 1; j = 1; ka = 0; kb = 0
+    @inbounds while i <= length(a) || j <= length(b)
+        if j > length(b) || (i <= length(a) && a[i] < b[j])
+            a[ka+=1] = a[i]; i += 1
+        elseif i > length(a) || b[j] < a[i]
+            b[kb+=1] = b[j]; j += 1
+        else
+            i += 1; j += 1
+        end
+    end
+    resize!(a, ka); resize!(b, kb)
+    return a, b
+end
+
+"v ← ζ^x v − ζ^(−x) v in ℤ[ζ]/(ζ^h + 1), in place in the big integers of `tmp`, then swapped into `v`."
+function _ring_binomial!(v::Vector{BigInt}, tmp::Vector{BigInt}, x::Int)
+    h = length(v)
+    x = mod(x, 2h)
+    @inbounds for j in 0:h-1
+        a = j - x; a < 0 && (a += 2h)                 # ζ^x carries index a to j
+        b = j + x; b >= 2h && (b -= 2h)               # ζ^(−x) carries index b to j
+        sa = a < h; a = sa ? a : a - h
+        sb = b < h; b = sb ? b : b - h
+        t = tmp[j+1]
+        if sa && sb
+            MPZ.sub!(t, v[a+1], v[b+1])
+        elseif sa
+            MPZ.add!(t, v[a+1], v[b+1])
+        elseif sb
+            MPZ.add!(t, v[a+1], v[b+1]); MPZ.neg!(t)
+        else
+            MPZ.sub!(t, v[b+1], v[a+1])
+        end
+    end
+    @inbounds for j in 1:h
+        v[j], tmp[j] = tmp[j], v[j]
+    end
+    return v
+end
+
+"""
+    _level_ring_zero(s, segs, k, w = 0) -> Bool
+
+Whether the sum of (±1)^z ζ^{wz} t_z over the segments `segs` vanishes at ζ = e^{iπ/(k+2)}. All contributing
+terms must have the same valuation at the level, which `classify_at_level` guarantees. The answer is a proof,
+for every rule and at every size, in Julia's big integers alone.
+"""
+function _level_ring_zero(s::FactorialSum, segs, k::Int, w::Int = 0)
+    zs = Int[z for seg in segs for z in seg]
+    isempty(zs) && return true
+    h = k + 2
+    G = [BigInt(0) for _ in 1:h]; L = [BigInt(0) for _ in 1:h]; tmp = [BigInt(0) for _ in 1:h]
+    G[1] = BigInt(1); L[1] = BigInt(1)
+    num = Int[]; den = Int[]
+    for i in length(zs)-1:-1:1
+        z0 = zs[i]; z1 = zs[i+1]
+        _ratio_arguments!(num, den, s, z0, z1)
+        _cancel_common!(num, den)
+        # the vanishing factors, which balance, leave a rational number and a sign
+        A = BigInt(1); B = BigInt(1); negative = s.alternating && isodd(z1 - z0)
+        nh = 0
+        for x in num
+            rem(x, h) == 0 || continue
+            j = x ÷ h; A *= j; nh += 1; iseven(j) && (negative = !negative)
+        end
+        for x in den
+            rem(x, h) == 0 || continue
+            j = x ÷ h; B *= j; nh -= 1; iseven(j) && (negative = !negative)
+        end
+        nh == 0 || throw(ArgumentError("the terms of this sum have different valuations at level $k"))
+        filter!(x -> rem(x, h) != 0, num); filter!(x -> rem(x, h) != 0, den)
+        # [x] = (ζ^x − ζ^(−x)) / (ζ − ζ^(−1)), so an unequal count leaves powers of ζ − ζ^(−1)
+        nn = length(num); nd = length(den)
+        for _ in 1:(nd-nn); push!(num, 1); end
+        for _ in 1:(nn-nd); push!(den, 1); end
+        for x in num; _ring_binomial!(G, tmp, x); end
+        for x in den; _ring_binomial!(L, tmp, x); end
+        if !isone(A)
+            for j in 1:h; MPZ.mul!(G[j], G[j], A); end
+        end
+        if !isone(B)
+            for j in 1:h; MPZ.mul!(L[j], L[j], B); end
+        end
+        # G ← L ± ζ^{w(z1−z0)} G
+        shift = mod(w * (z1 - z0), 2h)
+        @inbounds for j in 0:h-1
+            a = j - shift; a < 0 && (a += 2h)
+            plus = a < h
+            a = plus ? a : a - h
+            t = tmp[j+1]
+            plus != negative ? MPZ.add!(t, L[j+1], G[a+1]) : MPZ.sub!(t, L[j+1], G[a+1])
+        end
+        @inbounds for j in 1:h
+            G[j], tmp[j] = tmp[j], G[j]
+        end
+    end
+    # the remainder modulo Φ_{2h}, which divides ζ^h + 1
+    phi = _level_phi(k); d = length(phi) - 1
+    @inbounds for i in h:-1:d+1
+        c = G[i]
+        iszero(c) && continue
+        for t in 0:d
+            iszero(phi[t+1]) && continue
+            G[i-d+t] -= c * phi[t+1]
+        end
+    end
+    @inbounds for i in 1:d
+        iszero(G[i]) || return false
+    end
+    return true
+end
+
 "Is the value exactly zero at level k (empty, all terms vanishing, or cancelling)?"
 is_zero_at_level(s::FactorialSum, k::Int) = is_zero_at_level(s, k, level_zero_table(k))
 
@@ -247,6 +432,9 @@ function is_zero_at_level(s::FactorialSum, k::Int, tab::LevelZeroTable)
     _, segs = classify_at_level(s, k)
     return _level_exact_zero(s, segs, k)
 end
+
+"Exact confirmation of a sum the screen could not settle."
+_level_confirm_zero(s::FactorialSum, k::Int) = _level_exact_zero(s, last(classify_at_level(s, k)), k)
 
 "Proved zero/nonzero, or `nothing` when exact confirmation is needed. No exact-field work here."
 function _level_zero_screen(s::FactorialSum, k::Int, tab::LevelZeroTable)

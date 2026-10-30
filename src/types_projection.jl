@@ -275,6 +275,9 @@ Base.:/(res::ClassicalResult, x::AbstractFloat) = BigFloat(res) / BigFloat(x)
 
 Base.Float64(res::ClassicalResult) = res.sign * Float64(sqrt(BigFloat(res.sq_val)))
 Base.BigFloat(res::ClassicalResult) = res.sign * sqrt(BigFloat(res.sq_val))
+Base.AbstractFloat(res::ClassicalResult) = Float64(res)
+Base.float(::Type{ClassicalResult}) = Float64
+Base.big(res::ClassicalResult) = BigFloat(res)
 
 function Base.Rational{T}(res::ClassicalResult) where {T <: Integer}
     num, den = numerator(res.sq_val), denominator(res.sq_val)
