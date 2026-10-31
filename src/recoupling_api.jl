@@ -219,6 +219,7 @@ function clear_sieve_caches!()
     empty!(LEVEL_ZERO_TABLES)
     empty!(LEVEL_PHI)
     empty!(LEVEL_RELATIONS)     # qform.jl
+    empty!(LEVEL_FIELDS)        # level_field.jl
     empty!(CLASSICAL_F64_TABLES)
     empty!(CLASSICAL_MOD_TABLES)
     empty!(GENERIC_MOD_TABLES)

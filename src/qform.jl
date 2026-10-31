@@ -243,17 +243,8 @@ function _qform_cost(f::QForm)
                              digits(f.coef) + digits(f.radcoef))
 end
 
-function _qform(s::FactorialSum, k, reduce::Bool, ::Type{R}) where {R}
-    level = k === nothing ? nothing : Int(k)
-    is_empty_sum(s) && return _qform_zero(level)
-    if level !== nothing
-        st, segs = classify_at_level(s, level)
-        st === :pole && throw(ArgumentError("the rule is singular at level $level"))
-        st === :finite || return _qform_zero(level)
-        zs = Int[z for seg in segs for z in seg]
-    else
-        zs = collect(s.zlo:s.zhi)
-    end
+"The largest factorial argument of a rule over the terms `zs`, at least 2."
+function _rule_top(s::FactorialSum, zs::Vector{Int})
     N = 2
     for (n, _) in s.pre
         N = max(N, Int(n))
@@ -261,8 +252,11 @@ function _qform(s::FactorialSum, k, reduce::Bool, ::Type{R}) where {R}
     for f in s.fac, z in (first(zs), last(zs))
         N = max(N, _arg(f, z))
     end
-    raw = zeros(Int, N)
-    # the prefactor squared, as doubled exponents
+    return N
+end
+
+"The prefactor squared, as doubled exponents of [1], …, [N]."
+function _prefactor_exponents(s::FactorialSum, N::Int)
     pre2 = zeros(Int, N)
     for (n, c) in s.pre
         n >= 2 || continue
@@ -272,19 +266,25 @@ function _qform(s::FactorialSum, k, reduce::Bool, ::Type{R}) where {R}
     for i in 3:N
         pre2[i] += pre2[i-1]
     end
-    es = Vector{Vector{Int}}(undef, length(zs)); cs = Vector{R}(undef, length(zs))
-    if level === nothing
-        pre = pre2; prerat = one(R)
-        for (t, z) in enumerate(zs)
-            es[t] = copy(_term_exponents!(raw, s, z))
-            cs[t] = s.alternating && isodd(z) ? -one(R) : one(R)
-        end
-        return _qform_assemble(level, Int(s.sign0), pre, prerat, es, cs)
-    end
-    h = level + 2
+    return pre2
+end
+
+"""
+A rule folded to its level: `(zs, pre, prerat, es, cs)`, the contributing terms, the squared prefactor as exponents
+and a rational, and each term as exponents and a rational. `nothing` when no term contributes.
+"""
+function _level_exponents(s::FactorialSum, level::Int, ::Type{R}) where {R}
+    is_empty_sum(s) && return nothing
+    st, segs = classify_at_level(s, level)
+    st === :pole && throw(ArgumentError("the rule is singular at level $level"))
+    st === :finite || return nothing
+    zs = Int[z for seg in segs for z in seg]
+    N = _rule_top(s, zs); h = level + 2
+    raw = zeros(Int, N)
     lab, neg = _fold_table(N, h)
-    pre, prerat, ps, nhp = _fold_exponents(pre2, h, lab, neg, R)
+    pre, prerat, ps, nhp = _fold_exponents(_prefactor_exponents(s, N), h, lab, neg, R)
     ps < 0 && throw(ArgumentError("the radicand is negative at level $level"))
+    es = Vector{Vector{Int}}(undef, length(zs)); cs = Vector{R}(undef, length(zs))
     for (t, z) in enumerate(zs)
         e, r, ts, nh = _fold_exponents(_term_exponents!(raw, s, z), h, lab, neg, R)
         nhp + 2nh == 0 || throw(ArgumentError("the terms of this rule have different valuations at level $level"))
@@ -292,10 +292,29 @@ function _qform(s::FactorialSum, k, reduce::Bool, ::Type{R}) where {R}
         s.alternating && isodd(z) && (c = -c)
         es[t] = e; cs[t] = c
     end
+    return zs, pre, prerat, es, cs
+end
+
+function _qform(s::FactorialSum, k, reduce::Bool, ::Type{R}) where {R}
+    if k === nothing
+        is_empty_sum(s) && return _qform_zero(nothing)
+        zs = collect(s.zlo:s.zhi)
+        raw = zeros(Int, _rule_top(s, zs))
+        es = [copy(_term_exponents!(raw, s, z)) for z in zs]
+        cs = R[s.alternating && isodd(z) ? -one(R) : one(R) for z in zs]
+        return _qform_assemble(nothing, Int(s.sign0), _prefactor_exponents(s, length(raw)), one(R), es, cs)
+    end
+    level = Int(k); h = level + 2
+    data = _level_exponents(s, level, R)
+    data === nothing && return _qform_zero(level)
+    zs, pre, prerat, es, cs = data
     plain = _qform_assemble(level, Int(s.sign0), pre, prerat, es, cs)
     reduce || return plain
+    iszero(plain) && return plain
+    # terms can cancel by additive relations that no rewriting of the products shows
+    length(plain.terms) > 1 && _level_sum_zero(s, zs, es, cs, h) && return _qform_zero(level)
     rows = _relations_at(h)
-    (isempty(rows) || iszero(plain)) && return plain         # h prime: the folded labels are independent
+    isempty(rows) && return plain                            # h prime: the folded labels are independent
     # Exponents first. Constants are only worth computing for a form that merges terms or reads shorter.
     es2 = copy.(es); pre2r = copy(pre)
     qs = [_reduce_exponents!(e, rows) for e in es2]

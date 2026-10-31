@@ -197,6 +197,36 @@ end
     @test_throws ArgumentError numeric_value(qform(q6j, 1, 1, 1, 1, 1, 1))
 end
 
+@testset "exact level values without Nemo" begin
+    QR = QRecoupling
+    # the value in q-integers agrees with the exact field, at prime and composite h, with and without a root
+    for (k, l) in ((0, ntuple(_ -> 0, 6)), (1, (1//2, 1//2, 0, 1//2, 1//2, 0)), (3, ntuple(_ -> 1, 6)), (5, (1, 1, 1, 2, 1, 1)),
+                   (10, ntuple(_ -> 2, 6)), (11, (1//2, 1, 3//2, 2, 3//2, 1)), (16, (3, 3, 2, 3, 3, 2)),
+                   (30, ntuple(_ -> 3, 6)), (41, ntuple(_ -> 10, 6)), (121, ntuple(_ -> 30, 6)))
+        v = QR.level_value(QR._rule_for(q6j, l...), k)
+        @test float(v) ≈ Float64(numeric_value(q6j(Exact(k), l...))) rtol = 1e-12
+        @test length(v.coeffs) == QR.euler_phi(2(k + 2)) ÷ 2
+    end
+    # [1], …, [d] carry the arithmetic: at k = 10 the value (2√3 − 3)/3 is (2[3] − 5)/3
+    @test QR.level_value(QR._rule_for(q6j, ntuple(_ -> 1, 6)...), 10).coeffs == [-5 // 3, 0 // 1, 2 // 3, 0 // 1]
+    # zeros that only additive relations show, proved without the exact field
+    for (k, l) in ((20, (5//2, 9//2, 5, 4, 5, 11//2)), (22, (2, 3, 3, 5//2, 7//2, 7//2)), (10, (1, 5//2, 5//2, 5//2, 3, 3)))
+        @test iszero(qform(q6j, l...; k = k))
+        @test iszero(QR.level_value(QR._rule_for(q6j, l...), k))
+        @test iszero_at(k, l...)
+    end
+    @test !iszero(qform(q6j, 2, 3, 3, 5//2, 7//2, 7//2; k = 23))
+    # the valuations behind the proof: the norm of [n] is the matching power of its prime
+    for h in (4, 6, 12, 16, 30, 49, 60)
+        F = QR.LevelField(h); as = [a for a in 1:h-1 if gcd(a, 2h) == 1]
+        for n in 2:h÷2
+            l, w = F.valuation[n]
+            @test sum(log(abs(sinpi(a * n / h) / sinpi(a / h))) for a in as) ≈
+                  (l == 0 ? 0.0 : F.d * w * log(l)) atol = 1e-9
+        end
+    end
+end
+
 @testset "display of exact level values" begin
     plain(v) = sprint(show, MIME("text/plain"), v)
     v = q6j(Exact(5), 1, 1, 1, 2, 1, 1)

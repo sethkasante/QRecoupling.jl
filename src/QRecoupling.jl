@@ -51,6 +51,7 @@ include("targets.jl")
 include("qcg.jl")       # quantum Clebsch–Gordan coefficients and the quantum 3j symbol: weighted rules
 include("qcg_columns.jl") # coupling columns by the Casimir recurrence: qcg_matrix and the near-edge tier
 include("qform.jl")     # values written in quantum integers, generic and at a level
+include("level_field.jl") # exact level values in quantum integers, in plain Julia
 
 
 # Export physics tqft and recoupling symbols api
