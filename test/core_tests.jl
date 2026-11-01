@@ -11,6 +11,9 @@ const QR = QRecoupling
     s = q6j(Symbolic(),1,1,1,1,1,1)
     @test s isa QForm && string(s) == "([5] − 1)/[4]!" && s(1) == 1//6
     @test_throws ArgumentError x_form(s)
+    @test occursin("x_form", sprint(showerror, try x_form(s) catch e; e end))
+    # what needs Nemo still explains itself without it
+    VERSION >= v"1.11" && @test all(n -> Docs.hasdoc(QRecoupling, n), filter(!=(:QRecoupling), names(QRecoupling)))
     # exact values are forms and need no backend: only radicals and polynomials do
     v = q6j(Exact(10),1,1,1,1,1,1)
     @test v isa QForm && float(v) ≈ q6j(Level(10),1,1,1,1,1,1)

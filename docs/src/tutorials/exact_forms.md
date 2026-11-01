@@ -129,8 +129,8 @@ Generic square roots specify an algebraic expression. To evaluate with the packa
 QForm
 x_form
 XValue
-ExactX
-ExactXSum
+QRecoupling.ExactX
+QRecoupling.ExactXSum
 radical
 NoRadical
 numeric_value

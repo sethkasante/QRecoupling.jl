@@ -12,7 +12,7 @@
 | `q6j(Exact(k), js...)` was an `ExactX`, and needed Nemo | A form at the level, with no backend. `==`, `iszero` and arithmetic are exact |
 | `q3j` and `qcg` had no `Exact(k)` or `Symbolic()` | Both write them with their powers of q |
 | `v.x_value`, `v.rad` | `QRecoupling.xpolynomial(v)`, `QRecoupling.radicand(v)`, `radical(v)`, with Nemo |
-| `ExactXSum(k)` to accumulate a sum | `sum`, or start from `zero(v)` |
+| `ExactXSum(k)` to accumulate a sum | `sum`, or start from `zero(v)`. `ExactX` and `ExactXSum` are no longer exported; `QRecoupling.exact_x` still returns them, with Nemo |
 | `isempty(residual)` | `iszero(residual)`, or `==` |
 
 `q6j(js...; k = k, exact = true)` is the same as `q6j(Exact(k), js...)`, and `q6j(js...; exact = true)` the same as `q6j(Exact(), js...)`.

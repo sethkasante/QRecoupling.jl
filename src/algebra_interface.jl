@@ -36,15 +36,30 @@ end
 _missing_algebra(name) = throw(ArgumentError("$name requires the optional Nemo backend. Install Nemo and load it with `using Nemo`. Numerical values, `Exact()` and `Exact(k)` do not require it."))
 _qfact_exactx(args...; kwargs...) = _missing_algebra(:Exact)
 exact_x(args...; kwargs...) = _missing_algebra(:exact_x)
-generic_value(args...; kwargs...) = _missing_algebra(:generic_value)
+generic_value(args...; kwargs...) = _missing_algebra(:x_form)
 generic_sixj(args...; kwargs...) = _missing_algebra(:generic_sixj)
+"""
+    radical(v; kwargs...)
+
+A value at a level in nested square roots, where they exist. It needs Nemo: load it with `using Nemo`.
+"""
 radical(args...; kwargs...) = _missing_algebra(:radical)
 radical_form(args...; kwargs...) = _missing_algebra(:radical_form)
 radical_levels(args...; kwargs...) = _missing_algebra(:radical_levels)
 has_radical_form(args...; kwargs...) = _missing_algebra(:has_radical_form)
+"""
+    prove_identity(lhs, rhs; kwargs...)
+
+A proof that two expressions in x = q + 1/q agree at every q. It needs Nemo: load it with `using Nemo`.
+"""
 prove_identity(args...; kwargs...) = _missing_algebra(:prove_identity)
 xpolynomial(args...; kwargs...) = _missing_algebra(:xpolynomial)
 radicand(args...; kwargs...) = _missing_algebra(:radicand)
+"""
+    phi_form(f; kwargs...)
+
+A formula expanded in q and factored over the cyclotomic polynomials. It needs Nemo: load it with `using Nemo`.
+"""
 phi_form(args...; kwargs...) = _missing_algebra(:phi_form)
 splits_completely(args...; kwargs...) = _missing_algebra(:splits_completely)
 xvalue(rad, num) = _missing_algebra(:xvalue)

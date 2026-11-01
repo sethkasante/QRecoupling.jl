@@ -63,7 +63,7 @@ export Level, Exact, At, Classical, Symbolic
 
 # exact values in x = q + 1/q: generic q, and identities proved for every level at once
 export prove_identity, x_form, XValue, phi_form
-export ExactX, ExactXSum, RadExpr, NoRadical, radical, numeric_value
+export RadExpr, NoRadical, radical, numeric_value
 export QForm
 
 # structural queries and batches

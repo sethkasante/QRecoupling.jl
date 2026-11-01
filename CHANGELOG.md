@@ -10,6 +10,7 @@
 - Fixed: equal `QForm`, `LevelValue`, `ExactX` and `SymbolicValue` values had different hashes, so `unique` and `Dict` kept duplicates, and hashing a `ClassicalResult` threw. `isequal` between a form and a number is false, since they have no hash in common.
 - `==` between a form and a float is exact, where it was always false. `Exact` rejects invalid levels when it is built. `twist(Exact(), j)` is 1 at q = 1, where it was a phase.
 - Nemo is optional, and needed only for nested radicals and expanded polynomials.
+- `ExactX` and `ExactXSum` are no longer exported, since `Exact(k)` no longer returns them. They remain as `QRecoupling.ExactX` and `QRecoupling.ExactXSum`, the types of `QRecoupling.exact_x`.
 - Quantum-integer displays for exact values, including native level zero checks. Polynomial views remain explicit.
 - Forms cover `qcg` and `q3j`: powers of q are printed in front and on each term, reduced by q^h = −1 at a level, where these values are complex.
 - The relations at a level are built from their distinct generators and kept reduced, with checked arithmetic. Levels such as k = 2000 no longer stall, and tables that took 384 ms at k = 1000 take 9 ms. At very smooth levels long rows are left out, so a form can stay longer there, and values are never affected.
