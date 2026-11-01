@@ -918,19 +918,28 @@ function _analytic_q(q::Number)
 end
 
 """
+A value at real or complex q in the type asked for. `T` is a floor at Float64 and above, so a wider `q` keeps its precision.
+Narrower types round the Float64 evaluation, which keeps its accuracy, since the kernels here do not run below it.
+"""
+function _analytic_result(::Type{T}, v) where {T}
+    R = real(T)
+    (R === Float32 || R === Float16) && return (T <: Complex || v isa Complex) ? Complex{R}(v) : R(v)
+    return convert(promote_type(T, typeof(v)), v)
+end
+
+"""
     analytic_value(s, q, T; workspace) -> value
 
 The same evaluation, with `T` as a **floor** on the working precision and output type: the result type is
 `promote_type(T, typeof(value))`, so `BigFloat` widens `q`, and a `Complex{BigFloat}` or complex `q` is never
-narrowed by the default `T = Float64`.
+narrowed by the default `T = Float64`. A `T` below Float64 rounds the result to it.
 """
 function analytic_value(s::FactorialSum,q::Number,::Type{T};workspace=nothing,labels=nothing,
                         weight::Tuple{Int,Int}=(0,0),near_edge=nothing) where {T}
     R = real(T)
     qq = (R === BigFloat && !(real(typeof(float(q*1.0))) === BigFloat)) ?
          (q isa Real ? BigFloat(q) : Complex{BigFloat}(q)) : q
-    v = analytic_value(s,qq;workspace=workspace,labels=labels,weight=weight,near_edge=near_edge)
-    return convert(promote_type(T,typeof(v)),v)
+    return _analytic_result(T, analytic_value(s,qq;workspace=workspace,labels=labels,weight=weight,near_edge=near_edge))
 end
 
 """

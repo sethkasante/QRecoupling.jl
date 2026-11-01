@@ -157,7 +157,9 @@ The default is the classical value. `rmatrix(Symbolic(), ...)` returns a `QPhase
 At a level, `exact=true` retains the exact `QPhase` representation.
 Numerical level phases are complex even when `T` or `Level(k; T=...)` names a real type.
 """
-function rmatrix(j1::Spin, j2::Spin, j3::Spin; 
+function rmatrix end
+
+Base.@constprop :aggressive function rmatrix(j1::Spin, j2::Spin, j3::Spin; 
                  k=nothing, q=nothing, exact::Bool=false, T::Type=ComplexF64)
     
     q = _evaluation_q(k,q,exact)
@@ -207,6 +209,8 @@ end
     k === nothing || return Complex{real(float(T))}
     (q === nothing || _is_classical(q)) && return T
     Q = typeof(float(q))
+    R = real(T)
+    (R === Float32 || R === Float16) && return T <: Complex || !(q isa Real) || q < 0 ? Complex{R} : R
     return promote_type(T, q isa Real && q < 0 ? Complex{real(Q)} : Q)
 end
 

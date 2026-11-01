@@ -9,6 +9,8 @@
 - A first call no longer compiles for seconds. `q6j(Level(10), …)` took 4.7 s and takes 1 ms, through a precompile workload using PrecompileTools, at the cost of about 0.05 s more at `using` and 30 s more when the package is installed.
 - Fixed: equal `QForm`, `LevelValue`, `ExactX` and `SymbolicValue` values had different hashes, so `unique` and `Dict` kept duplicates, and hashing a `ClassicalResult` threw. `isequal` between a form and a number is false, since they have no hash in common.
 - `==` between a form and a float is exact, where it was always false. `Exact` rejects invalid levels when it is built. `twist(Exact(), j)` is 1 at q = 1, where it was a phase.
+- Fixed: `qdim(j; k)` above k/2 gives zero, as `Exact(k)` and every symbol do, where it returned [2j+1]. `T = Float32` is respected at real and complex q, where it was silently ignored.
+- Numerical calls infer their result: a level gives `Float64`, or `ComplexF64` for `qcg` and `q3j`, and q = 1 gives `Float64`, with no exact type in the union. At a real q the result can still be `Float64` or `ComplexF64`, since negative q is complex.
 - Nemo is optional, and needed only for nested radicals and expanded polynomials.
 - `ExactX` and `ExactXSum` are no longer exported, since `Exact(k)` no longer returns them. They remain as `QRecoupling.ExactX` and `QRecoupling.ExactXSum`, the types of `QRecoupling.exact_x`.
 - Quantum-integer displays for exact values, including native level zero checks. Polynomial views remain explicit.

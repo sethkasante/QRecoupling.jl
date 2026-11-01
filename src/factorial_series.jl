@@ -52,7 +52,9 @@ complex q scaled ratios with adaptive precision; `workspace` reuses fixed-q tabl
 must be nonnegative, and individually polar terms are rejected. `qeval(Symbolic(), rule)` returns the
 formula as a [`QForm`](@ref); with Nemo, `x_form` expands it.
 """
-function qeval(s::FactorialSum; k=nothing,q=nothing,exact::Bool=false,
+function qeval end
+
+Base.@constprop :aggressive function qeval(s::FactorialSum; k=nothing,q=nothing,exact::Bool=false,
                T::Type{TT}=Float64,workspace=nothing) where {TT}
     _validate_rule(s)
     q = _evaluation_q(k,q,exact)
@@ -63,8 +65,8 @@ function qeval(s::FactorialSum; k=nothing,q=nothing,exact::Bool=false,
         kk=Int(k)
         kk>=0 || throw(DomainError(k,"level must be nonnegative"))
         exact && return qform(s; k = kk)       # see `_level_value`
-        return value_at_level(s,kk,T;workspace=workspace,
-                             fallback=()->project_discrete(_factorial_dcr(s),kk,T))
+        return convert(T, value_at_level(s,kk,T;workspace=workspace,
+                             fallback=()->project_discrete(_factorial_dcr(s),kk,T)))
     elseif !isnothing(q)
         exact && !_is_classical(q) && throw(ArgumentError("exact rule evaluation requires k or q=1"))
         return analytic_value(s,q,T;workspace=workspace)

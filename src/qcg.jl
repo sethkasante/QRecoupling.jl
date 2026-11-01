@@ -357,7 +357,9 @@ each `Ψ_d` rooted separately; Δ(F) = F⊗K + K⁻¹⊗F, with F the transpose 
 The value is the 3j rule with term z weighted by q^{-z(j₁+j₂+j+1)} and the whole by
 q^{½(j₁+j₂-j)(j₁+j₂+j+1) + j₁m₂ - j₂m₁}, evaluated by the same scaled, escalating kernel. See also [`q3j`](@ref).
 """
-function qcg(j1::Spin, m1::Spin, j2::Spin, m2::Spin, j::Spin, m::Spin = m1 + m2;
+function qcg end
+
+Base.@constprop :aggressive function qcg(j1::Spin, m1::Spin, j2::Spin, m2::Spin, j::Spin, m::Spin = m1 + m2;
              k = nothing, q = nothing, exact::Bool = false, T::Type{TT} = Float64,
              workspace = nothing) where {TT}
     q = _evaluation_q(k, q, exact)
@@ -391,7 +393,9 @@ From v0.5, the deformation-dependent weights are included; classical values are 
 `Symbolic()` and `Exact(k)` write the symbol in quantum integers and powers of q, and `Exact()` or `exact = true` gives
 the exact classical value.
 """
-function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = -m1 - m2;
+function q3j end
+
+Base.@constprop :aggressive function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = -m1 - m2;
              k = nothing, q = nothing, exact::Bool = false, T::Type{TT} = Float64,
              workspace = nothing) where {TT}
     q = _evaluation_q(k, q, exact)

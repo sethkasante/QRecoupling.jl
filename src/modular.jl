@@ -108,7 +108,9 @@ self-braiding of a self-dual object through the vacuum. With `exact = true` the 
 a generic parameter. It is the one place the modular layer has a generic-q value at all — `smatrix`,
 `tmatrix` and the rest are statements about a modular category and need the level.
 """
-function twist(j::Spin; k = nothing, q = nothing, exact::Bool = false, T::Type = ComplexF64)
+function twist end
+
+Base.@constprop :aggressive function twist(j::Spin; k = nothing, q = nothing, exact::Bool = false, T::Type = ComplexF64)
     q = _evaluation_q(k, q, exact)
     k isa AbstractVector && return [twist(j;k=kk,exact=exact,T=T) for kk in k]
     _check_phase_q(q)

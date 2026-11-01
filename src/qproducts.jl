@@ -48,15 +48,14 @@ function _product_value(pairs, k, q, exact::Bool, ::Type{T}; workspace = nothing
     if k === nothing && !exact && !_is_classical(q)
         # The monomial projector can overflow q² before a representable answer
         # is formed. Reuse the scaled rule path for non-machine inputs and the
-        # cases declined by the fast product kernels; T remains a precision floor.
+        # cases declined by the fast product kernels.
         s = pairs === nothing ? _ZERO_PRODUCT_RULE : _qfact_rule(pairs)
         if q in (-1, im, -im)
             # Preserve the legacy projector's treatment of special roots,
             # which the generic summation evaluator deliberately rejects.
             R = real(T)
             qq = R === BigFloat ? (q isa Real ? BigFloat(q) : Complex{BigFloat}(q)) : q
-            v = project_analytic(_pairs_mono(pairs), qq)
-            return convert(promote_type(T,typeof(v)),v)
+            return _analytic_result(T, project_analytic(_pairs_mono(pairs), qq))
         end
         return analytic_value(s,q,T;workspace=workspace)
     end
@@ -381,6 +380,12 @@ function _qbinomial_pairs(n::Int, m::Int)
 end
 
 """
+What a Float64 target lands on: a Float64 at a level or at q = 1, and at any other q a Float64 or, at complex or negative q, a
+ComplexF64. It is read before `q` takes its default, and a constant `k` or `q` folds it away.
+"""
+@inline _float_target(k, q) = (k isa Integer || (k === nothing && (q === nothing || q === 1))) ? Float64 : Union{Float64,ComplexF64}
+
+"""
     qint(n, p = 1; k, q, exact, T)
 
 The q-integer `[n]^p`, classical by default — `[n] = (qⁿ − q⁻ⁿ)/(q − q⁻¹)`, with the Turaev–Viro
@@ -401,14 +406,14 @@ function qint end
 
 Base.@constprop :aggressive @inline function qint(n::Integer, p::Integer = 1; k = nothing, q = nothing, exact::Bool = false,
               T::Type{TT} = Float64, workspace = nothing) where {TT}
+    R = _float_target(k, q)
     q = _evaluation_q(k, q, exact)
     if !exact && T === Float64 && !(k isa AbstractVector) &&
        (q === nothing || real(typeof(float(q))) !== BigFloat)
         v = _qnumber_float(:int, Int(n), Int(p), k, q)
-        v === nothing || return v
-        # a Float64 target lands on a Float64 or, at complex q, a ComplexF64: saying so keeps the
-        # return unboxed, since the general route below is not inferable
-        return _product_value(_qint_pairs(Int(n), Int(p)), k, q, exact, T; workspace = workspace)::Union{Float64,ComplexF64}
+        v === nothing || return v::R
+        # saying what a Float64 target lands on keeps the return unboxed, since the general route below is not inferable
+        return _product_value(_qint_pairs(Int(n), Int(p)), k, q, exact, T; workspace = workspace)::R
     end
     return _product_value(_qint_pairs(Int(n), Int(p)), k, q, exact, T; workspace = workspace)
 end
@@ -423,14 +428,14 @@ function qfact end
 
 Base.@constprop :aggressive @inline function qfact(n::Integer, p::Integer = 1; k = nothing, q = nothing, exact::Bool = false,
                T::Type{TT} = Float64, workspace = nothing) where {TT}
+    R = _float_target(k, q)
     q = _evaluation_q(k, q, exact)
     if !exact && T === Float64 && !(k isa AbstractVector) &&
        (q === nothing || real(typeof(float(q))) !== BigFloat)
         v = _qnumber_float(:fact, Int(n), Int(p), k, q)
-        v === nothing || return v
-        # a Float64 target lands on a Float64 or, at complex q, a ComplexF64: saying so keeps the
-        # return unboxed, since the general route below is not inferable
-        return _product_value(_qfact_pairs(Int(n), Int(p)), k, q, exact, T; workspace = workspace)::Union{Float64,ComplexF64}
+        v === nothing || return v::R
+        # saying what a Float64 target lands on keeps the return unboxed, since the general route below is not inferable
+        return _product_value(_qfact_pairs(Int(n), Int(p)), k, q, exact, T; workspace = workspace)::R
     end
     return _product_value(_qfact_pairs(Int(n), Int(p)), k, q, exact, T; workspace = workspace)
 end
@@ -445,14 +450,15 @@ function qbinomial end
 
 Base.@constprop :aggressive @inline function qbinomial(n::Integer, m::Integer; k = nothing, q = nothing, exact::Bool = false,
                    T::Type{TT} = Float64, workspace = nothing) where {TT}
+    R = _float_target(k, q)
     q = _evaluation_q(k, q, exact)
     if !exact && T === Float64 && !(k isa AbstractVector) &&
        (q === nothing || real(typeof(float(q))) !== BigFloat)
         v = _qnumber_float(:binomial, Int(n), Int(m), k, q)
-        v === nothing || return v
+        v === nothing || return v::R
         # a Float64 target lands on a Float64 or, at complex q, a ComplexF64: saying so keeps the
         # return unboxed, since the general route below is not inferable
-        return _product_value(_qbinomial_pairs(Int(n), Int(m)), k, q, exact, T; workspace = workspace)::Union{Float64,ComplexF64}
+        return _product_value(_qbinomial_pairs(Int(n), Int(m)), k, q, exact, T; workspace = workspace)::R
     end
     return _product_value(_qbinomial_pairs(Int(n), Int(m)), k, q, exact, T; workspace = workspace)
 end

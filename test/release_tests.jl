@@ -605,6 +605,54 @@ end
     @test_throws ArgumentError q6j(Exact(10), js...)(0.8)
 end
 
+@testset "numerical calls say what they return" begin
+    # a level and q = 1 infer one concrete type through a level known only at run time
+    symbols = ((q6j, (1, 1, 1, 1, 1, 1), Float64), (fsymbol, (1, 1, 1, 1, 1, 1), Float64), (gsymbol, (1, 1, 1, 1, 1, 1), Float64),
+               (QR.tetrahedron, (1, 1, 1, 1, 1, 1), Float64), (QR.q3j_factorial, (1, 1, 2, 0, 0, 0), Float64), (QR.theta_value, (1, 1, 1), Float64),
+               (qcg, (1, 0, 1, 0, 2, 0), ComplexF64), (q3j, (1, 1, 2, 0, 0, 0), ComplexF64), (qdim, (1,), Float64), (qint, (5,), Float64),
+               (qfact, (4,), Float64), (qbinomial, (6, 2), Float64), (rmatrix, (1, 1, 1), ComplexF64), (twist, (1,), ComplexF64))
+    for (f, a, E) in symbols
+        target(k) = f(Level(k), a...); keyword(k) = f(a...; k = k); classical() = f(a...)
+        @test only(Base.return_types(target, (Int,))) === E
+        @test only(Base.return_types(keyword, (Int,))) === E
+        @test isconcretetype(only(Base.return_types(classical, ())))
+        @test f(Level(10), a...) isa E && f(a...; k = 10) === f(Level(10), a...)
+        # at real q only a positive value is real, so a union is the honest answer, and the exact types stay out of it
+        generic(q) = f(At(q), a...)
+        @test only(Base.return_types(generic, (Float64,))) <: Union{Float64,ComplexF64}
+    end
+
+    # the element type is respected wherever a number is computed
+    for (f, a) in ((q6j, (1, 1, 1, 1, 1, 1)), (fsymbol, (1, 1, 1, 1, 1, 1)), (gsymbol, (1, 1, 1, 1, 1, 1)), (QR.tetrahedron, (1, 1, 1, 1, 1, 1)),
+                   (QR.theta_value, (1, 1, 1)), (qdim, (1,)), (qint, (5,)), (qfact, (4,)), (qbinomial, (6, 2)))
+        for (kw, R) in (((;), Float32), ((; k = 10), Float32), ((; q = 0.8), Float32), ((; q = 0.8f0), Float32), ((; q = 0.8 + 0.2im), ComplexF32), ((; q = -0.8), ComplexF32))
+            v = f(a...; kw..., T = Float32)
+            @test v isa R
+            @test v ≈ f(a...; kw...) rtol = 1e-6
+        end
+        @test f(a...; q = 0.8, T = BigFloat) isa BigFloat
+        @test f(At(big(0.8)), a...) isa BigFloat                      # a wider q keeps its precision
+    end
+    for (kw, R) in (((;), Float32), ((; k = 10), ComplexF32), ((; q = 0.8), Float32), ((; q = 0.8 + 0.2im), ComplexF32))
+        @test qcg(1, 0, 1, 0, 2, 0; kw..., T = Float32) isa R && q3j(1, 1, 2, 0, 0, 0; kw..., T = Float32) isa R
+    end
+    @test rmatrix(1, 1, 1; q = 0.8, T = ComplexF32) isa ComplexF32 && twist(1; q = 0.8, T = ComplexF32) isa ComplexF32
+    s = QR._rule_for(q6j, 1, 1, 1, 1, 1, 1)
+    @test qeval(s; q = 0.8, T = Float32) isa Float32 && qeval(s; k = 10, T = Float32) isa Float32
+    rule_level(k) = qeval(s; k = k); rule_target(k) = qeval(Level(k), s)
+    @test only(Base.return_types(rule_level, (Int,))) === Float64 && only(Base.return_types(rule_target, (Int,))) === Float64
+
+    # a label above k/2 is not in the theory: every engine and every symbol agree it gives zero
+    @test qdim(Level(4), 3) == 0 && qdim(3; k = 4) == 0 && qdim(3; k = 4, T = Float32) isa Float32
+    @test iszero(qdim(Exact(4), 3)) && iszero(qdim(3; k = 4, exact = true)) && q6j(Level(4), 3, 3, 0, 3, 3, 0) == 0
+    @test qdim(Level(4), 2) ≈ 1 && float(qdim(Exact(4), 2)) ≈ 1 && qdim(Level(4), 1) ≈ float(qdim(Exact(4), 1))
+    @test qint(Level(4), 7) ≈ -1                                     # a q-integer has no label to reject
+    for k in 0:12, j in 0:1//2:k//2+2
+        @test qdim(Level(k), j) ≈ float(qdim(Exact(k), j)) atol = 1e-13
+    end
+    @test qdim(1; k = 2:4) == [qdim(Level(2), 1), qdim(Level(3), 1), qdim(Level(4), 1)] && qdim(Exact(2:3), 1) isa Vector{QForm}
+end
+
 @testset "equality at a level, read at places" begin
     # against the dense kernel, on pairs close enough to be equal, with both signs, and with numbers
     for (k, top) in ((4, 2), (10, 5//2), (16, 5//2), (18, 5//2))
