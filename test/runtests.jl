@@ -24,8 +24,8 @@ const ONES = (1, 1, 1, 1, 1, 1)
         @test iszero(v-v) && isone(v*inv(v))
 
         s = q6j(Symbolic(), ONES...)
-        @test s isa SymbolicValue && x_form(s) isa XValue
-        @test qeval(Exact(), s) == 1//6
+        @test s isa QForm && s.k === nothing && x_form(s) isa XValue
+        @test s(1) == 1//6 && qeval(Exact(), QRecoupling._rule_for(q6j, ONES...)) == 1//6
         @test qeval(s; q=0.8) ≈ formula(0.8+inv(0.8)) rtol=1e-13
     end
 

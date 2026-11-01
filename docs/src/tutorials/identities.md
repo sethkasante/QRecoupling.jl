@@ -47,12 +47,12 @@ This verifies one admissible coefficient identity, not the full theorem for arbi
 
 ## Two values at every q
 
-`==` between two `Exact()` values decides equality at every q, without expanding either side. Here is a q-Vandermonde sum against one binomial.
+`==` between two `Symbolic()` values decides equality at every q, without expanding either side. Here is a q-Vandermonde sum against one binomial.
 
 ```@example identities
-vandermonde = qform(FactorialSum(0:3; prefactor = (3 => 1, 4 => 1), factors = ((1, 0, -2), (-1, 3, -1), (-1, 4, -1))); weight = (7, -24))
-@assert vandermonde == qbinomial(Exact(), 7, 3) # hide
-(vandermonde, qbinomial(Exact(), 7, 3), vandermonde == qbinomial(Exact(), 7, 3))
+vandermonde = QRecoupling.qform(FactorialSum(0:3; prefactor = (3 => 1, 4 => 1), factors = ((1, 0, -2), (-1, 3, -1), (-1, 4, -1))); weight = (7, -24))
+@assert vandermonde == qbinomial(Symbolic(), 7, 3) # hide
+(vandermonde, qbinomial(Symbolic(), 7, 3), vandermonde == qbinomial(Symbolic(), 7, 3))
 ```
 
 ## Prove a generic identity in x

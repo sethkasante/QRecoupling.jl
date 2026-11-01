@@ -29,22 +29,22 @@ symbolic = q6j(Symbolic(), 1, 1, 1, 1, 1, 1)
 x_form(symbolic)
 ```
 
-Symbolic construction and display retain the factorial rule without carrying out its sum. `x_form(symbolic)` explicitly expands it in x; large expanded formulas have a bounded display.
+`Symbolic()` writes the formula in quantum integers without carrying out its sum, and `x_form(symbolic)` explicitly expands it in x, which needs Nemo.
 
 ## Choose the calculation
 
 | Task | Interface | Result |
 |:--|:--|:--|
 | Classical angular momentum | `q6j(js...)` | Numerical q = 1 value |
-| Exact value at every q | `q6j(Exact(), js...)` | Quantum integers; `classical` gives the rational at q = 1 |
+| Exact classical value | `q6j(Exact(), js...)` | A sign and a rational under a root |
 | Root of unity | `q6j(Level(k), js...)` | Numerical q = exp(iπ/(k+2)) value |
-| Exact level value | `q6j(Exact(k), js...)` | Quantum integers, simplified, with zeros proved |
+| Exact level value | `q6j(Exact(k), js...)` | Quantum integers, with zeros and equality proved |
 | Real or complex deformation | `q6j(At(q), js...)` | Adaptive numerical evaluation |
-| Polynomials in x | `q6j(Symbolic(), js...)` | Rule-backed x-form, expanded by `x_form` with Nemo |
+| Formula at every q | `q6j(Symbolic(), js...)` | Quantum integers; `f(q)` evaluates it, and `x_form` expands it with Nemo |
 | Whole fusion transformation | `fmatrix(a,b,c,d; k=k)` | Matrix and its row/column labels |
 | Finite factorial series | `FactorialSum(...)`, `qeval(...)` | The same evaluation targets |
 
-Quantum CG and 3j coefficients support all of these except `Symbolic()`. Their exact values carry powers of q.
+Quantum CG and 3j coefficients support all of these. Their formulas carry powers of q.
 
 ## Why use it?
 

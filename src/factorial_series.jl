@@ -49,8 +49,8 @@ end
 Evaluate a finite factorial rule, classically when no target is supplied (`k` and `q` are exclusive).
 Classical and level values use ratio kernels, exact classical values integer arithmetic, and real or
 complex q scaled ratios with adaptive precision; `workspace` reuses fixed-q tables. Factorial arguments
-must be nonnegative, and individually polar terms are rejected. `qeval(Symbolic(), rule)` returns a
-`SymbolicValue` retaining the rule; use `x_form` to expand it explicitly.
+must be nonnegative, and individually polar terms are rejected. `qeval(Symbolic(), rule)` returns the
+formula as a [`QForm`](@ref); with Nemo, `x_form` expands it.
 """
 function qeval(s::FactorialSum; k=nothing,q=nothing,exact::Bool=false,
                T::Type{TT}=Float64,workspace=nothing) where {TT}

@@ -51,6 +51,10 @@ xvalue(rad, num) = _missing_algebra(:xvalue)
 xvalue(rad, num, den) = _missing_algebra(:xvalue)
 ExactXSum(k) = _missing_algebra(:ExactXSum)
 function x_form end
+
+"Largest generic polynomial the display of an `XValue` writes out, and its length."
+const GENERIC_MAX_DEGREE = 16
+const GENERIC_MAX_CHARS = 120
 function numeric_value end
 Base.zero(::Type{ExactX}, k) = _missing_algebra(:Exact)
 

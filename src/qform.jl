@@ -24,11 +24,11 @@
 """
     QForm
 
-A value written in q-integers, as returned by `Exact()`, `Exact(k)` and [`qform`](@ref).
+A value written in q-integers, as returned by `Symbolic()` and `Exact(k)`.
 
-A generic form holds at every q. `f(q)` evaluates it at a real positive `q`, and used as a number it means its value at
-q = 1: [`classical`](@ref) gives that exactly, and `==` with a number, `float`, `numeric_value` and arithmetic read it.
-Between two forms `==` means equal at every q, decided exactly.
+A generic form, from `Symbolic()`, is a function of q and has no value of its own. `f(q)` evaluates it at any q that `At`
+takes, and `f(1)` gives its value at q = 1 exactly. `==` and `iszero` mean at every q, decided exactly, whether the other
+side is a form or a number. `float`, `numeric_value` and arithmetic need a value of q, and say so.
 
 A form at a level is one number, complex when it carries powers of q. `float` and `numeric_value` give it, and
 `==`, `iszero` and arithmetic are exact.
@@ -196,23 +196,6 @@ function _generic_equal(f::QWritten, g::QWritten)
     (iszero(f) || iszero(g)) && return iszero(f) && iszero(g)
     (f.rad == g.rad && f.radcoef == g.radcoef && iseven(f.qpow - g.qpow)) || return false
     return _generic_sum_vanishes(vcat(_generic_terms(f, (f.qpow - g.qpow) ÷ 2), _generic_terms(g, 0, -1)))
-end
-
-"""
-    classical(f::QForm) -> ClassicalResult
-
-The value of a generic form at q = 1, exactly: a sign and the rational under the root. It compares with rationals and
-integers, and converts with `Rational` when it is one.
-
-```julia
-classical(q6j(Exact(), 1, 1, 1, 1, 1, 1))          # 1//6
-classical(q3j(Exact(), 2, 2, 0, 1, -1, 0))         # -√(1//5)
-```
-"""
-function classical(f::QForm)
-    f.k === nothing || throw(ArgumentError("this form is at level $(f.k), and has no value at q = 1"))
-    f.rule === nothing && return zero(ClassicalResult)
-    return classical_exact(f.rule)
 end
 
 # ---- the relations at a level ----
@@ -701,8 +684,6 @@ function _qform_assemble(level, sign::Int, pre::Vector{Int}, prerat::R, es::Vect
     return QWritten{R}(level, sign, c, out, under, rad, terms, qpow, powers)
 end
 
-qform(v::SymbolicValue; kw...) = qform(v.rule; kw...)
-
 function qform(f::Function, args...; k = nothing, reduce::Bool = true)
     (f === qcg || f === q3j) && return _qform_weighted(f, k, reduce, args...)
     k !== nothing && !_admissible_at(f, Int(k), args...) && return _qform_zero(Int(k))
@@ -742,13 +723,15 @@ end
 
 _qform_value(f::QForm, args...) = _qform_value(_written(f), args...)
 
-function (f::QForm)(q::Real)
+function (f::QForm)(q::Number)
     f.k === nothing || throw(ArgumentError("this form is at level $(f.k); use `numeric_value` or `float`"))
-    q > 0 || throw(DomainError(q, "a QForm is evaluated at positive real q"))
-    Q = float(q)
+    if q isa Union{Integer,Rational} && isone(q)         # an exact 1 gives the exact value
+        return f.rule === nothing ? zero(ClassicalResult) : classical_exact(f.rule)
+    end
+    Q = float(q); R = real(typeof(Q))
     (f.rule === nothing || is_empty_sum(f.rule)) && return zero(Q)
-    f.weight == (0, 0) && return qeval(f.rule; q = Q, T = typeof(Q))
-    return isone(Q) ? classical_value(f.rule, typeof(Q)) : analytic_value(f.rule, Q, typeof(Q); weight = f.weight)
+    f.weight == (0, 0) && return qeval(f.rule; q = Q, T = R)
+    return isone(Q) ? classical_value(f.rule, R) : analytic_value(f.rule, Q, R; weight = f.weight)
 end
 
 "The form as written at its level, in the current precision."
@@ -758,13 +741,15 @@ function _qform_level(f::QForm)
     return _qform_value(_written(f), n -> sinpi(BigFloat(n) / h) / sinpi(inv(BigFloat(h))), a -> cispi(BigFloat(a) / (2h)))
 end
 
+const _NO_VALUE = "a generic form holds at every q and has no single value: use `f(q)`, or `f(1)` for the exact value at q = 1"
+
 "Round a value at a level to the current precision. Weighted values are complex."
 _round_level(v::Real) = BigFloat(v)
 _round_level(v::Complex) = complex(BigFloat(real(v)), BigFloat(imag(v)))
 
 function numeric_value(f::QForm; bits::Integer = precision(BigFloat))
     bits > 0 || throw(ArgumentError("bits must be positive"))
-    f.k === nothing && return numeric_value(classical(f); bits = bits)
+    f.k === nothing && throw(ArgumentError(_NO_VALUE))
     iszero(f) && return setprecision(() -> zero(BigFloat), BigFloat, Int(bits))
     v = setprecision(BigFloat, Int(bits) + 32) do
         f.weight == (0, 0) && return qeval(f.rule; k = f.k, T = BigFloat)
@@ -782,7 +767,6 @@ Base.ComplexF64(f::QForm) = ComplexF64(numeric_value(f; bits = 128))
 Base.convert(::Type{T}, f::QForm) where {T<:Union{AbstractFloat,Complex{<:AbstractFloat}}} = T(numeric_value(f; bits = 128))
 Base.BigFloat(f::QForm) = numeric_value(f)
 Base.big(f::QForm) = BigFloat(f)
-Base.Rational(f::QForm) = Rational(classical(f))
 Base.isapprox(f::QForm, g::QForm; kw...) = isapprox(float(f), float(g); kw...)
 Base.isapprox(f::QForm, x::Number; kw...) = isapprox(float(f), x; kw...)
 Base.isapprox(x::Number, f::QForm; kw...) = isapprox(x, float(f); kw...)
@@ -892,20 +876,12 @@ function Base.show(io::IO, f::QForm)
     f.k === nothing || print(io, "   (k = ", f.k, isempty(w.powers) && iszero(w.qpow) ? ")" : ", q = e^{iπ/$(f.k + 2)})")
 end
 
-"The longest classical value that is printed beside a form."
-const QFORM_SHOWN_VALUE = 40
-
-"The form, with the number it stands for beside it: its value at q = 1, or its value at its level."
+"The form, with its value beside it when it is at a level."
 function Base.show(io::IO, ::MIME"text/plain", f::QForm)
     show(io, f)
-    iszero(_written(f)) && return
-    if f.k === nothing
-        v = replace(sprint(show, classical(f)), "-" => "−", "//1" => "", "//" => "/")
-        length(v) <= QFORM_SHOWN_VALUE && print(io, "   (", endswith(v, "/1") ? v[1:end-2] : v, " at q = 1)")
-    else
-        v = float(f)
-        print(io, "   ≈ ", replace(string(v isa Complex ? complex(round(real(v); sigdigits = 7), round(imag(v); sigdigits = 7)) : round(v; sigdigits = 7)), "-" => "−"))
-    end
+    (f.k === nothing || iszero(_written(f))) && return
+    v = float(f)
+    print(io, "   ≈ ", replace(string(v isa Complex ? complex(round(real(v); sigdigits = 7), round(imag(v); sigdigits = 7)) : round(v; sigdigits = 7)), "-" => "−"))
 end
 
 
@@ -919,3 +895,28 @@ function _q_sum_str(terms; most::Int)
     scale = top // bot
     return _q_fraction(scale, Pair{Int,Int}[], _q_sum([(c / scale, p) for (c, p) in terms]; most = most))
 end
+
+# ---- expansions, with Nemo ----
+
+"""
+    x_form(f::QForm) -> XValue
+
+The formula expanded in x = q + 1/q, as `√(∏_{e ∈ rad} ψ_e(x)) · num(x)/den(x)`. It needs Nemo, and may be expensive at large
+labels. [`phi_form`](@ref) carries the sum out in q and factors it, at 30 to 50 times the cost.
+"""
+function x_form(f::QForm)
+    f.k === nothing || throw(ArgumentError("`x_form` expands a generic form: use `Symbolic()`"))
+    f.weight == (0, 0) || throw(ArgumentError("`x_form` is not available for forms with powers of q"))
+    return generic_value(something(f.rule, EMPTY_FACTORIAL_SUM))
+end
+x_form(s::FactorialSum) = generic_value(_validate_rule(s))
+
+function phi_form(f::QForm; kwargs...)
+    f.k === nothing || throw(ArgumentError("`phi_form` expands a generic form: use `Symbolic()`"))
+    f.weight == (0, 0) || throw(ArgumentError("`phi_form` is not available for forms with powers of q"))
+    return phi_form(_factorial_dcr(something(f.rule, EMPTY_FACTORIAL_SUM)); kwargs...)
+end
+splits_completely(f::QForm) = splits_completely(phi_form(f))
+qeval(::Symbolic, f::QForm) = f
+qeval(f::QForm; kwargs...) = f.k === nothing ? qeval(something(f.rule, EMPTY_FACTORIAL_SUM); kwargs...) :
+    throw(ArgumentError("this form is at level $(f.k); use `numeric_value` or `float`"))

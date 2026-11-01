@@ -119,7 +119,7 @@ function twist(j::Spin; k = nothing, q = nothing, exact::Bool = false, T::Type =
         _qδ(J, 0, J, kk) || throw(ArgumentError("j = $j is not an object of SU(2)_$kk"))
     end
     p = J * (J + 2)
-    exact && return QPhase(Int8(1), p//2)
+    exact && return _is_classical(q) ? 1 : QPhase(Int8(1), p//2)
     _is_classical(q) && return T(1)                   # q → 1
     k === nothing && q === nothing && return T(1)
     if k === nothing

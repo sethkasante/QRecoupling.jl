@@ -50,9 +50,6 @@ q3j_rule(J1::Int, J2::Int, J3::Int, M1::Int, M2::Int, M3::Int) =
 "q = e^{iπ/(k+2)} in the precision of `T`."
 _level_q(::Type{T}, k::Int) where {T} = cispi(one(real(float(T))) / (k + 2))
 
-_weighted_symbolic_error(f) = ArgumentError(
-    "$(f) carries q-power weights that the factorial-rule display cannot hold yet. " *
-    "Use `At(q)` or `Level(k)` for numerical values.")
 
 """
     _level_half_phase_parts(k) -> (hi, lo)
@@ -350,9 +347,8 @@ three `(j, m)` tuples.
 Use `q` for a real or complex parameter and `k` for the level, q = e^{iπ/(k+2)} (mutually exclusive). At real
 q > 0 the coefficients form an orthogonal matrix in (j, m₁) at fixed m; at complex q, including a level,
 orthogonality is bilinear, Cᵀ C = 1 (at a level, for complete sectors). Negative real q is evaluated as
-`complex(q)`. At a level, labels outside the fusion rule j₁ + j₂ + j ≤ k give zero. `Exact()` and `Exact(k)` write the
-coefficient in quantum integers and powers of q, and `exact = true` gives the exact classical value. `Symbolic()` is
-not available.
+`complex(q)`. At a level, labels outside the fusion rule j₁ + j₂ + j ≤ k give zero. `Symbolic()` and `Exact(k)` write the
+coefficient in quantum integers and powers of q, and `Exact()` or `exact = true` gives the exact classical value.
 [`qcg_matrix`](@ref) and [`qcg_row`](@ref) build whole matrices and rows by recurrence.
 
 Square roots follow the balanced-factor convention: `[n] = Π_{d|n,d>1} Ψ_d(q)`, `Ψ_d(q) = q^{−φ(d)} Φ_d(q²)`,
@@ -392,8 +388,8 @@ relabellings by q-powers: (j₂ j₁ j₃; m₂ m₁ m₃)_q = (−1)^{j₁+j₂
 m → −m, and (j₂ j₃ j₁; m₂ m₃ m₁)_q = q^{m₂} (j₁ j₂ j₃; m₁ m₂ m₃)_q.
 
 From v0.5, the deformation-dependent weights are included; classical values are unchanged.
-`Exact()` and `Exact(k)` write the symbol in quantum integers and powers of q, and `exact = true` gives the exact
-classical value. `Symbolic()` is not available.
+`Symbolic()` and `Exact(k)` write the symbol in quantum integers and powers of q, and `Exact()` or `exact = true` gives
+the exact classical value.
 """
 function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = -m1 - m2;
              k = nothing, q = nothing, exact::Bool = false, T::Type{TT} = Float64,
@@ -417,7 +413,10 @@ end
 
 for f in (:q3j, :qcg)
     @eval function $f(t::EvalTarget, args...; kw...)
-        t isa Symbolic && throw(_weighted_symbolic_error($(string(f))))
+        if t isa Symbolic
+            isempty(kw) || throw(ArgumentError("Symbolic() does not accept evaluation keywords"))
+            return qform($f, args...)
+        end
         if t isa Exact
             isempty(kw) || throw(ArgumentError("`Exact` already sets the target and takes no keywords"))
             t.k isa AbstractVector && return [qform($f, args...; k = kk) for kk in t.k]

@@ -1,10 +1,10 @@
 # A form as a value: what `==`, `iszero` and arithmetic mean for what `Exact()` and `Exact(k)` return. Arithmetic goes
-# through the plain-Julia kernel at a level and the classical evaluator at q = 1. `==` at a level expands nothing.
+# through the plain-Julia kernel at a level, and a generic form has none. `==` expands nothing.
 
 
-"What a form means in arithmetic: its value at q = 1, or the exact value at its level."
+"What a form means in arithmetic: the exact value at its level."
 function _form_value(f::QForm)
-    f.k === nothing && return classical(f)
+    f.k === nothing && throw(ArgumentError("a generic form has no arithmetic: use `Exact(k)` for a level, or `f(1)` for the exact value at q = 1"))
     f.weight == (0, 0) || f.rule === nothing ||
         throw(ArgumentError("exact arithmetic at a level is not available for forms with powers of q"))
     iszero(f) && return zero(LevelValue, f.k)
@@ -39,17 +39,21 @@ function Base.:(==)(f::QForm, g::QForm)
     return _same_root(f, numeric_value(g; bits = 64))
 end
 function Base.:(==)(f::QForm, c::Union{Integer,Rational})
-    f.k === nothing && return _form_value(f) == c
     (iszero(c) || iszero(f)) && return iszero(f) && iszero(c)
+    if f.k === nothing                                   # a number is a constant function of q
+        _generic_constant_differs(f, c) && return false
+        s = sign(c)
+        return _generic_equal(_written(f), QWritten{Rational{BigInt}}(nothing, Int(s), abs(Rational{BigInt}(c)), Pair{Int,Int}[], big(1)//big(1),
+                                                                      Pair{Int,Int}[], [(big(1)//big(1), Pair{Int,Int}[])]))
+    end
     _level_squares_equal(LevelSquare(f.rule, f.k, f.weight), LevelSquare(FactorialSum(0:0), f.k, (0, 0), c), f.k) || return false
     return _same_root(f, BigFloat(c))
 end
 Base.:(==)(c::Union{Integer,Rational}, f::QForm) = f == c
-Base.:(==)(f::QForm, x::AbstractFloat) = f.k === nothing ? classical(f) == x : isfinite(x) && f == Rational{BigInt}(x)
+Base.:(==)(f::QForm, x::AbstractFloat) = isfinite(x) && f == Rational{BigInt}(x)
 Base.:(==)(x::AbstractFloat, f::QForm) = f == x
 
-# `==` with a number reads a generic form at q = 1, so it does not extend to `isequal` and `hash`, which have to be
-# transitive: there a form equals only a form at the same level with the same value.
+# A form and a number have no hash in common, so for `isequal` a form equals only a form at the same level with the same value.
 Base.isequal(f::QForm, g::QForm) = f.k == g.k && f == g
 Base.isequal(::QForm, ::Union{Number,LevelValue,LevelValueSum}) = false
 Base.isequal(::Union{Number,LevelValue,LevelValueSum}, ::QForm) = false
