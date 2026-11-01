@@ -429,37 +429,71 @@ LevelSquare(s::FactorialSum, k::Int, weight::Tuple{Int,Int} = (0, 0), c = 1) = L
     Int[z for seg in last(classify_at_level(s, k)) for z in seg], weight..., Rational{BigInt}(c))
 
 "The square at the place q ↦ q^a, from factorials alone: nothing here is folded, merged or reduced."
-_place_square(t::LevelPlaces, V::LevelSquare, i::Int, a::Int, h::Int) = _place_square(t, V, V.s, i, a, h)
-function _place_square(t::LevelPlaces, V::LevelSquare, s::FactorialSum, i::Int, a::Int, h::Int)
-    m = t.m; acc = zero(UInt64)
+_place_square(t::LevelPlaces, V::LevelSquare, i::Int, a::Int, h::Int) =
+    _rule_square(t.m, V, V.s, t.fact, t.invf, i, x -> t.pow[mod(a * x, 2h)+1])
+
+"The square of `V` from tables of factorials in column `i`, with `power(x)` the residue of q^x."
+function _rule_square(m::Montgomery, V::LevelSquare, s::FactorialSum, fact, invf, i::Int, power)
+    acc = zero(UInt64)
     @inbounds for z in V.zs
         u = m.one
         for f in s.fac
             n = _arg(f, z); c = Int(f.c)
-            b = c > 0 ? t.fact[n+1, i] : t.invf[n+1, i]
+            b = c > 0 ? fact[n+1, i] : invf[n+1, i]
             for _ in 1:abs(c)
                 u = mont_mul(m, u, b)
             end
         end
-        iszero(V.w) || (u = mont_mul(m, u, t.pow[mod(a * V.w * z, 2h)+1]))
+        iszero(V.w) || (u = mont_mul(m, u, power(V.w * z)))
         acc = s.alternating && isodd(z) ? mont_sub(m, acc, u) : mont_add(m, acc, u)
     end
     iszero(acc) && return acc
     acc = mont_mul(m, acc, acc)
     @inbounds for (n, c) in s.pre
         e = s.sqrt_pre ? Int(c) : 2Int(c)
-        b = e > 0 ? t.fact[Int(n)+1, i] : t.invf[Int(n)+1, i]
+        b = e > 0 ? fact[Int(n)+1, i] : invf[Int(n)+1, i]
         for _ in 1:abs(e)
             acc = mont_mul(m, acc, b)
         end
     end
-    iszero(V.e2) || (acc = mont_mul(m, acc, t.pow[mod(a * V.e2, 2h)+1]))
+    iszero(V.e2) || (acc = mont_mul(m, acc, power(V.e2)))
     if !isone(V.c)
         p = big(m.p)
         c = mont_mul(m, to_mont(m, mod(numerator(V.c), p)), mont_inv(m, to_mont(m, mod(denominator(V.c), p))))
         acc = mont_mul(m, acc, mont_mul(m, c, c))
     end
     return acc
+end
+
+"""
+Do two generic values have different squares? Their squares are rational functions of q, read here at one point modulo
+one prime, so a different residue proves them different. Equal residues say nothing, and neither does a point where some
+[n] vanishes.
+"""
+function _generic_squares_differ(f, g)
+    V = LevelSquare(f.rule, collect(f.rule.zlo:f.rule.zhi), f.weight..., big(1)//big(1))
+    W = LevelSquare(g.rule, collect(g.rule.zlo:g.rule.zhi), g.weight..., big(1)//big(1))
+    N = max(_rule_top(f.rule, [f.rule.zlo, f.rule.zhi]), _rule_top(g.rule, [g.rule.zlo, g.rule.zhi]))
+    m = Montgomery(UInt64(0x7fffffffffffffe7))
+    Q = to_mont(m, 0x1234567); Qinv = mont_inv(m, Q); x = mont_add(m, Q, Qinv)
+    labels = Vector{UInt64}(undef, N)
+    last = zero(UInt64); now = m.one
+    for n in 1:N
+        iszero(now) && return false
+        labels[n] = now
+        last, now = now, mont_sub(m, mont_mul(m, x, now), last)
+    end
+    fact = Matrix{UInt64}(undef, N + 1, 1); invf = similar(fact)
+    fact[1, 1] = m.one
+    for n in 1:N
+        fact[n+1, 1] = mont_mul(m, fact[n, 1], labels[n])
+    end
+    invf[N+1, 1] = mont_inv(m, fact[N+1, 1])
+    for n in N:-1:1
+        invf[n, 1] = mont_mul(m, invf[n+1, 1], labels[n])
+    end
+    power(a) = a >= 0 ? mont_pow(m, Q, a) : mont_pow(m, Qinv, -a)
+    return _rule_square(m, V, V.s, fact, invf, 1, power) != _rule_square(m, W, W.s, fact, invf, 1, power)
 end
 
 """
@@ -482,6 +516,15 @@ function _square_sizes(V::LevelSquare, k::Int)
     return Kbits, tops .+ (extra << LOG_FRACTION_BITS)
 end
 
+"Do two squares differ at the first place? That is a proof that they differ, and usually the whole of the work."
+function _first_place_differs(V::LevelSquare, W::LevelSquare, k::Int)
+    h = k + 2
+    t = _places(_level_field(h), 1, _squares_top(V, W))
+    return _place_square(t, V, 1, t.as[1], h) != _place_square(t, W, 1, t.as[1], h)
+end
+_squares_top(V::LevelSquare, W::LevelSquare) =
+    max(_rule_top(V.s, isempty(V.zs) ? [V.s.zlo] : V.zs), _rule_top(W.s, isempty(W.zs) ? [W.s.zlo] : W.zs))
+
 """
     _level_squares_equal(V, W, k) -> Bool
 
@@ -490,9 +533,7 @@ degree φ(2h) when powers of q occur and φ(2h)/2 when not, so the places needed
 """
 function _level_squares_equal(V::LevelSquare, W::LevelSquare, k::Int)
     h = k + 2; F = _level_field(h)
-    N = max(_rule_top(V.s, isempty(V.zs) ? [V.s.zlo] : V.zs), _rule_top(W.s, isempty(W.zs) ? [W.s.zlo] : W.zs))
-    t = _places(F, 1, N)
-    _place_square(t, V, 1, t.as[1], h) == _place_square(t, W, 1, t.as[1], h) || return false
+    N = _squares_top(V, W)
     KV, a = _square_sizes(V, k); KW, b = _square_sizes(W, k)
     tops = [max(a[i] + (KW << LOG_FRACTION_BITS), b[i] + (KV << LOG_FRACTION_BITS)) for i in eachindex(a)]
     weighted = !iszero(V.w) || !iszero(W.w) || !iszero(V.e2) || !iszero(W.e2)

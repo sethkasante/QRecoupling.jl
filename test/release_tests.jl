@@ -181,7 +181,8 @@ end
 @testset "forms as written" begin
     # the helpers have to notice a wrong form, or the tests below prove nothing
     f = qform(q6j, 1, 1, 1, 2, 1, 1; k = 5)
-    wrong = typeof(f)(f.k, f.sign, 7 * f.coef, f.out, f.radcoef, f.rad, f.terms, f.rule, f.weight, f.qpow, f.powers)
+    w = QR._written(f)
+    wrong = QR.QForm(f.k, f.rule, f.weight, true, QR.QWritten(w.k, w.sign, 7 * w.coef, w.out, w.radcoef, w.rad, w.terms, w.qpow, w.powers))
     @test float(wrong) ≈ float(f)
     @test form_value(wrong) ≈ 7 * float(f)
     @test text_value(string(wrong); k = 5) ≈ 7 * float(f)
@@ -193,7 +194,7 @@ end
             g = qform(q6j, l...; k = k, reduce = reduce)
             iszero(g) && continue
             @test form_value(g) ≈ reference atol = 1e-12
-            length(g.terms) <= QR.QFORM_SHOWN_TERMS && @test text_value(string(g); k = k) ≈ reference atol = 1e-12
+            length(QR._written(g).terms) <= QR.QFORM_SHOWN_TERMS && @test text_value(string(g); k = k) ≈ reference atol = 1e-12
         end
     end
     # at generic q, q = 1 included
@@ -202,14 +203,15 @@ end
         iszero(g) && continue
         reference = isone(q) ? q6j(l...) : q6j(At(q), l...)
         @test form_value(g; q = q) ≈ reference rtol = 1e-10
-        length(g.terms) <= QR.QFORM_SHOWN_TERMS && @test text_value(string(g); q = q) ≈ reference rtol = 1e-10
+        length(QR._written(g).terms) <= QR.QFORM_SHOWN_TERMS && @test text_value(string(g); q = q) ≈ reference rtol = 1e-10
     end
 end
 
 @testset "forms with powers of q" begin
     # a wrong power of q has to show, in the form and in its text
     f = qform(qcg, 3//2, 1//2, 1, 0, 3//2, 1//2; k = 9)
-    wrong = typeof(f)(f.k, f.sign, f.coef, f.out, f.radcoef, f.rad, f.terms, f.rule, f.weight, f.qpow + 2, f.powers)
+    w = QR._written(f)
+    wrong = QR.QForm(f.k, f.rule, f.weight, true, QR.QWritten(w.k, w.sign, w.coef, w.out, w.radcoef, w.rad, w.terms, w.qpow + 2, w.powers))
     @test float(wrong) ≈ float(f)
     @test !(form_value(wrong) ≈ form_value(f))
     @test !(text_value(string(wrong); k = 9) ≈ form_value(f))
@@ -221,7 +223,7 @@ end
         for q in (0.7, 1.3)
             @test form_value(g; q = q) ≈ qcg(l...; q = q) rtol = 1e-11
             @test g(q) ≈ qcg(l...; q = q) rtol = 1e-11
-            length(g.terms) <= QR.QFORM_SHOWN_TERMS && @test text_value(string(g); q = q) ≈ qcg(l...; q = q) rtol = 1e-11
+            length(QR._written(g).terms) <= QR.QFORM_SHOWN_TERMS && @test text_value(string(g); q = q) ≈ qcg(l...; q = q) rtol = 1e-11
         end
         @test form_value(g; q = 1) ≈ qcg(l...) rtol = 1e-12
         @test g(1) ≈ qcg(l...) rtol = 1e-12
@@ -234,7 +236,7 @@ end
                 @test form_value(h) ≈ v atol = 1e-11
                 @test ComplexF64(numeric_value(h)) ≈ v atol = 1e-11
                 @test float(h) ≈ v atol = 1e-11
-                length(h.terms) <= QR.QFORM_SHOWN_TERMS && @test text_value(string(h); k = k) ≈ v atol = 1e-11
+                length(QR._written(h).terms) <= QR.QFORM_SHOWN_TERMS && @test text_value(string(h); k = k) ≈ v atol = 1e-11
             end
         end
     end
@@ -253,13 +255,13 @@ end
     @test iszero(numeric_value(qform(qcg, 1, 0, 1, 0, 2, 0; k = 3)))
     # terms with one monomial and different powers do not merge at generic q, and do merge when q^h = −1 aligns them
     h = 9; s = FactorialSum(0:2; factors = [(0, 2, 1)], alternating = false)
-    @test length(qform(s; weight = (2h ÷ 3, 0)).terms) == 3
+    @test length(QR._written(qform(s; weight = (2h ÷ 3, 0))).terms) == 3
     # 1 + q^(2h/3) + q^(4h/3) is a sum of cube roots of unity: no two terms merge, and it vanishes
-    @test length(qform(s; k = h - 2, reduce = false, weight = (2h ÷ 3, 0)).terms) == 3
+    @test length(QR._written(qform(s; k = h - 2, reduce = false, weight = (2h ÷ 3, 0))).terms) == 3
     @test iszero(qform(s; k = h - 2, weight = (2h ÷ 3, 0)))
     @test !iszero(qform(s; k = h - 2, weight = (2h ÷ 3 + 2, 0)))
     @test iszero(qform(FactorialSum(0:1; factors = [(0, 2, 1)], alternating = true); k = h - 2, weight = (2h, 0)))
-    @test length(qform(FactorialSum(0:1; factors = [(0, 2, 1)], alternating = true); k = h - 2, weight = (h, 0)).terms) == 1
+    @test length(QR._written(qform(FactorialSum(0:1; factors = [(0, 2, 1)], alternating = true); k = h - 2, weight = (h, 0))).terms) == 1
 end
 
 @testset "values in quantum integers" begin
@@ -504,6 +506,24 @@ end
     @test iszero(QR.level_value(QR._rule_for(q6j, 5//2, 9//2, 5, 4, 5, 11//2), 20))
 end
 
+@testset "a form is written when it is shown" begin
+    f = q6j(Exact(12), 2, 2, 2, 2, 2, 2); g = q6j(Exact(12), 2, 2, 2, 2, 2, 1)
+    u = q6j(Exact(), 2, 2, 2, 2, 2, 2); v = q6j(Exact(), 2, 2, 2, 2, 2, 1)
+    # deciding and evaluating read the rule
+    @test !iszero(f) && f != g && f == f && f != 1 && u != v && !iszero(u) && classical(u) == classical(q6j(Exact(), 2, 2, 2, 2, 2, 2))
+    float(f); numeric_value(f; bits = 80); u(0.8); -f; float(u); QR._form_value(f)
+    @test all(x -> x.written === nothing, (f, g, u, v))
+    # showing writes it once, and the text is what a form written at once would print
+    text = string(f)
+    w = f.written
+    @test w isa QR.QWritten && string(f) == text && f.written === w
+    @test text == QR._qform_body(QR._write(f.rule, f.k, true, f.weight)) * "   (k = 12)"
+    # what writing alone can settle is still zero, and a rule that is singular says so at once
+    @test iszero(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2)) && string(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2)) == "0   (k = 10)"
+    @test iszero(qcg(Exact(9), 3//2, 1//2, 1, 0, 9//2, 1//2)) && -q6j(Exact(4), 1, 1, 1, 5, 5, 5) == 0
+    @test_throws ArgumentError qform(QR._qfact_rule([5 => -1]); k = 3)
+end
+
 @testset "equality at a level, read at places" begin
     # against the dense kernel, on pairs close enough to be equal, with both signs, and with numbers
     for (k, top) in ((4, 2), (10, 5//2), (16, 5//2), (18, 5//2))
@@ -650,14 +670,14 @@ end
     done = 0
     for l in all_6j(k = 12)
         l2 = regge(l...)
-        (all(x -> denominator(2x) == 1 && x >= 0, l2) && l2 != l && length(qform(q6j, l...).terms) > 1) || continue
+        (all(x -> denominator(2x) == 1 && x >= 0, l2) && l2 != l && length(QR._written(qform(q6j, l...)).terms) > 1) || continue
         @test q6j(Exact(), l...) == q6j(Exact(), l2...)
         (done += 1) == 20 && break
     end
     @test done == 20
     # forms that share nothing: q-Vandermonde, a sum of 4 terms against one binomial, with a proof and not a match
     sum_form(w, e2) = qform(FactorialSum(0:3; prefactor = (3 => 1, 4 => 1), factors = ((1, 0, -2), (-1, 3, -1), (-1, 4, -1))); weight = (w, e2))
-    @test length(sum_form(7, -24).terms) == 4 && length(qbinomial(Exact(), 7, 3).terms) == 1
+    @test length(QR._written(sum_form(7, -24)).terms) == 4 && length(QR._written(qbinomial(Exact(), 7, 3)).terms) == 1
     @test sum_form(7, -24)(1.3) ≈ qbinomial(At(1.3), 7, 3)
     @test sum_form(7, -24) == qbinomial(Exact(), 7, 3)
     @test classical(sum_form(7, -22)) == classical(qbinomial(Exact(), 7, 3)) && sum_form(7, -22) != qbinomial(Exact(), 7, 3)

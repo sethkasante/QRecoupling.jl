@@ -71,9 +71,8 @@ include("algebra/symbolic_display.jl")
 # Radicals and polynomials are requests on a form. They go through the expanded value, which only this backend holds.
 function _expanded(f::QForm)
     f.k === nothing && throw(ArgumentError("a radical needs a level: use `Exact(k)`"))
-    (isempty(f.powers) && iszero(f.qpow)) || throw(ArgumentError("radicals are not available for forms with powers of q"))
     iszero(f) && return zero(ExactX, f.k)
-    f.rule === nothing && throw(ArgumentError("this form holds no rule to expand"))
+    f.weight == (0, 0) || throw(ArgumentError("radicals are not available for forms with powers of q"))
     return exact_x(f.rule, f.k)
 end
 radical(f::QForm; kwargs...) = radical(_expanded(f); kwargs...)

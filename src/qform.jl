@@ -32,8 +32,20 @@ Between two forms `==` means equal at every q, decided exactly.
 
 A form at a level is one number, complex when it carries powers of q. `float` and `numeric_value` give it, and
 `==`, `iszero` and arithmetic are exact.
+
+A form holds its rule, which is short and is all that deciding and evaluating read. What it prints is written from the
+rule the first time it is shown, so a form costs no more than its rule until then.
 """
-struct QForm{R<:Rational}
+mutable struct QForm
+    const k::Union{Nothing,Int}
+    const rule::Union{Nothing,FactorialSum}             # `nothing` for a form known to be zero
+    const weight::Tuple{Int,Int}                        # the weights (w, e2) of the rule
+    const reduce::Bool                                  # whether writing it reduces by the relations of the level
+    written::Any                                        # its `QWritten`, once it is asked for
+end
+
+"What a form prints, in the shape described at the head of this file."
+struct QWritten{R<:Rational}
     k::Union{Nothing,Int}
     sign::Int
     coef::R
@@ -41,18 +53,42 @@ struct QForm{R<:Rational}
     radcoef::R                                                # r under the square root
     rad::Vector{Pair{Int,Int}}                                # ∏[n]^f under the square root
     terms::Vector{Tuple{R,Vector{Pair{Int,Int}}}}
-    rule::Union{Nothing,FactorialSum}  # retain the stable numerical evaluator, separately from display
-    weight::Tuple{Int,Int}                                    # the weights (w, e2) of the rule, for that evaluator
     qpow::Int                                                 # a, doubled: q^(a/2) in front
     powers::Vector{Int}                                       # q^(b_t) of each term; empty when there are none
 end
-QForm{R}(k, sign, coef, out, radcoef, rad, terms) where {R<:Rational} =
-    QForm{R}(k, sign, coef, out, radcoef, rad, terms, nothing, (0, 0), 0, Int[])
+QWritten{R}(k, sign, coef, out, radcoef, rad, terms) where {R<:Rational} =
+    QWritten{R}(k, sign, coef, out, radcoef, rad, terms, 0, Int[])
 
-_qform_zero(k) = QForm{Rational{Int}}(k, 0, 0 // 1, Pair{Int,Int}[], 1 // 1, Pair{Int,Int}[],
-                                      Tuple{Rational{Int},Vector{Pair{Int,Int}}}[])
+_written_zero(k) = QWritten{Rational{Int}}(k, 0, 0 // 1, Pair{Int,Int}[], 1 // 1, Pair{Int,Int}[],
+                                           Tuple{Rational{Int},Vector{Pair{Int,Int}}}[])
+_qform_zero(k) = QForm(k, nothing, (0, 0), true, _written_zero(k))
 
-Base.iszero(f::QForm) = iszero(f.sign)
+"What this form prints, written now if it has not been shown before. Two threads at worst write it twice."
+function _written(f::QForm)
+    w = f.written
+    w === nothing || return w
+    f.written = _write(f.rule, f.k, f.reduce, f.weight)
+    return f.written
+end
+
+Base.iszero(f::QWritten) = iszero(f.sign)
+
+"""
+Zero or not, from the rule. One nonzero residue settles nearly every value in microseconds, at the level or, for a
+generic form, at a level above its factorial arguments, where a sum vanishing at every q would vanish too. Writing the
+form then proves what is left.
+"""
+function Base.iszero(f::QForm)
+    f.written === nothing || return iszero(f.written)
+    s = f.rule; w = f.weight[1]
+    is_empty_sum(s) && return true
+    K = f.k === nothing ? nextpow(2, max(_rule_top(s, [s.zlo, s.zhi]), 16)) : f.k
+    if classify_at_level(s, K)[1] === :finite
+        (iszero(w) ? _level_zero_screen(s, K, level_zero_table(K)) === false : !_weighted_residue_vanishes(s, w, K)) &&
+            return false
+    end
+    return iszero(_written(f))
+end
 
 # ---- deciding a generic form ----
 
@@ -129,7 +165,7 @@ function _generic_sum_vanishes(input::Vector{Tuple{Rational{BigInt},Int,Vector{P
 end
 
 "The terms of a generic form, without its root: the front power of q is `front`, in whole powers."
-function _generic_terms(f::QForm, front::Int, scale::Int = 1)
+function _generic_terms(f::QWritten, front::Int, scale::Int = 1)
     out = Tuple{Rational{BigInt},Int,Vector{Pair{Int,Int}}}[]
     for (t, (c, p)) in enumerate(f.terms)
         e = Dict{Int,Int}(f.out)
@@ -145,7 +181,7 @@ end
 Whether a rule with many terms vanishes at every q. Such a sum vanishes at every level whose h exceeds its factorial
 arguments, so one nonzero residue at one such level, the usual screen, settles nearly every case in microseconds.
 """
-function _generic_rule_vanishes(s::FactorialSum, w::Int, f::QForm)
+function _generic_rule_vanishes(s::FactorialSum, w::Int, f::QWritten)
     K = nextpow(2, max(_rule_top(s, [s.zlo, s.zhi]), 16))
     if iszero(w)
         _level_zero_screen(s, K, level_zero_table(K)) === false && return false
@@ -156,7 +192,7 @@ function _generic_rule_vanishes(s::FactorialSum, w::Int, f::QForm)
 end
 
 "Equality at every q. The [n] are multiplicatively independent, so what stays under the root has to agree."
-function _generic_equal(f::QForm, g::QForm)
+function _generic_equal(f::QWritten, g::QWritten)
     (iszero(f) || iszero(g)) && return iszero(f) && iszero(g)
     (f.rad == g.rad && f.radcoef == g.radcoef && iseven(f.qpow - g.qpow)) || return false
     return _generic_sum_vanishes(vcat(_generic_terms(f, (f.qpow - g.qpow) ÷ 2), _generic_terms(g, 0, -1)))
@@ -175,8 +211,7 @@ classical(q3j(Exact(), 2, 2, 0, 1, -1, 0))         # -√(1//5)
 """
 function classical(f::QForm)
     f.k === nothing || throw(ArgumentError("this form is at level $(f.k), and has no value at q = 1"))
-    iszero(f) && return zero(ClassicalResult)
-    f.rule === nothing && throw(ArgumentError("this form holds no rule to evaluate at q = 1"))
+    f.rule === nothing && return zero(ClassicalResult)
     return classical_exact(f.rule)
 end
 
@@ -472,17 +507,22 @@ qform(qcg, 1//2, 1//2, 1//2, -1//2, 1, 0)   # q^(−1/2) √(1/[2])
 ```
 """
 function qform(s::FactorialSum; k = nothing, reduce::Bool = true, weight::Tuple{Int,Int} = (0, 0))
-    f = try
-        _qform(s, k, reduce, weight, Rational{Int})
+    k === nothing && return QForm(nothing, s, weight, reduce, nothing)
+    classify_at_level(s, Int(k))[1] === :pole && throw(ArgumentError("the rule is singular at level $k"))
+    return QForm(Int(k), s, weight, reduce, nothing)
+end
+
+function _write(s::FactorialSum, k, reduce::Bool, weight::Tuple{Int,Int})
+    try
+        return _qform(s, k, reduce, weight, Rational{Int})
     catch e
         (e isa OverflowError || e isa InexactError) || rethrow()
-        _qform(s, k, reduce, weight, Rational{BigInt})
+        return _qform(s, k, reduce, weight, Rational{BigInt})
     end
-    return typeof(f)(f.k, f.sign, f.coef, f.out, f.radcoef, f.rad, f.terms, s, weight, f.qpow, f.powers)
 end
 
 "How long a form reads: its terms first, then its exponents and the digits of its numbers."
-function _qform_cost(f::QForm)
+function _qform_cost(f::QWritten)
     digits(c) = ndigits(numerator(c)) + ndigits(denominator(c)) - 2
     exps(p) = sum(abs(e) for (_, e) in p; init = 0)
     return (length(f.terms), exps(f.out) + exps(f.rad) + sum(exps(p) + digits(c) for (c, p) in f.terms; init = 0) +
@@ -557,7 +597,7 @@ end
 function _qform(s::FactorialSum, k, reduce::Bool, weight::Tuple{Int,Int}, ::Type{R}) where {R}
     w, e2 = weight
     if k === nothing
-        is_empty_sum(s) && return _qform_zero(nothing)
+        is_empty_sum(s) && return _written_zero(nothing)
         zs = collect(s.zlo:s.zhi)
         raw = zeros(Int, _rule_top(s, zs))
         es = [copy(_term_exponents!(raw, s, z)) for z in zs]
@@ -565,12 +605,12 @@ function _qform(s::FactorialSum, k, reduce::Bool, weight::Tuple{Int,Int}, ::Type
         f = _qform_assemble(nothing, Int(s.sign0), _prefactor_exponents(s, length(raw)), one(R), es, cs,
                             _term_powers(w, zs, cs, nothing), e2)
         # a sum can vanish at every q although no two of its terms merge
-        reduce && length(f.terms) > 1 && _generic_rule_vanishes(s, w, f) && return _qform_zero(nothing)
+        reduce && length(f.terms) > 1 && _generic_rule_vanishes(s, w, f) && return _written_zero(nothing)
         return f
     end
     level = Int(k); h = level + 2
     data = _level_exponents(s, level, R)
-    data === nothing && return _qform_zero(level)
+    data === nothing && return _written_zero(level)
     zs, pre, prerat, es, cs = data
     ps = _term_powers(w, zs, cs, h)
     plain = _qform_assemble(level, Int(s.sign0), pre, prerat, es, cs, ps, e2)
@@ -578,7 +618,7 @@ function _qform(s::FactorialSum, k, reduce::Bool, weight::Tuple{Int,Int}, ::Type
     iszero(plain) && return plain
     # terms can cancel by additive relations that no rewriting of the products shows
     length(plain.terms) > 1 && (iszero(w) ? _level_sum_zero(s, zs, es, cs, h) : _weighted_level_zero(s, w, level)) &&
-        return _qform_zero(level)
+        return _written_zero(level)
     rows = _relations_at(h)
     isempty(rows) && return plain                            # h prime: the folded labels are independent
     # Exponents first. Constants are only worth computing for a form that merges terms or reads shorter.
@@ -609,7 +649,7 @@ function _qform_assemble(level, sign::Int, pre::Vector{Int}, prerat::R, es::Vect
         end
     end
     live = [i for i in eachindex(keep) if !iszero(coef[i])]
-    isempty(live) && return _qform_zero(level)
+    isempty(live) && return _written_zero(level)
     score = [sum(abs, es[keep[i]]) for i in live]
     order = sortperm(score; rev = true)                      # stable: terms of equal length keep their order
     ts = live[order]
@@ -648,7 +688,7 @@ function _qform_assemble(level, sign::Int, pre::Vector{Int}, prerat::R, es::Vect
     outside, under = _split_square(prerat)
     c = abs(scale) * outside
     sign = scale < 0 ? -sign : sign
-    ps === nothing && e2 == 0 && return QForm{R}(level, sign, c, out, under, rad, terms)
+    ps === nothing && e2 == 0 && return QWritten{R}(level, sign, c, out, under, rad, terms)
     least = ps === nothing ? 0 : minimum(ps[keep[i]] for i in ts)
     powers = ps === nothing ? Int[] : [ps[keep[i]] - least for i in ts]
     qpow = e2 + 2least
@@ -658,7 +698,7 @@ function _qform_assemble(level, sign::Int, pre::Vector{Int}, prerat::R, es::Vect
         qpow -= 2h * n
         isodd(n) && (sign = -sign)
     end
-    return QForm{R}(level, sign, c, out, under, rad, terms, nothing, (0, 0), qpow, powers)
+    return QWritten{R}(level, sign, c, out, under, rad, terms, qpow, powers)
 end
 
 qform(v::SymbolicValue; kw...) = qform(v.rule; kw...)
@@ -687,7 +727,7 @@ end
 # ---- numbers ----
 
 "The form as written, from `qn(n)` = [n] and `phase(a)` = q^(a/2)."
-function _qform_value(f::QForm, qn, phase = a -> 1)
+function _qform_value(f::QWritten, qn, phase = a -> 1)
     iszero(f) && return zero(qn(2))
     mono(p) = (v = one(qn(2)); for (n, e) in p; v *= qn(n)^e; end; v)
     total = zero(qn(2))
@@ -700,24 +740,22 @@ function _qform_value(f::QForm, qn, phase = a -> 1)
     return f.sign * w * mono(f.out) * sqrt(u * mono(f.rad)) * total * phase(f.qpow)
 end
 
+_qform_value(f::QForm, args...) = _qform_value(_written(f), args...)
+
 function (f::QForm)(q::Real)
     f.k === nothing || throw(ArgumentError("this form is at level $(f.k); use `numeric_value` or `float`"))
     q > 0 || throw(DomainError(q, "a QForm is evaluated at positive real q"))
     Q = float(q)
-    if f.rule !== nothing
-        f.weight == (0, 0) && return qeval(f.rule; q = Q, T = typeof(Q))
-        is_empty_sum(f.rule) && return zero(Q)
-        return isone(Q) ? classical_value(f.rule, typeof(Q)) : analytic_value(f.rule, Q, typeof(Q); weight = f.weight)
-    end
-    isone(Q) && return _qform_value(f, n -> oftype(Q, n))
-    return _qform_value(f, n -> qint(n; q = Q, T = typeof(Q)), a -> sqrt(Q)^a)
+    (f.rule === nothing || is_empty_sum(f.rule)) && return zero(Q)
+    f.weight == (0, 0) && return qeval(f.rule; q = Q, T = typeof(Q))
+    return isone(Q) ? classical_value(f.rule, typeof(Q)) : analytic_value(f.rule, Q, typeof(Q); weight = f.weight)
 end
 
 "The form as written at its level, in the current precision."
 function _qform_level(f::QForm)
     f.k === nothing && throw(ArgumentError("a generic form is evaluated with `f(q)`"))
     h = f.k + 2
-    return _qform_value(f, n -> sinpi(BigFloat(n) / h) / sinpi(inv(BigFloat(h))), a -> cispi(BigFloat(a) / (2h)))
+    return _qform_value(_written(f), n -> sinpi(BigFloat(n) / h) / sinpi(inv(BigFloat(h))), a -> cispi(BigFloat(a) / (2h)))
 end
 
 "Round a value at a level to the current precision. Weighted values are complex."
@@ -729,7 +767,6 @@ function numeric_value(f::QForm; bits::Integer = precision(BigFloat))
     f.k === nothing && return numeric_value(classical(f); bits = bits)
     iszero(f) && return setprecision(() -> zero(BigFloat), BigFloat, Int(bits))
     v = setprecision(BigFloat, Int(bits) + 32) do
-        f.rule === nothing && return _qform_level(f)
         f.weight == (0, 0) && return qeval(f.rule; k = f.k, T = BigFloat)
         return _weighted_level_value(f.rule, f.weight..., f.k, Complex{BigFloat})
     end
@@ -834,7 +871,7 @@ function _q_sum(terms; most::Int = QFORM_SHOWN_TERMS, powers::Vector{Int} = Int[
 end
 
 "The form as text, without its level, showing at most `most` terms of its sum."
-function _qform_body(f::QForm; most::Int = QFORM_SHOWN_TERMS)
+function _qform_body(f::QWritten; most::Int = QFORM_SHOWN_TERMS)
     iszero(f) && return "0"
     text = (f.sign < 0 ? "−" : "") * _q_fraction(f.coef, f.out, _q_sum(f.terms; most = most, powers = f.powers), _q_phase(f.qpow))
     isempty(f.rad) && isone(f.radcoef) && return _unwrap(text)
@@ -844,9 +881,12 @@ function _qform_body(f::QForm; most::Int = QFORM_SHOWN_TERMS)
     return text * " " * root
 end
 
+_qform_body(f::QForm; most::Int = QFORM_SHOWN_TERMS) = _qform_body(_written(f); most = most)
+
 function Base.show(io::IO, f::QForm)
-    print(io, _qform_body(f))
-    f.k === nothing || print(io, "   (k = ", f.k, isempty(f.powers) && iszero(f.qpow) ? ")" : ", q = e^{iπ/$(f.k + 2)})")
+    w = _written(f)
+    print(io, _qform_body(w))
+    f.k === nothing || print(io, "   (k = ", f.k, isempty(w.powers) && iszero(w.qpow) ? ")" : ", q = e^{iπ/$(f.k + 2)})")
 end
 
 "The longest classical value that is printed beside a form."
@@ -855,12 +895,11 @@ const QFORM_SHOWN_VALUE = 40
 "The form, with the number it stands for beside it: its value at q = 1, or its value at its level."
 function Base.show(io::IO, ::MIME"text/plain", f::QForm)
     show(io, f)
-    iszero(f) && return
+    iszero(_written(f)) && return
     if f.k === nothing
-        f.rule === nothing && return
         v = replace(sprint(show, classical(f)), "-" => "−", "//1" => "", "//" => "/")
         length(v) <= QFORM_SHOWN_VALUE && print(io, "   (", endswith(v, "/1") ? v[1:end-2] : v, " at q = 1)")
-    elseif f.rule !== nothing
+    else
         v = float(f)
         print(io, "   ≈ ", replace(string(v isa Complex ? complex(round(real(v); sigdigits = 7), round(imag(v); sigdigits = 7)) : round(v; sigdigits = 7)), "-" => "−"))
     end
