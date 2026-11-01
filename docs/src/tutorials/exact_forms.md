@@ -47,7 +47,9 @@ v = q6j(Exact(10), 1, 1, 1, 1, 1, 1)
 (q6j(Exact(3), 1, 1, 1, 1, 1, 1), q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2))
 ```
 
-Two equal values can print differently, so `==` decides equality and the text does not. Arithmetic with `*`, `+`, `-`, `/` and `^` is exact at a level, needs no backend, and gives a value that prints in the basis `[1], …, [d]`.
+Two equal values can print differently, so `==` decides equality and the text does not. Nothing is expanded to do it. `==` compares the squares of the two values at places, primes where q is a root of unity, reading each from the rule's factorials. One different residue settles it, in about 5 µs at spins 100, k = 401. Equal squares need more places, as many as the norm of the difference allows, about 6.5 ms at that size, and the certified number then gives the sign.
+
+Arithmetic with `*`, `+`, `-`, `/` and `^` is exact at a level, needs no backend, and gives a value that prints in the basis `[1], …, [d]`.
 
 ```@example exact_forms
 a = q6j(Exact(12), 1, 1, 1, 1, 1, 1)
@@ -69,7 +71,7 @@ Use `Level(k)` for numbers. It costs about 1 µs where the form costs 450 µs at
 qcg(Exact(9), 3//2, 1//2, 1, 0, 3//2, 1//2)
 ```
 
-These forms decide zeros and differences. Two different forms with powers of q that have the same value at a level are not decided yet, and `==` says so with an error instead of guessing. They have no arithmetic at a level.
+`==` and `iszero` decide these forms like any other. They have no arithmetic at a level.
 
 ## Radicals
 

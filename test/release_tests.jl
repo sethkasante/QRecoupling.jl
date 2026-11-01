@@ -504,6 +504,60 @@ end
     @test iszero(QR.level_value(QR._rule_for(q6j, 5//2, 9//2, 5, 4, 5, 11//2), 20))
 end
 
+@testset "equality at a level, read at places" begin
+    # against the dense kernel, on pairs close enough to be equal, with both signs, and with numbers
+    for (k, top) in ((4, 2), (10, 5//2), (16, 5//2), (18, 5//2))
+        r = 0:1//2:top
+        fs = [q6j(Exact(k), a, b, c, d, e, f) for a in r, b in r, c in r, d in r, e in r, f in r
+              if QR._admissible_at(q6j, k, a, b, c, d, e, f)]
+        fs = filter(!iszero, fs)
+        close = Dict{Int,Vector{eltype(fs)}}()
+        for f in fs
+            push!(get!(close, round(Int, abs(float(f)) * 10^9), eltype(fs)[]), f)
+        end
+        bad = 0
+        for b in values(close), i in eachindex(b), j in i:min(i + 3, length(b))
+            bad += (b[i] == b[j]) != (QR._form_value(b[i]) == QR._form_value(b[j]))
+            bad += (b[i] == -b[j]) != (QR._form_value(b[i]) == -QR._form_value(b[j]))
+        end
+        for f in fs[1:7:end], c in (1, -1, 1//2)
+            bad += (f == c) != (QR._form_value(f) == c)
+        end
+        @test bad == 0
+    end
+    @test q6j(Exact(3), 1, 1, 1, 1, 1, 1) != 1 && 1 == q6j(Exact(10), 0, 0, 0, 0, 0, 0)
+    @test iszero(q6j(Exact(4), 1, 1, 1, 5, 5, 5)) && q6j(Exact(4), 1, 1, 1, 5, 5, 5) == 0
+
+    # the proof with powers of q: q^(2h) = 1 gives the same square and value, q^h = −1 the opposite value
+    s, (w, e2) = QR.qcg_rule(3, 1, 2, 0, 3, 1)
+    k = 9; h = k + 2
+    V = QR.LevelSquare(s, k, (w, e2))
+    @test QR._level_squares_equal(V, QR.LevelSquare(s, k, (w + 2h, e2 + 4h)), k)
+    @test QR._level_squares_equal(V, QR.LevelSquare(s, k, (w, e2 + 2h)), k)
+    @test !QR._level_squares_equal(V, QR.LevelSquare(s, k, (w + 1, e2)), k)
+    c = qform(s; k = k, weight = (w, e2))
+    @test qform(s; k = k, weight = (w, e2 + 4h)) == c
+    @test qform(s; k = k, weight = (w, e2 + 2h)) == -c
+    @test qform(s; k = k, weight = (w, e2 + 2h)) != c
+
+    # the sizes behind the proof hold at every conjugate, where cancellation can only help
+    for (k, j) in ((10, 1), (20, 4), (41, 10))
+        s = QR._rule_for(q6j, j, j, j, j, j, j)
+        K, tops = QR._square_sizes(QR.LevelSquare(s, k), k)
+        zs, pre, r, es, cs = QR._level_exponents(s, k, Rational{BigInt})
+        h = k + 2
+        setprecision(BigFloat, 512) do
+            for (i, a) in enumerate(a for a in 1:h-1 if gcd(a, 2h) == 1)
+                qn(n) = sinpi(big(a * n) / h) / sinpi(big(a) / h)
+                mono(e) = prod(qn(n)^x for (n, x) in enumerate(e) if !iszero(x); init = big(1))
+                square = (sum(big(numerator(c)) / denominator(c) * mono(e) for (c, e) in zip(cs, es)))^2 *
+                         big(numerator(r)) / denominator(r) * mono(pre)
+                iszero(square) || @test log2(abs(square)) + K <= tops[i] / 2^20
+            end
+        end
+    end
+end
+
 @testset "exact values are forms" begin
     # one target with no q: the form, and the number it means
     f = q6j(Exact(), 1, 1, 1, 1, 1, 1)
@@ -577,10 +631,11 @@ end
     @test qcg(Exact(), 1//2, 1//2, 1//2, -1//2, 0)^2 == 1//2
     @test f * f == 1//36 && 6f == 1
 
-    # with powers of q: complex numbers, decided when they differ, and the same form is equal to itself
+    # with powers of q: complex numbers, decided like any other value
     c = qcg(Exact(9), 3//2, 1//2, 1, 0, 3//2, 1//2)
     @test c == qcg(Exact(9), 3//2, 1//2, 1, 0, 3//2, 1//2)
     @test c != qcg(Exact(9), 3//2, 1//2, 1, 0, 1//2, 1//2)
+    @test c != -c && -c == -c && c == -(-c)
     @test_throws ArgumentError c * c
     @test_throws ArgumentError radical(c)
 

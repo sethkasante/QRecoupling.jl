@@ -194,15 +194,15 @@ struct LevelRule
 end
 
 """
-Bits of J·C·front·S at its largest conjugate, of J and of C, each rounded up. C clears the q-integers below the
-line: for each prime ℓ, the smallest power of ℓ whose valuation covers theirs. The factorial table already holds
-the rational in each term, so J appears once.
+The sizes of Σ_t c_t^scale ∏[n]^(base[n] + scale·e_t[n]) at its conjugates, term by term: for each conjugate the largest
+term in fixed point, then the bits of J and of C. C clears the q-integers below the line: for each prime ℓ, the smallest
+power of ℓ whose valuation covers theirs. J clears the rationals, once for each power of `scale`.
 """
-function _level_sum_bound(L::LevelRule, front::Vector{Int}, es::Vector{Vector{Int}}, cs, h::Int)
+function _level_sizes(base::Vector{Int}, scale::Int, es::Vector{Vector{Int}}, cs, h::Int)
     F = _level_field(h)
-    m = zeros(Int, length(front))
+    m = zeros(Int, length(base))
     for e in es, n in eachindex(m)
-        m[n] = max(m[n], -(e[n] + front[n]))
+        m[n] = max(m[n], -(scale * e[n] + base[n]))
     end
     J = big(1)
     for c in cs
@@ -218,14 +218,14 @@ function _level_sum_bound(L::LevelRule, front::Vector{Int}, es::Vector{Vector{In
     Jbits = ndigits(J; base = 2)
     # Each log size in fixed point: a positive power takes its upper bound, a negative one its lower bound.
     up, lo = _log_sines(F)
-    N = length(front)
-    cbits = [ndigits(abs(numerator(c)); base = 2) - ndigits(denominator(c); base = 2) + 1 for c in cs]
+    N = length(base)
+    cbits = [scale * (ndigits(abs(numerator(c)); base = 2) - ndigits(denominator(c); base = 2) + 1) for c in cs]
     # Nothing below can wrap around if the largest possible total fits, which keeps the integers a proof.
-    weight = maximum(e -> sum(abs(e[n] + front[n]) for n in 2:N; init = 0), es)
+    weight = maximum(e -> sum(abs(scale * e[n] + base[n]) for n in 2:N; init = 0), es)
     Base.Checked.checked_add(Base.Checked.checked_mul(2weight, max(maximum(abs, up), maximum(abs, lo))),
                              Base.Checked.checked_mul(maximum(abs, cbits), 1 << LOG_FRACTION_BITS))
     above = Vector{Int}(undef, N); below = Vector{Int}(undef, N)
-    top = typemin(Int)
+    tops = Int[]
     for a in 1:h-1
         gcd(a, 2h) == 1 || continue
         b = min(a, h - a)
@@ -233,17 +233,28 @@ function _level_sum_bound(L::LevelRule, front::Vector{Int}, es::Vector{Vector{In
             r = rem(a * n, h); r = min(r, h - r)
             above[n] = up[r] - lo[b]; below[n] = lo[r] - up[b]
         end
+        top = typemin(Int)
         for t in eachindex(es)
             iszero(cs[t]) && continue
             e = es[t]; total = cbits[t] << LOG_FRACTION_BITS
             @inbounds for n in 2:N
-                power = e[n] + front[n]
+                power = scale * e[n] + base[n]
                 total += power * (power > 0 ? above[n] : below[n])
             end
             top = max(top, total)
         end
+        push!(tops, top)
     end
-    bits = iszero(count(!iszero, cs)) ? 0 : cld(top, 1 << LOG_FRACTION_BITS) + ndigits(length(es); base = 2)
+    return tops, Jbits, Cbits
+end
+
+"""
+Bits of J·C·front·S at its largest conjugate, of J and of C, each rounded up. The factorial table already holds the
+rational in each term, so J appears once.
+"""
+function _level_sum_bound(L::LevelRule, front::Vector{Int}, es::Vector{Vector{Int}}, cs, h::Int)
+    tops, Jbits, Cbits = _level_sizes(front, 1, es, cs, h)
+    bits = iszero(count(!iszero, cs)) ? 0 : cld(maximum(tops), 1 << LOG_FRACTION_BITS) + ndigits(length(es); base = 2)
     return max(bits, 0) + Jbits + Cbits, Jbits, Cbits
 end
 
@@ -369,6 +380,13 @@ function _level_coordinates(L::LevelRule, bits::Int, Jbits::Int, Cbits::Int, h::
     end
 end
 
+# ---- deciding without expanding ----
+#
+# A nonzero algebraic integer E has a nonzero norm, and each place at which E vanishes is a prime ideal of norm p dividing
+# E, so such places have a product of at most ∏_σ |σE|. Once the primes of the places read pass that, E = 0. The sizes of
+# the conjugates add up here, where a coordinate's bound needs the largest of them: a unit is large at one conjugate and
+# small at another, and in the norm it counts for nothing.
+
 """
 Do the terms of a rule cancel exactly? One nonzero residue settles a nonzero sum, usually at the first place of
 the first prime, and the bound settles a vanishing one.
@@ -378,15 +396,117 @@ function _level_sum_zero(s::FactorialSum, zs::Vector{Int}, es, cs, h::Int)
     front = zeros(Int, length(first(es)))
     L = _level_rule(s, zs, front, h)
     iszero(_place_value(_places(F, 1, L.top), L, 1, h)) || return false
-    need = first(_level_sum_bound(L, front, es, cs, h))
+    tops, Jbits, Cbits = _level_sizes(front, 1, es, cs, h)
+    need = _norm_bits(tops, ndigits(length(es); base = 2) + Jbits + Cbits)
     bits = 0; i = 0
     while bits <= need
         i += 1
         t = _places(F, i, L.top)
         for a in 1:F.d
             iszero(_place_value(t, L, a, h)) || return false
+            bits += ndigits(t.m.p; base = 2) - 1
         end
-        bits += ndigits(t.m.p; base = 2) - 1
+    end
+    return true
+end
+
+"Bits of the norm: the fixed-point sizes `tops` at the conjugates, each with `extra` bits more."
+_norm_bits(tops::Vector{Int}, extra::Int) =
+    Int(cld(sum(Int128, tops; init = Int128(0)), Int128(1) << LOG_FRACTION_BITS)) + length(tops) * extra
+
+"""
+A value read through its rule, c·s with the weights (w, e2), for what is decided at a level by squares: its contributing
+terms and its rational factor. Its square lies in the field of q, unlike the value.
+"""
+struct LevelSquare
+    s::FactorialSum
+    zs::Vector{Int}
+    w::Int
+    e2::Int
+    c::Rational{BigInt}
+end
+LevelSquare(s::FactorialSum, k::Int, weight::Tuple{Int,Int} = (0, 0), c = 1) = LevelSquare(s,
+    Int[z for seg in last(classify_at_level(s, k)) for z in seg], weight..., Rational{BigInt}(c))
+
+"The square at the place q ↦ q^a, from factorials alone: nothing here is folded, merged or reduced."
+_place_square(t::LevelPlaces, V::LevelSquare, i::Int, a::Int, h::Int) = _place_square(t, V, V.s, i, a, h)
+function _place_square(t::LevelPlaces, V::LevelSquare, s::FactorialSum, i::Int, a::Int, h::Int)
+    m = t.m; acc = zero(UInt64)
+    @inbounds for z in V.zs
+        u = m.one
+        for f in s.fac
+            n = _arg(f, z); c = Int(f.c)
+            b = c > 0 ? t.fact[n+1, i] : t.invf[n+1, i]
+            for _ in 1:abs(c)
+                u = mont_mul(m, u, b)
+            end
+        end
+        iszero(V.w) || (u = mont_mul(m, u, t.pow[mod(a * V.w * z, 2h)+1]))
+        acc = s.alternating && isodd(z) ? mont_sub(m, acc, u) : mont_add(m, acc, u)
+    end
+    iszero(acc) && return acc
+    acc = mont_mul(m, acc, acc)
+    @inbounds for (n, c) in s.pre
+        e = s.sqrt_pre ? Int(c) : 2Int(c)
+        b = e > 0 ? t.fact[Int(n)+1, i] : t.invf[Int(n)+1, i]
+        for _ in 1:abs(e)
+            acc = mont_mul(m, acc, b)
+        end
+    end
+    iszero(V.e2) || (acc = mont_mul(m, acc, t.pow[mod(a * V.e2, 2h)+1]))
+    if !isone(V.c)
+        p = big(m.p)
+        c = mont_mul(m, to_mont(m, mod(numerator(V.c), p)), mont_inv(m, to_mont(m, mod(denominator(V.c), p))))
+        acc = mont_mul(m, acc, mont_mul(m, c, c))
+    end
+    return acc
+end
+
+"""
+Bits an integer K needs for K·v² to be an algebraic integer, and the fixed-point sizes of K·v² at the conjugates. Only
+called once two squares agree at a first place, since this is the one step here that reads the folded rule.
+"""
+function _square_sizes(V::LevelSquare, k::Int)
+    h = k + 2
+    data = try
+        _level_exponents(V.s, k, Rational{Int})
+    catch e
+        (e isa OverflowError || e isa InexactError) || rethrow()
+        _level_exponents(V.s, k, Rational{BigInt})
+    end
+    zs, pre, prerat, es, cs = data
+    tops, Jbits, Cbits = _level_sizes(pre, 2, es, cs, h)
+    r = Rational{BigInt}(prerat) * V.c^2
+    Kbits = 2Jbits + Cbits + ndigits(denominator(r); base = 2)
+    extra = 2ndigits(length(es); base = 2) + 2Jbits + Cbits + ndigits(numerator(r); base = 2)
+    return Kbits, tops .+ (extra << LOG_FRACTION_BITS)
+end
+
+"""
+    _level_squares_equal(V, W, k) -> Bool
+
+Whether two values have equal squares at a level. With K, K′ clearing them, E = K′K(v² − w²) is an algebraic integer, of
+degree φ(2h) when powers of q occur and φ(2h)/2 when not, so the places needed are those of the norm bound above.
+"""
+function _level_squares_equal(V::LevelSquare, W::LevelSquare, k::Int)
+    h = k + 2; F = _level_field(h)
+    N = max(_rule_top(V.s, isempty(V.zs) ? [V.s.zlo] : V.zs), _rule_top(W.s, isempty(W.zs) ? [W.s.zlo] : W.zs))
+    t = _places(F, 1, N)
+    _place_square(t, V, 1, t.as[1], h) == _place_square(t, W, 1, t.as[1], h) || return false
+    KV, a = _square_sizes(V, k); KW, b = _square_sizes(W, k)
+    tops = [max(a[i] + (KW << LOG_FRACTION_BITS), b[i] + (KV << LOG_FRACTION_BITS)) for i in eachindex(a)]
+    weighted = !iszero(V.w) || !iszero(W.w) || !iszero(V.e2) || !iszero(W.e2)
+    need = _norm_bits(tops, 1) * (weighted ? 2 : 1)
+    bits = 0; i = 0
+    while bits <= need
+        i += 1
+        t = _places(F, i, N)
+        for j in eachindex(t.as)
+            for a in (weighted ? (t.as[j], 2h - t.as[j]) : (t.as[j],))
+                _place_square(t, V, j, a, h) == _place_square(t, W, j, a, h) || return false
+                bits += ndigits(t.m.p; base = 2) - 1
+            end
+        end
     end
     return true
 end
