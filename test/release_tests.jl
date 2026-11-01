@@ -151,29 +151,31 @@ end
 # form itself: its fields, and the text a reader gets.
 "The value of a form's own fields, at its level or at a real q."
 form_value(f; q = nothing) = setprecision(BigFloat, 1024) do
-    Float64(q === nothing ? QR._qform_level(f) :
-            QR._qform_value(f, isone(q) ? (n -> BigFloat(n)) : (n -> (big(q)^n - big(q)^(-n)) / (big(q) - 1 / big(q)))))
+    v = q === nothing ? QR._qform_level(f) :
+        QR._qform_value(f, isone(q) ? (n -> BigFloat(n)) : (n -> (big(q)^n - big(q)^(-n)) / (big(q) - 1 / big(q))),
+                        a -> sqrt(big(q))^a)
+    v isa Complex ? ComplexF64(v) : Float64(v)
 end
-
-"The value of printed text, parsed independently of the form that wrote it."
 function text_value(str::AbstractString; k = nothing, q = nothing)
-    sup = Dict('⁰' => '0', '¹' => '1', '²' => '2', '³' => '3', '⁴' => '4', '⁵' => '5', '⁶' => '6', '⁷' => '7', '⁸' => '8', '⁹' => '9')
+    sup = Dict('⁰' => '0', '¹' => '1', '²' => '2', '³' => '3', '⁴' => '4', '⁵' => '5', '⁶' => '6', '⁷' => '7', '⁸' => '8', '⁹' => '9', '⁻' => '-')
     t = replace(first(split(str, "   (k")), "−" => "-", "√" => "*sqrt")
-    t = replace(t, r"[⁰¹²³⁴⁵⁶⁷⁸⁹]+" => m -> "^" * join(sup[c] for c in m))
+    t = replace(t, r"[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+" => m -> "^" * join(sup[c] for c in m))
     t = replace(t, r"\[(\d+)\]!" => s"F(\1)", r"\[(\d+)\]" => s"Q(\1)")
-    t = replace(t, r"\)\s*(?=[FQ(\d])" => ")*", r"(?<=\d)(?=[FQ(])" => "*", r"\s\*sqrt" => "*sqrt")
+    t = replace(t, r"(q\^\([^)]*\)|q\^-?\d+|q)(?=[FQ(*\s]*[FQ(])" => s"\1*", r"(?<=[)\d])\s*(?=q)" => "*")
+    t = replace(t, r"\)\s*(?=[FQ(\d])" => ")*", r"(?<=\d)(?=[FQ(])" => "*", r"\s\*sqrt" => "*sqrt", r"^\*sqrt" => "sqrt", r"^-\*sqrt" => "-sqrt")
+    t = replace(t, r"\*+" => "*")
     setprecision(BigFloat, 1024) do
         Q(n) = k !== nothing ? sinpi(big(n) / (k + 2)) / sinpi(1 / big(k + 2)) :
                isone(q) ? BigFloat(n) : (big(q)^n - big(q)^(-n)) / (big(q) - 1 / big(q))
         F(n) = prod(Q(i) for i in 2:n; init = BigFloat(1))
-        Float64(Base.invokelatest(eval(:((Q, F) -> $(Meta.parse(t)))), Q, F))
+        v = Base.invokelatest(eval(:((Q, F, q) -> $(Meta.parse(t)))), Q, F, k !== nothing ? cispi(1 / big(k + 2)) : big(q))
+        v isa Complex ? ComplexF64(v) : Float64(v)
     end
 end
-
 @testset "forms as written" begin
     # the helpers have to notice a wrong form, or the tests below prove nothing
     f = qform(q6j, 1, 1, 1, 2, 1, 1; k = 5)
-    wrong = typeof(f)(f.k, f.sign, 7 * f.coef, f.out, f.radcoef, f.rad, f.terms, f.rule)
+    wrong = typeof(f)(f.k, f.sign, 7 * f.coef, f.out, f.radcoef, f.rad, f.terms, f.rule, f.weight, f.qpow, f.powers)
     @test float(wrong) ≈ float(f)
     @test form_value(wrong) ≈ 7 * float(f)
     @test text_value(string(wrong); k = 5) ≈ 7 * float(f)
@@ -196,6 +198,64 @@ end
         @test form_value(g; q = q) ≈ reference rtol = 1e-10
         length(g.terms) <= QR.QFORM_SHOWN_TERMS && @test text_value(string(g); q = q) ≈ reference rtol = 1e-10
     end
+end
+
+@testset "forms with powers of q" begin
+    # a wrong power of q has to show, in the form and in its text
+    f = qform(qcg, 3//2, 1//2, 1, 0, 3//2, 1//2; k = 9)
+    wrong = typeof(f)(f.k, f.sign, f.coef, f.out, f.radcoef, f.rad, f.terms, f.rule, f.weight, f.qpow + 2, f.powers)
+    @test float(wrong) ≈ float(f)
+    @test !(form_value(wrong) ≈ form_value(f))
+    @test !(text_value(string(wrong); k = 9) ≈ form_value(f))
+    labels = [(a, m1, b, m2, j, m1 + m2) for a in (0:6) .// 2 for b in (0:6) .// 2 for j in abs(a - b):1:a+b
+              for m1 in -a:1:a for m2 in -b:1:b if abs(m1 + m2) <= j]
+    for l in labels[1:7:end]
+        g = qform(qcg, l...)
+        @test !iszero(g)
+        for q in (0.7, 1.3)
+            @test form_value(g; q = q) ≈ qcg(l...; q = q) rtol = 1e-11
+            @test g(q) ≈ qcg(l...; q = q) rtol = 1e-11
+            length(g.terms) <= QR.QFORM_SHOWN_TERMS && @test text_value(string(g); q = q) ≈ qcg(l...; q = q) rtol = 1e-11
+        end
+        @test form_value(g; q = 1) ≈ qcg(l...) rtol = 1e-12
+        @test g(1) ≈ qcg(l...) rtol = 1e-12
+        for k in (1, 2, 3, 4, 6, 10, 15)
+            v = qcg(l...; k = k)
+            for reduce in (true, false)
+                h = qform(qcg, l...; k = k, reduce = reduce)
+                @test iszero(h) == iszero(v)
+                iszero(h) && continue
+                @test form_value(h) ≈ v atol = 1e-11
+                @test ComplexF64(numeric_value(h)) ≈ v atol = 1e-11
+                @test float(h) ≈ v atol = 1e-11
+                length(h.terms) <= QR.QFORM_SHOWN_TERMS && @test text_value(string(h); k = k) ≈ v atol = 1e-11
+            end
+        end
+    end
+    for (a, b, c, m1, m2) in ((1, 1, 1, 1, -1), (2, 2, 2, 0, 0), (3//2, 1, 1//2, 1//2, 0), (5//2, 2, 3//2, -1//2, 1))
+        m3 = -m1 - m2
+        @test form_value(qform(q3j, a, b, c, m1, m2, m3); q = 0.8) ≈ q3j(a, b, c, m1, m2, m3; q = 0.8) rtol = 1e-11
+        k = 2Int(a + b + c)
+        @test form_value(qform(q3j, a, b, c, m1, m2, m3; k = k)) ≈ q3j(a, b, c, m1, m2, m3; k = k) atol = 1e-11
+    end
+    # the printed powers: a form with one term, at generic q and reduced by q^h = −1 at a level
+    @test string(qform(qcg, 1//2, 1//2, 1//2, -1//2, 1, 0)) == "q^(−1/2) √(1/[2])"
+    @test string(qform(qcg, 1//2, 1//2, 1//2, -1//2, 0, 0)) == "q^(1/2) √(1/[2])"
+    @test endswith(string(qform(qcg, 1//2, 1//2, 1//2, -1//2, 1, 0; k = 3)), "(k = 3, q = e^{iπ/5})")
+    # outside the fusion rule
+    @test iszero(qform(qcg, 1, 0, 1, 0, 2, 0; k = 3))
+    @test iszero(numeric_value(qform(qcg, 1, 0, 1, 0, 2, 0; k = 3)))
+    # terms with one monomial and different powers do not merge at generic q, and do merge when q^h = −1 aligns them
+    h = 9; s = FactorialSum(0:2; factors = [(0, 2, 1)], alternating = false)
+    @test length(qform(s; weight = (2h ÷ 3, 0)).terms) == 3
+    # 1 + q^(2h/3) + q^(4h/3) is a sum of cube roots of unity: no two terms merge, and it vanishes
+    @test length(qform(s; k = h - 2, reduce = false, weight = (2h ÷ 3, 0)).terms) == 3
+    @test iszero(qform(s; k = h - 2, weight = (2h ÷ 3, 0)))
+    @test !iszero(qform(s; k = h - 2, weight = (2h ÷ 3 + 2, 0)))
+    @test iszero(qform(FactorialSum(0:1; factors = [(0, 2, 1)], alternating = true); k = h - 2, weight = (2h, 0)))
+    @test length(qform(FactorialSum(0:1; factors = [(0, 2, 1)], alternating = true); k = h - 2, weight = (h, 0)).terms) == 1
+    # exact values with weights are not a target yet
+    @test_throws ArgumentError qcg(Exact(5), 1, 0, 1, 0, 1, 0)
 end
 
 @testset "values in quantum integers" begin
@@ -241,9 +301,38 @@ end
         end
     end
     # each stored row is a true relation between positive numbers
-    for h in (12, 30), (_, row, con) in QR._relations_at(h)
+    for h in (12, 30), (_, row, con, _) in QR._relations_at(h)
         @test prod(qn(n, h)^row[n] for n in 2:h÷2) ≈ Float64(con)
     end
+    # generators are distinct, and they span the relations: the rank is what the units leave free
+    for h in (12, 30, 60, 77, 121, 210, 420, 714, 1002)
+        @test length(QR._level_relations(h)) == (h ÷ 2 - 1) - (count(n -> gcd(n, h) == 1, 1:h) ÷ 2 - 1)
+    end
+    @test isempty(QR._level_relations(101))
+    # very smooth levels: finite in time and memory, every row true, and a form still comes back right
+    logq(n, h) = log(sinpi(big(n) / h)) - log(sinpi(1 / big(h)))
+    for h in (2002, 2310)
+        t = @elapsed rows = QR._level_relations(h)
+        @test t < 60 && !isempty(rows)
+        @test all(r -> maximum(abs, r[2]) <= QR.RELATION_EXPONENT_LIMIT, rows)
+        for (piv, row, con, _) in rows[1:29:end]
+            @test all(iszero, row[piv+1:end]) && row[piv] > 0
+            @test abs(sum(row[n] * logq(n, h) for n in 2:h÷2 if !iszero(row[n])) - log(BigFloat(con))) < 1e-30
+        end
+        # the classes stay complete without the table, with small entries
+        F = QR._level_field(h)
+        cl = QR._class_rows(F)
+        @test count(r -> r.pivot > 0, cl) == length(unique(r.pivot for r in cl if r.pivot > 0)) > length(rows)
+        @test maximum(maximum(abs, r.e) for r in cl) < 10^4
+    end
+    v = QR.level_value(QR._rule_for(q6j, 3, 3, 3, 3, 3, 3), 2000)
+    @test float(v) ≈ q6j(Level(2000), 3, 3, 3, 3, 3, 3) rtol = 1e-12
+    @test float(v * v) ≈ float(v)^2 rtol = 1e-12
+    @test float(qform(q6j, 3, 3, 3, 3, 3, 3; k = 2000)) ≈ q6j(Level(2000), 3, 3, 3, 3, 3, 3) rtol = 1e-12
+    # the largest levels go without a table, and a form is still correct
+    @test isempty(QR._level_relations(QR.RELATION_TABLE_LIMIT + 2))
+    # an exponent past the range of Int stops a reduction, and never wraps
+    @test_throws OverflowError QR._reduce_exponents!([0, typemin(Int) + 10, 100], [(3, [0, 4, 1], 1 // big(1), [2, 3])])
 
     @test_throws ArgumentError qform(q6j, 1, 1, 1, 1, 1, 1; k = 3)(0.8)
     @test_throws DomainError qform(q6j, 1, 1, 1, 1, 1, 1)(-0.8)

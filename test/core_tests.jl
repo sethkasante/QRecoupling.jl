@@ -20,6 +20,8 @@ const QR = QRecoupling
         written = QR._qform_value(qform(q6j,2,2,2,2,2,2), n -> (big(q)^n - big(q)^(-n)) / (big(q) - 1/big(q)))
         @test Float64(written) ≈ q6j(At(q),2,2,2,2,2,2) rtol=1e-12
     end
+    @test qform(qcg,1,0,1,0,1,0)(1.3) ≈ qcg(1,0,1,0,1,0;q=1.3)
+    @test float(qform(qcg,3//2,1//2,1,0,3//2,1//2;k=9)) ≈ qcg(3//2,1//2,1,0,3//2,1//2;k=9)
     @test iszero(q6j(Level(10),1,3//2,3//2,2,3//2,3//2))
     @test iszero(qform(q6j,1,5//2,5//2,5//2,3,3;k=10))
     for k in (3,10,12,30)

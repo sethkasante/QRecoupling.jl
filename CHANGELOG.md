@@ -4,6 +4,9 @@
 
 - Nemo is optional. Load it for exact level arithmetic, polynomial expansion and radicals; numerical evaluation, classical exact values and quantum-integer expressions work without it.
 - Added `qform` and quantum-integer displays for exact values, including native level zero checks. Polynomial views remain explicit.
+- `qform` now covers `qcg` and `q3j`: powers of q are printed in front and on each term, reduced by q^h = −1 at a level, where these values are complex.
+- The relations at a level are built from their distinct generators and kept reduced, with checked arithmetic. Levels such as k = 2000 no longer stall, and tables that took 384 ms at k = 1000 take 9 ms. At very smooth levels long rows are left out, so a form can stay longer there, and values are never affected.
+- Square classes use the generators directly, which keeps them complete at every level with small entries.
 - Certified native bounds, bad-prime rejection, stable `qform` evaluation, and quadratic-character nonzero certificates. Faster modular table setup and bounded cache retention.
 - **Breaking:** removed the deprecated canonical/DCR exact paths, `eager`, and one-argument `xvalue`. Polynomial result types now parameterize their payload. See [Migration](docs/src/migration.md).
 

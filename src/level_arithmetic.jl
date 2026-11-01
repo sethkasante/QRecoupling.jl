@@ -343,23 +343,55 @@ function _class_rows(F::LevelField)
     lock(LEVEL_FIELD_LOCK) do
         F.classes === nothing || return F.classes
         h = F.h; top = h ÷ 2
-        primes = _prime_factors(2h)
-        rows = [(copy(e), c, BigInt[]) for (_, e, c) in _relations_at(h)]
+        gens = _relation_generators(h)
+        small = _prime_factors(h)
+        # A row is a product of distinct generators, so its entries and its constant stay small whatever the
+        # elimination does. Parity decides everything in the first part, and needs nothing but these masks.
+        parity = [falses(top) for _ in gens]
+        used = [falses(length(gens)) for _ in gens]
+        for (i, (_, g, _)) in enumerate(gens)
+            used[i][i] = true
+            for (m, c) in g
+                parity[i][m] = isodd(c)
+            end
+        end
+        function product(mask)
+            e = zeros(Int, top); c = 1 // big(1)
+            for i in findall(mask)
+                for (m, a) in gens[i][2]
+                    e[m] += a
+                end
+                c *= small[gens[i][3]]
+            end
+            return e, c
+        end
+        out = ClassRow[]
+        for piv in top:-1:2
+            i = findfirst(row -> row[piv], parity)
+            i === nothing && continue
+            pr = popat!(parity, i); ur = popat!(used, i)
+            for j in eachindex(parity)
+                parity[j][piv] || continue
+                parity[j] .⊻= pr; used[j] .⊻= ur
+            end
+            e, c = product(ur)
+            push!(out, ClassRow(piv, e, c, BigInt[]))
+        end
+        # What is left has even exponents throughout, so it says that √c lies in the field. So do the quadratic subfields.
+        rows = Tuple{Vector{Int},Rational{BigInt},Vector{BigInt}}[(product(mask)..., BigInt[]) for mask in used]
         for (D, G) in _quadratic_roots(F)
             push!(rows, (zeros(Int, top), D // big(1), G))
         end
         times(a, b) = isempty(a) ? b : isempty(b) ? a : _label_mul(a, b, F)
-        out = ClassRow[]
-        odd_at(c, l) = isodd(_rational_valuation(c, l))
-        for piv in vcat(top:-1:2, [-l for l in primes])
-            has(row) = piv > 0 ? isodd(row[1][piv]) : odd_at(row[2], -piv)
+        for l in _prime_factors(2h)
+            has(row) = isodd(_rational_valuation(row[2], l))
             i = findfirst(has, rows)
             i === nothing && continue
             e, c, G = popat!(rows, i)
             for j in eachindex(rows)
                 has(rows[j]) && (rows[j] = (rows[j][1] .+ e, rows[j][2] * c, times(rows[j][3], G)))
             end
-            push!(out, ClassRow(piv, e, c, G))
+            push!(out, ClassRow(-l, e, c, G))
         end
         F.classes = out
         _trim_level_fields!(F)

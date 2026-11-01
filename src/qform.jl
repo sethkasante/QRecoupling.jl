@@ -3,7 +3,9 @@
 #
 #  A rational is a ratio of integers; a recoupling coefficient is built the same way from q-integers:
 #
-#      sign · c · ∏[n]^e · √(r ∏[n]^f) · Σ_terms c_t ∏[n]^(e_t)
+#      sign · c · q^(a/2) · ∏[n]^e · √(r ∏[n]^f) · Σ_terms c_t q^(b_t) ∏[n]^(e_t)
+#
+#  The powers of q come from the weights of `qcg` and `q3j`, and are absent from every other symbol.
 #
 #  Generic q. The integers [n], n ≥ 2, are multiplicatively independent, since [n] = ∏_{d|n, d>1} Ψ_d and the
 #  Ψ_d are coprime. A product of them therefore has one set of exponents, read off the rule by counting.
@@ -14,6 +16,7 @@
 #    the rest obey           [pb] ∏_{j=1}^{p−1} [jh/p] = p ∏_{j=0}^{p−1} [b + jh/p]    for each prime p dividing h.
 #  The last is the distribution relation of sin(pθ) = 2^(p−1) ∏ sin(θ + jπ/p), with the power of two removed by
 #  its limit b → 0. Reducing by the lattice of these relations writes large labels through small ones.
+#  Powers of q reduce by q^h = −1. The relations hold among the [n], so they act on each term whatever its power.
 #  The relations are valid identities, so reducing never changes a value. Two equal values can still print
 #  differently, so equality belongs to `Exact(k)`, not to this form.
 # ---------------------------------------------------------------------------------
@@ -22,7 +25,8 @@
     QForm
 
 A value written in q-integers, as returned by [`qform`](@ref). `f(q)` evaluates a generic form at a real
-positive `q`, `q = 1` included; `numeric_value(f)` and `float(f)` evaluate a form at its level.
+positive `q`, `q = 1` included; `numeric_value(f)` and `float(f)` evaluate a form at its level. A form with powers
+of q is complex at its level, q = e^{iπ/(k+2)}.
 """
 struct QForm{R<:Rational}
     k::Union{Nothing,Int}
@@ -33,9 +37,12 @@ struct QForm{R<:Rational}
     rad::Vector{Pair{Int,Int}}                                # ∏[n]^f under the square root
     terms::Vector{Tuple{R,Vector{Pair{Int,Int}}}}
     rule::Union{Nothing,FactorialSum}  # retain the stable numerical evaluator, separately from display
+    weight::Tuple{Int,Int}                                    # the weights (w, e2) of the rule, for that evaluator
+    qpow::Int                                                 # a, doubled: q^(a/2) in front
+    powers::Vector{Int}                                       # q^(b_t) of each term; empty when there are none
 end
 QForm{R}(k, sign, coef, out, radcoef, rad, terms) where {R<:Rational} =
-    QForm{R}(k, sign, coef, out, radcoef, rad, terms, nothing)
+    QForm{R}(k, sign, coef, out, radcoef, rad, terms, nothing, (0, 0), 0, Int[])
 
 _qform_zero(k) = QForm{Rational{Int}}(k, 0, 0 // 1, Pair{Int,Int}[], 1 // 1, Pair{Int,Int}[],
                                       Tuple{Rational{Int},Vector{Pair{Int,Int}}}[])
@@ -44,65 +51,162 @@ Base.iszero(f::QForm) = iszero(f.sign)
 
 # ---- the relations at a level ----
 
-"Is `p` prime, for the small numbers that divide a level's h."
-_small_prime(p::Int) = p >= 2 && all(d -> p % d != 0, 2:isqrt(p))
-
 """
-Echelon form of the distribution relations at h, from the largest label down: rows `(pivot label, exponents,
-constant)`, meaning ∏[n]^(exponents[n]) = constant, with the exponent of the pivot label positive and every
-larger label absent. Labels are 2 ≤ n ≤ h/2.
+The distribution relations at h, each once: `b` and `b + h/p` give the same relation, and so do `b` and `−b`. Sparse
+rows `(largest label, label => exponent, index of p among the primes of h)`, in ascending order of the largest label.
 """
-function _level_relations(h::Int)
-    top = h ÷ 2
-    rows = Tuple{Vector{Int},Rational{BigInt}}[]
-    for p in 2:h
-        (h % p == 0 && _small_prime(p)) || continue
+function _relation_generators(h::Int)
+    primes = _prime_factors(h)
+    gens = Tuple{Int,Vector{Pair{Int,Int}},Int}[]
+    for (i, p) in enumerate(primes)
         step = h ÷ p
-        for b in 1:top
-            (p * b) % h == 0 && continue
-            any(j -> (b + j * step) % h == 0, 0:p-1) && continue
-            e = zeros(Int, top)
-            for (i, c) in Iterators.flatten(((p * b => 1,), ((j * step => 1) for j in 1:p-1),
+        for b in 1:step÷2
+            e = Dict{Int,Int}()
+            for (n, c) in Iterators.flatten(((p * b => 1,), ((j * step => 1) for j in 1:p-1),
                                              ((b + j * step => -1) for j in 0:p-1)))
-                m, _ = _fold_label(i, h)
-                m >= 2 && (e[m] += c)
+                m, _ = _fold_label(n, h)
+                m >= 2 && (e[m] = get(e, m, 0) + c)
             end
-            any(!iszero, e) && push!(rows, (e, p // big(1)))
+            filter!(kv -> !iszero(kv.second), e)
+            isempty(e) || push!(gens, (maximum(keys(e)), collect(e), i))
         end
     end
-    out = Tuple{Int,Vector{Int},Rational{BigInt}}[]
-    for col in top:-1:2
-        while true
-            nz = [r for r in rows if !iszero(r[1][col])]
-            length(nz) <= 1 && break
-            piv = argmin(r -> abs(r[1][col]), nz)
-            for i in eachindex(rows)
-                r = rows[i]
-                (r === piv || iszero(r[1][col])) && continue
-                q = div(r[1][col], piv[1][col])
-                rows[i] = (r[1] .- q .* piv[1], r[2] / piv[2]^q)
+    return sort!(gens; by = first)
+end
+
+"v − q·r, unless an entry passes the limit, in which case `v` stays as it was. Below the limit nothing can overflow."
+function _row_sub!(v::Vector{T}, q::T, r::Vector{T}, tmp::Vector{T}, limit::T) where {T}
+    @inbounds for i in eachindex(v)
+        x = v[i] - q * r[i]
+        abs(x) > limit && return false
+        tmp[i] = x
+    end
+    copyto!(v, tmp)
+    return true
+end
+
+"Reduce the labels below `c` of the row `v` by the rows that have those labels as pivots."
+function _row_lower!(v::Vector{T}, c::Int, rows, tmp::Vector{T}, limit::T) where {T}
+    for d in c-1:-1:2
+        r = rows[d]
+        (iszero(v[d]) || r === nothing) && continue
+        q = Base.fld(v[d], r[d])
+        iszero(q) || _row_sub!(v, q, r, tmp, limit)
+    end
+    return v
+end
+
+"Put a row at pivot `c` and reduce the rows above by it."
+function _row_place!(v::Vector{T}, c::Int, rows, tmp::Vector{T}, limit::T) where {T}
+    _row_lower!(v, c, rows, tmp, limit)
+    rows[c] = v
+    for d in c+1:length(rows)
+        s = rows[d]
+        (s === nothing || iszero(s[c])) && continue
+        q = Base.fld(s[c], v[c])
+        iszero(q) || (_row_sub!(s, q, v, tmp, limit) && _row_lower!(s, c, rows, tmp, limit))
+    end
+end
+
+"""
+Insert the generators, smallest labels first, into an echelon form that stays reduced: each row runs over the labels,
+then over the primes of h for its constant. A generator that would pass `limit` is dropped, and every row kept is still
+a true relation. Returns `(rows by pivot, number dropped)`.
+"""
+function _relation_echelon(gens, top::Int, np::Int, ::Type{T}, limit::T) where {T}
+    rows = Vector{Union{Nothing,Vector{T}}}(nothing, top)
+    tmp = zeros(T, top + np)
+    dropped = 0
+    for (_, e, i) in gens
+        v = zeros(T, top + np)
+        for (m, c) in e
+            v[m] = c
+        end
+        v[top+i] = one(T)
+        while v !== nothing
+            c = findlast(!iszero, view(v, 1:top))
+            c === nothing && break
+            r = rows[c]
+            if r === nothing
+                v[c] < 0 && (v .= .-v)
+                _row_place!(v, c, rows, tmp, limit)
+                v = nothing
+            elseif iszero(rem(v[c], r[c]))
+                _row_sub!(v, div(v[c], r[c]), r, tmp, limit) || (dropped += 1; v = nothing)
+            else
+                g, a, b = gcdx(v[c], r[c])
+                top_row = a .* v .+ b .* r                   # holds the gcd at c
+                rest = div(r[c], g) .* v .- div(v[c], g) .* r # vanishes at c
+                if maximum(abs, top_row) > limit || maximum(abs, rest) > limit
+                    dropped += 1; v = nothing
+                else
+                    _row_place!(top_row, c, rows, tmp, limit)
+                    v = rest
+                end
             end
         end
-        k = findfirst(r -> !iszero(r[1][col]), rows)
-        k === nothing && continue
-        r = popat!(rows, k)
-        r[1][col] < 0 && (r = (-r[1], inv(r[2])))
-        push!(out, (col, r[1], r[2]))
+    end
+    return rows, dropped
+end
+
+const RelationRow = Tuple{Int,Vector{Int},Rational{BigInt},Vector{Int}}
+
+"Above this h no table is built: it would be large, and the forms stay correct without one."
+const RELATION_TABLE_LIMIT = 10^4
+"Up to this h a table that lost generators in `Int` is built again in `Int128`."
+const RELATION_WIDE_LIMIT = 2600
+"A row with an exponent beyond this cannot make a form shorter, so it is not kept."
+const RELATION_EXPONENT_LIMIT = 1 << 13
+
+"""
+The relations at h in echelon form, from the largest label down: rows `(pivot label, exponents, constant, labels with a
+nonzero exponent)`, meaning ∏[n]^(exponents[n]) = constant, with the exponent of the pivot label positive and every larger
+label absent. Labels are 2 ≤ n ≤ h/2.
+
+The reduced table has large entries at very smooth h: 3·10⁹ at h = 2002. So generators are dropped past a limit and long
+rows are left out. Rows are always true and a product reduced by them keeps its value, but at those levels reduction can
+stop short. The square classes of `_class_rows` use the generators, and do not depend on this.
+"""
+function _level_relations(h::Int)
+    out = RelationRow[]
+    h <= RELATION_TABLE_LIMIT || return out
+    top = h ÷ 2
+    primes = _prime_factors(h)
+    gens = _relation_generators(h)
+    rows, dropped = _relation_echelon(gens, top, length(primes), Int, 1 << 31)
+    if dropped > 0 && h <= RELATION_WIDE_LIMIT
+        rows, dropped = _relation_echelon(gens, top, length(primes), Int128, Int128(1) << 62)
+    end
+    # What survives an incomplete table is mostly long. Short rows come from building it under the limit itself.
+    dropped > 0 && ((rows, _) = _relation_echelon(gens, top, length(primes), Int, RELATION_EXPONENT_LIMIT))
+    for c in top:-1:2
+        r = rows[c]
+        r === nothing && continue
+        maximum(abs, r) <= RELATION_EXPONENT_LIMIT || continue
+        con = 1 // big(1)
+        for (i, p) in enumerate(primes)
+            con *= (p // big(1))^Int(r[top+i])
+        end
+        e = Int.(r[1:top])
+        push!(out, (c, e, con, findall(!iszero, e)))
     end
     return out
 end
 
-const LEVEL_RELATIONS = LRU{Int,Vector{Tuple{Int,Vector{Int},Rational{BigInt}}}}(maxsize = 64)
+"The memory of a table of relations, in words."
+_relations_weight(rows) = sum(r -> length(r[2]) + length(r[4]), rows; init = 1)
+
+const LEVEL_RELATIONS = LRU{Int,Vector{RelationRow}}(maxsize = 8 * 10^6, by = _relations_weight)
 _relations_at(h::Int) = get!(() -> _level_relations(h), LEVEL_RELATIONS, h)
 
 "Reduce the exponents `e` (labels ≤ h/2) by the relations, returning how many times each row was taken out."
 function _reduce_exponents!(e::Vector{Int}, rows)
     qs = zeros(Int, length(rows))
-    for (r, (piv, row, _)) in enumerate(rows)
+    for (r, (piv, row, _, labels)) in enumerate(rows)
         q = fld(e[piv], row[piv])
         iszero(q) && continue
-        @inbounds for i in eachindex(e)
-            e[i] -= q * row[i]
+        @inbounds for i in labels
+            e[i] = Base.Checked.checked_sub(e[i], Base.Checked.checked_mul(q, row[i]))
         end
         qs[r] = q
     end
@@ -210,7 +314,7 @@ function _split_square(r::R) where {R<:Rational}
 end
 
 """
-    qform(rule; k = nothing, reduce = true) -> QForm
+    qform(rule; k = nothing, reduce = true, weight = (0, 0)) -> QForm
     qform(symbol, labels...; k = nothing, reduce = true) -> QForm
     qform(q6j(Symbolic(), labels...); k = nothing, reduce = true) -> QForm
 
@@ -218,7 +322,9 @@ A value written in quantum integers `[n]`, the form recoupling theory is written
 every generic q, and `q = 1` turns it into integers. With `k` the labels fold to `n ≤ (k+2)/2` and vanishing
 factors leave their limit. With `reduce = true` the distribution relations of the level are applied too: terms
 can then merge or cancel, and a zero they reveal is returned as zero. The shorter of the two forms is returned.
-Rules with `q`-power weights (`qcg`, `q3j`) are not covered.
+
+`qcg` and `q3j` carry powers of q, printed in front and on each term. At a level these reduce by q^h = −1 and the value
+is complex, with `q` read as e^{iπ/(k+2)}. A rule with weights takes them as `weight = (w, e2)`, as `qcg_rule` returns them.
 
 With `reduce = true`, a native exact check also detects additive cancellations. With `reduce = false`,
 `iszero_at` can decide cancellations left in the expression. Two equal nonzero values can still print
@@ -229,16 +335,17 @@ rule-backed form reuses the original factorial rule and its stable numerical ker
 qform(q6j, 1, 1, 1, 1, 1, 1)          # ([5] − 1)/[4]!, which is 1/6 at q = 1
 qform(q6j, 1, 1, 1, 1, 1, 1; k = 3)   # −1/[2]²
 qform(q6j, 1, 1, 1, 2, 1, 1; k = 5)   # [2]/[3]²
+qform(qcg, 1//2, 1//2, 1//2, -1//2, 1, 0)   # q^(−1/2) √(1/[2])
 ```
 """
-function qform(s::FactorialSum; k = nothing, reduce::Bool = true)
+function qform(s::FactorialSum; k = nothing, reduce::Bool = true, weight::Tuple{Int,Int} = (0, 0))
     f = try
-        _qform(s, k, reduce, Rational{Int})
+        _qform(s, k, reduce, weight, Rational{Int})
     catch e
         (e isa OverflowError || e isa InexactError) || rethrow()
-        _qform(s, k, reduce, Rational{BigInt})
+        _qform(s, k, reduce, weight, Rational{BigInt})
     end
-    return typeof(f)(f.k, f.sign, f.coef, f.out, f.radcoef, f.rad, f.terms, s)
+    return typeof(f)(f.k, f.sign, f.coef, f.out, f.radcoef, f.rad, f.terms, s, weight, f.qpow, f.powers)
 end
 
 "How long a form reads: its terms first, then its exponents and the digits of its numbers."
@@ -301,42 +408,64 @@ function _level_exponents(s::FactorialSum, level::Int, ::Type{R}) where {R}
     return zs, pre, prerat, es, cs
 end
 
-function _qform(s::FactorialSum, k, reduce::Bool, ::Type{R}) where {R}
+"The powers of q on the terms `zs`, in [0, h) at a level, with the signs that q^h = −1 leaves on `cs`."
+function _term_powers(w::Int, zs::Vector{Int}, cs::Vector{R}, h) where {R}
+    iszero(w) && return nothing
+    ps = w .* zs
+    h === nothing && return ps
+    for t in eachindex(ps)
+        n, a = fldmod(ps[t], h)
+        ps[t] = a
+        isodd(n) && (cs[t] = -cs[t])
+    end
+    return ps
+end
+
+function _qform(s::FactorialSum, k, reduce::Bool, weight::Tuple{Int,Int}, ::Type{R}) where {R}
+    w, e2 = weight
     if k === nothing
         is_empty_sum(s) && return _qform_zero(nothing)
         zs = collect(s.zlo:s.zhi)
         raw = zeros(Int, _rule_top(s, zs))
         es = [copy(_term_exponents!(raw, s, z)) for z in zs]
         cs = R[s.alternating && isodd(z) ? -one(R) : one(R) for z in zs]
-        return _qform_assemble(nothing, Int(s.sign0), _prefactor_exponents(s, length(raw)), one(R), es, cs)
+        return _qform_assemble(nothing, Int(s.sign0), _prefactor_exponents(s, length(raw)), one(R), es, cs,
+                               _term_powers(w, zs, cs, nothing), e2)
     end
     level = Int(k); h = level + 2
     data = _level_exponents(s, level, R)
     data === nothing && return _qform_zero(level)
     zs, pre, prerat, es, cs = data
-    plain = _qform_assemble(level, Int(s.sign0), pre, prerat, es, cs)
+    ps = _term_powers(w, zs, cs, h)
+    plain = _qform_assemble(level, Int(s.sign0), pre, prerat, es, cs, ps, e2)
     reduce || return plain
     iszero(plain) && return plain
     # terms can cancel by additive relations that no rewriting of the products shows
-    length(plain.terms) > 1 && _level_sum_zero(s, zs, es, cs, h) && return _qform_zero(level)
+    length(plain.terms) > 1 && (iszero(w) ? _level_sum_zero(s, zs, es, cs, h) : _weighted_level_zero(s, w, level)) &&
+        return _qform_zero(level)
     rows = _relations_at(h)
     isempty(rows) && return plain                            # h prime: the folded labels are independent
     # Exponents first. Constants are only worth computing for a form that merges terms or reads shorter.
     es2 = copy.(es); pre2r = copy(pre)
-    qs = [_reduce_exponents!(e, rows) for e in es2]
-    qp = _reduce_exponents!(pre2r, rows)
+    qs, qp = try
+        [_reduce_exponents!(e, rows) for e in es2], _reduce_exponents!(pre2r, rows)
+    catch err
+        err isa OverflowError || rethrow()
+        return plain                                         # exponents this long never read shorter
+    end
     _exponent_cost(pre2r, es2) < _exponent_cost(pre, es) || return plain
     cs2 = [cs[t] * _relation_constant(rows, qs[t], R) for t in eachindex(cs)]
-    reduced = _qform_assemble(level, Int(s.sign0), pre2r, prerat * _relation_constant(rows, qp, R), es2, cs2)
+    reduced = _qform_assemble(level, Int(s.sign0), pre2r, prerat * _relation_constant(rows, qp, R), es2, cs2, ps, e2)
     iszero(reduced) && return reduced
     return _qform_cost(reduced) < _qform_cost(plain) ? reduced : plain
 end
 
 "Merge equal terms, move what every term shares in front, and take even exponents out of the root."
-function _qform_assemble(level, sign::Int, pre::Vector{Int}, prerat::R, es::Vector{Vector{Int}}, cs::Vector{R}) where {R}
+function _qform_assemble(level, sign::Int, pre::Vector{Int}, prerat::R, es::Vector{Vector{Int}}, cs::Vector{R},
+                         ps = nothing, e2::Int = 0) where {R}
     seen = Dict{Vector{Int},Int}(); keep = Int[]; coef = R[]
     for t in eachindex(es)
-        i = get!(seen, es[t], length(keep) + 1)
+        i = get!(seen, ps === nothing ? es[t] : vcat(es[t], ps[t]), length(keep) + 1)   # powers must agree to merge
         if i > length(keep)
             push!(keep, t); push!(coef, cs[t])
         else
@@ -382,56 +511,99 @@ function _qform_assemble(level, sign::Int, pre::Vector{Int}, prerat::R, es::Vect
     end
     outside, under = _split_square(prerat)
     c = abs(scale) * outside
-    return QForm{R}(level, scale < 0 ? -sign : sign, c, out, under, rad, terms)
+    sign = scale < 0 ? -sign : sign
+    ps === nothing && e2 == 0 && return QForm{R}(level, sign, c, out, under, rad, terms)
+    least = ps === nothing ? 0 : minimum(ps[keep[i]] for i in ts)
+    powers = ps === nothing ? Int[] : [ps[keep[i]] - least for i in ts]
+    qpow = e2 + 2least
+    if level !== nothing                                     # q^h = −1, nearest to 1 in front
+        h = level + 2
+        n = fld(qpow + h, 2h)
+        qpow -= 2h * n
+        isodd(n) && (sign = -sign)
+    end
+    return QForm{R}(level, sign, c, out, under, rad, terms, nothing, (0, 0), qpow, powers)
 end
 
 qform(v::SymbolicValue; kw...) = qform(v.rule; kw...)
 
 function qform(f::Function, args...; k = nothing, reduce::Bool = true)
+    (f === qcg || f === q3j) && return _qform_weighted(f, k, reduce, args...)
     k !== nothing && !_admissible_at(f, Int(k), args...) && return _qform_zero(Int(k))
     return qform(_rule_for(f, args...); k = k, reduce = reduce)
 end
 
+function _qform_weighted(s::FactorialSum, weight, admissible, k, reduce::Bool)
+    k !== nothing && !admissible(Int(k)) && return _qform_zero(Int(k))
+    return qform(s; k = k, reduce = reduce, weight = weight)
+end
+function _qform_weighted(::typeof(qcg), k, reduce::Bool, j1::Spin, m1::Spin, j2::Spin, m2::Spin, j::Spin, m::Spin = m1 + m2)
+    J1, M1, J2, M2, J, M = doubled(j1, m1, j2, m2, j, m)
+    return _qform_weighted(qcg_rule(J1, M1, J2, M2, J, M)..., kk -> _qδ(J1, J2, J, kk), k, reduce)
+end
+_qform_weighted(::typeof(qcg), k, reduce::Bool, a::Tuple{Spin,Spin}, b::Tuple{Spin,Spin}, c::Tuple{Spin,Spin}) =
+    _qform_weighted(qcg, k, reduce, a..., b..., c...)
+function _qform_weighted(::typeof(q3j), k, reduce::Bool, j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = -m1 - m2)
+    J1, J2, J3, M1, M2, M3 = doubled(j1, j2, j3, m1, m2, m3)
+    return _qform_weighted(q3j_rule(J1, J2, J3, M1, M2, M3)..., kk -> _qδ(J1, J2, J3, kk), k, reduce)
+end
+
 # ---- numbers ----
 
-function _qform_value(f::QForm, qn)
+"The form as written, from `qn(n)` = [n] and `phase(a)` = q^(a/2)."
+function _qform_value(f::QForm, qn, phase = a -> 1)
     iszero(f) && return zero(qn(2))
     mono(p) = (v = one(qn(2)); for (n, e) in p; v *= qn(n)^e; end; v)
     total = zero(qn(2))
-    for (c, p) in f.terms
-        total += oftype(total, numerator(c)) / oftype(total, denominator(c)) * mono(p)
+    for (t, (c, p)) in enumerate(f.terms)
+        u = oftype(real(total), numerator(c)) / oftype(real(total), denominator(c)) * mono(p)
+        total += isempty(f.powers) ? u : u * phase(2 * f.powers[t])
     end
-    w = oftype(total, numerator(f.coef)) / oftype(total, denominator(f.coef))
-    u = oftype(total, numerator(f.radcoef)) / oftype(total, denominator(f.radcoef))
-    return f.sign * w * mono(f.out) * sqrt(u * mono(f.rad)) * total
+    w = oftype(qn(2), numerator(f.coef)) / oftype(qn(2), denominator(f.coef))
+    u = oftype(qn(2), numerator(f.radcoef)) / oftype(qn(2), denominator(f.radcoef))
+    return f.sign * w * mono(f.out) * sqrt(u * mono(f.rad)) * total * phase(f.qpow)
 end
 
 function (f::QForm)(q::Real)
     f.k === nothing || throw(ArgumentError("this form is at level $(f.k); use `numeric_value` or `float`"))
     q > 0 || throw(DomainError(q, "a QForm is evaluated at positive real q"))
     Q = float(q)
-    f.rule === nothing || return qeval(f.rule; q = Q, T = typeof(Q))
-    return _qform_value(f, isone(Q) ? (n -> oftype(Q, n)) : (n -> qint(n; q = Q, T = typeof(Q))))
+    if f.rule !== nothing
+        f.weight == (0, 0) && return qeval(f.rule; q = Q, T = typeof(Q))
+        is_empty_sum(f.rule) && return zero(Q)
+        return isone(Q) ? classical_value(f.rule, typeof(Q)) : analytic_value(f.rule, Q, typeof(Q); weight = f.weight)
+    end
+    isone(Q) && return _qform_value(f, n -> oftype(Q, n))
+    return _qform_value(f, n -> qint(n; q = Q, T = typeof(Q)), a -> sqrt(Q)^a)
 end
 
+"The form as written at its level, in the current precision."
 function _qform_level(f::QForm)
     f.k === nothing && throw(ArgumentError("a generic form is evaluated with `f(q)`"))
     h = f.k + 2
-    return _qform_value(f, n -> sinpi(BigFloat(n) / h) / sinpi(inv(BigFloat(h))))
+    return _qform_value(f, n -> sinpi(BigFloat(n) / h) / sinpi(inv(BigFloat(h))), a -> cispi(BigFloat(a) / (2h)))
 end
+
+"Round a value at a level to the current precision. Weighted values are complex."
+_round_level(v::Real) = BigFloat(v)
+_round_level(v::Complex) = complex(BigFloat(real(v)), BigFloat(imag(v)))
 
 function numeric_value(f::QForm; bits::Integer = precision(BigFloat))
     bits > 0 || throw(ArgumentError("bits must be positive"))
     f.k === nothing && throw(ArgumentError("a generic form is evaluated with `f(q)`"))
-    if f.rule !== nothing
-        v = setprecision(() -> qeval(f.rule; k = f.k, T = BigFloat), BigFloat, Int(bits) + 32)
-        return setprecision(() -> BigFloat(v), BigFloat, Int(bits))
+    iszero(f) && return setprecision(() -> zero(BigFloat), BigFloat, Int(bits))
+    v = setprecision(BigFloat, Int(bits) + 32) do
+        f.rule === nothing && return _qform_level(f)
+        f.weight == (0, 0) && return qeval(f.rule; k = f.k, T = BigFloat)
+        return _weighted_level_value(f.rule, f.weight..., f.k, Complex{BigFloat})
     end
-    v = setprecision(() -> _qform_level(f), BigFloat, Int(bits) + 32)
-    return setprecision(() -> BigFloat(v), BigFloat, Int(bits))
+    return setprecision(() -> _round_level(v), BigFloat, Int(bits))
 end
-Base.float(f::QForm) = Float64(numeric_value(f; bits = 128))
-Base.Float64(f::QForm) = float(f)
+function Base.float(f::QForm)
+    v = numeric_value(f; bits = 128)
+    return v isa Complex ? ComplexF64(v) : Float64(v)
+end
+Base.Float64(f::QForm) = Float64(numeric_value(f; bits = 128))
 
 # ---- display ----
 
@@ -474,10 +646,17 @@ function _q_product(p::Vector{Pair{Int,Int}})
     return join(up), join(dn)
 end
 
-function _q_fraction(c::Rational, p::Vector{Pair{Int,Int}}, inner::String = "")
+"q^(a/2) as text, from the doubled power `a`."
+function _q_phase(a::Int)
+    iszero(a) && return ""
+    a == 2 && return "q"
+    return iseven(a) ? "q" * to_superscript(a ÷ 2) : "q^(" * (a < 0 ? "−" : "") * string(abs(a)) * "/2)"
+end
+
+function _q_fraction(c::Rational, p::Vector{Pair{Int,Int}}, inner::String = "", phase::String = "")
     up, down = _q_product(p)
     a = numerator(c); b = denominator(c)
-    top = (isone(a) && !(isempty(up) && isempty(inner)) ? "" : string(a)) * up * inner
+    top = (isone(a) && !(isempty(up) && isempty(inner) && isempty(phase)) ? "" : string(a)) * phase * up * inner
     bot = (isone(b) ? "" : string(b)) * down
     isempty(bot) && return top
     factors = count(==('['), bot) + (isone(b) ? 0 : 1)
@@ -497,12 +676,12 @@ function _unwrap(text::String)
     return text[nextind(text, 1):prevind(text, lastindex(text))]
 end
 
-function _q_sum(terms; most::Int = QFORM_SHOWN_TERMS)
+function _q_sum(terms; most::Int = QFORM_SHOWN_TERMS, powers::Vector{Int} = Int[])
     length(terms) == 1 && isone(first(terms)[1]) && isempty(first(terms)[2]) && return ""
     shown = first(terms, most)
     parts = String[]
     for (i, (c, p)) in enumerate(shown)
-        t = _q_fraction(abs(c), p)
+        t = _q_fraction(abs(c), p, "", isempty(powers) ? "" : _q_phase(2 * powers[i]))
         push!(parts, i == 1 ? (c < 0 ? "−" : "") * t : (c < 0 ? " − " : " + ") * t)
     end
     extra = length(terms) - length(shown)
@@ -513,14 +692,17 @@ end
 "The form as text, without its level, showing at most `most` terms of its sum."
 function _qform_body(f::QForm; most::Int = QFORM_SHOWN_TERMS)
     iszero(f) && return "0"
-    text = (f.sign < 0 ? "−" : "") * _q_fraction(f.coef, f.out, _q_sum(f.terms; most = most))
+    text = (f.sign < 0 ? "−" : "") * _q_fraction(f.coef, f.out, _q_sum(f.terms; most = most, powers = f.powers), _q_phase(f.qpow))
     isempty(f.rad) && isone(f.radcoef) && return _unwrap(text)
-    return text * " √(" * _q_fraction(f.radcoef, f.rad) * ")"
+    root = "√(" * _q_fraction(f.radcoef, f.rad) * ")"
+    text == "1" && return root
+    text == "−1" && return "−" * root
+    return text * " " * root
 end
 
 function Base.show(io::IO, f::QForm)
     print(io, _qform_body(f))
-    f.k === nothing || print(io, "   (k = ", f.k, ")")
+    f.k === nothing || print(io, "   (k = ", f.k, isempty(f.powers) && iszero(f.qpow) ? ")" : ", q = e^{iπ/$(f.k + 2)})")
 end
 
 

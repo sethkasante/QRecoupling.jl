@@ -350,7 +350,8 @@ Use `q` for a real or complex parameter and `k` for the level, q = e^{iπ/(k+2)}
 q > 0 the coefficients form an orthogonal matrix in (j, m₁) at fixed m; at complex q, including a level,
 orthogonality is bilinear, Cᵀ C = 1 (at a level, for complete sectors). Negative real q is evaluated as
 `complex(q)`. At a level, labels outside the fusion rule j₁ + j₂ + j ≤ k give zero. `exact = true` and
-`Exact()` give the exact classical value; exact level values and `Symbolic()` are not available yet.
+`Exact()` give the exact classical value; exact level values and `Symbolic()` are not available yet, but
+[`qform`](@ref) writes the coefficient in quantum integers and powers of q, generic or at a level.
 [`qcg_matrix`](@ref) and [`qcg_row`](@ref) build whole matrices and rows by recurrence.
 
 Square roots follow the balanced-factor convention: `[n] = Π_{d|n,d>1} Ψ_d(q)`, `Ψ_d(q) = q^{−φ(d)} Φ_d(q²)`,
@@ -390,7 +391,8 @@ relabellings by q-powers: (j₂ j₁ j₃; m₂ m₁ m₃)_q = (−1)^{j₁+j₂
 m → −m, and (j₂ j₃ j₁; m₂ m₃ m₁)_q = q^{m₂} (j₁ j₂ j₃; m₁ m₂ m₃)_q.
 
 From v0.5, the deformation-dependent weights are included; classical values are unchanged.
-`Exact()` is supported; `Exact(k)` and `Symbolic()` are not available yet.
+`Exact()` is supported; `Exact(k)` and `Symbolic()` are not available yet. [`qform`](@ref) writes the symbol in
+quantum integers and powers of q, generic or at a level.
 """
 function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = -m1 - m2;
              k = nothing, q = nothing, exact::Bool = false, T::Type{TT} = Float64,
