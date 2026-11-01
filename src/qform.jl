@@ -876,15 +876,6 @@ function Base.show(io::IO, f::QForm)
     f.k === nothing || print(io, "   (k = ", f.k, isempty(w.powers) && iszero(w.qpow) ? ")" : ", q = e^{iπ/$(f.k + 2)})")
 end
 
-"The form, with its value beside it when it is at a level."
-function Base.show(io::IO, ::MIME"text/plain", f::QForm)
-    show(io, f)
-    (f.k === nothing || iszero(_written(f))) && return
-    v = float(f)
-    print(io, "   ≈ ", replace(string(v isa Complex ? complex(round(real(v); sigdigits = 7), round(imag(v); sigdigits = 7)) : round(v; sigdigits = 7)), "-" => "−"))
-end
-
-
 "A sum of labelled terms over a common factor, as text."
 function _q_sum_str(terms; most::Int)
     isempty(terms) && return "0"

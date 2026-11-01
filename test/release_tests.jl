@@ -688,7 +688,7 @@ end
     # a level: the same form, simplified, and no backend needed for any of it
     g = q6j(Exact(3), 1, 1, 1, 1, 1, 1)
     @test g isa QForm && g.k == 3 && string(g) == "−1/[2]²   (k = 3)"
-    @test sprint(show, MIME("text/plain"), g) == "−1/[2]²   (k = 3)   ≈ −0.381966"
+    @test sprint(show, MIME("text/plain"), g) == "−1/[2]²   (k = 3)"
     @test string(radical(g)) == "(√5 − 3)/2"
     @test_throws ArgumentError g(1)
     @test_throws ArgumentError f == g
