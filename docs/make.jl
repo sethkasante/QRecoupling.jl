@@ -1,13 +1,13 @@
 # docs/make.jl
 using Documenter
-using QRecoupling
+using QRecoupling, Nemo
 
-DocMeta.setdocmeta!(QRecoupling, :DocTestSetup, :(using QRecoupling); recursive=true)
+DocMeta.setdocmeta!(QRecoupling, :DocTestSetup, :(using QRecoupling, Nemo); recursive=true)
 
 makedocs(;
     sitename = "QRecoupling.jl",
     authors = "Seth K Asante <seth.kurankyi@gmail.com>",
-    modules = [QRecoupling],
+    modules = [QRecoupling, Base.get_extension(QRecoupling, :QRecouplingNemoExt)],
     build = get(ENV, "QRECOUPLING_DOCS_BUILD_DIR", "build"),
     format = Documenter.HTML(;
         prettyurls = get(ENV, "CI", "false") == "true",

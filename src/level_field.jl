@@ -8,8 +8,8 @@
 # The number of primes comes from a proof, not from the digits settling. Clear denominators, so that
 # E = D·J·C·(value − w) is an algebraic integer, with J, C and D integers. E vanishes at every place above every
 # prime used, so their product M divides E. A nonzero algebraic integer has some conjugate of size at least 1, so
-# |σE| < M for every σ forces E = 0, and σE is bounded term by term from the sizes of the conjugates, computed in
-# floating point with a margin.
+# |σE| < M for every σ forces E = 0, and σE is bounded term by term from the sizes of the conjugates. Those sizes
+# are enclosed once per level and rounded outward to fixed-point integers, so the bound itself is integer addition.
 #
 # C can be an integer because a q-integer is nearly a unit: [n] = unit · (1 − ζ_o)/(1 − ζ_h) with o = h/gcd(n, h),
 # and 1 − ζ_o is a unit unless o is a power of a prime ℓ, where its valuation is 1/φ(o) with ℓ normalized to 1.
@@ -50,6 +50,23 @@ function _fill_factorials!(fact, invf, t::LevelPlaces, h::Int)
     end
 end
 
+"Invert a vector of nonzero residues with one modular inverse and linear work."
+function _invert_places!(v::Vector{UInt64}, m::Montgomery)
+    prefix = similar(v); run = m.one
+    for i in eachindex(v)
+        prefix[i] = run
+        run = mont_mul(m, run, v[i])
+    end
+    iszero(run) && throw(DivideError())
+    run = mont_inv(m, run)
+    for i in reverse(eachindex(v))
+        old = v[i]
+        v[i] = mont_mul(m, run, prefix[i])
+        run = mont_mul(m, run, old)
+    end
+    return v
+end
+
 function LevelPlaces(p::UInt64, h::Int, N::Int)
     m = Montgomery(p); r = to_mont(m, root_of_unity(p, 2h))
     pow = Vector{UInt64}(undef, 2h); pow[1] = m.one
@@ -58,8 +75,8 @@ function LevelPlaces(p::UInt64, h::Int, N::Int)
     end
     as = [a for a in 1:h-1 if gcd(a, 2h) == 1]; d = length(as)
     X = [mont_add(m, pow[a+1], pow[2h-a+1]) for a in as]
-    den = [mont_inv(m, mont_sub(m, pow[a+1], pow[2h-a+1])) for a in as]
-    nd = [[mont_inv(m, mont_sub(m, X[i], X[i-j+1])) for i in j:d] for j in 2:d]
+    den = _invert_places!([mont_sub(m, pow[a+1], pow[2h-a+1]) for a in as], m)
+    nd = [_invert_places!([mont_sub(m, X[i], X[i-j+1]) for i in j:d], m) for j in 2:d]
     fact = Matrix{UInt64}(undef, N + 1, d); invf = similar(fact)
     t = LevelPlaces(m, as, pow, den, fact, invf, X, nd)
     _fill_factorials!(fact, invf, t, h)
@@ -73,28 +90,45 @@ function _grow(t::LevelPlaces, h::Int, N::Int)
     return g
 end
 
+"""
+A relation ∏[n]^e · G² = c used to rewrite square classes, with G a field element given by its coordinates, or left
+empty for 1. `pivot > 0` is a label whose exponent is odd in `e`; `pivot < 0` is minus a prime whose exponent is odd
+in `c`, with every exponent in `e` even.
+"""
+struct ClassRow
+    pivot::Int
+    e::Vector{Int}
+    c::Rational{BigInt}
+    root::Vector{BigInt}
+end
+
 "The primes in use at one level and their tables."
 mutable struct LevelField
     h::Int
     d::Int
     places::Vector{LevelPlaces}
     cursor::UInt64
-    logs::Matrix{Float64}       # row n + 1: log2 of the size of [n]!, as in `LevelPlaces`, at each conjugate
-    valuation::Vector{Tuple{Int,Float64}}   # for each [n], n ≤ h/2: the prime ℓ dividing it and its valuation
+    valuation::Vector{Tuple{Int,Rational{Int}}}   # for each [n], n ≤ h/2: the prime ℓ dividing it and its valuation
+    basis::Vector{Vector{Pair{Int,BigInt}}} # coordinates on [1], …, [d] of [d+1], …, [h÷2]; empty until asked for
+    basisbits::Int              # bits of the largest of those coordinates
+    classes::Union{Nothing,Vector{ClassRow}}
+    inverses::Dict{Int,Tuple{Vector{BigInt},BigInt}}    # coordinates of 1/[n], as they are asked for
+    logsines::Union{Nothing,Tuple{Vector{Int},Vector{Int}}} # `_log_sine_table(h)`, once it is asked for
 end
-LevelField(h::Int) = LevelField(h, euler_phi(2h) ÷ 2, LevelPlaces[], ((UInt64(1) << 62) - 1) ÷ UInt64(2h),
-                                Matrix{Float64}(undef, 0, 0), _label_valuations(h))
+LevelField(h::Int) = LevelField(h, _totient(2h) ÷ 2, LevelPlaces[], ((UInt64(1) << 62) - 1) ÷ UInt64(2h),
+                                _label_valuations(h),
+                                Vector{Pair{Int,BigInt}}[], 0, nothing, Dict{Int,Tuple{Vector{BigInt},BigInt}}(), nothing)
 
-"For each [n] with n ≤ h/2: `(ℓ, v)` when it is not a unit, with ℓ normalized to valuation 1, and `(0, 0.0)` when it is."
+"For each [n] with n ≤ h/2: `(ℓ, v)` when it is not a unit, with ℓ normalized to valuation 1, and `(0, 0//1)` when it is."
 function _label_valuations(h::Int)
-    out = fill((0, 0.0), h ÷ 2)
+    out = fill((0, 0//1), h ÷ 2)
     power_of(o) = (fs = _prime_factors(o); length(fs) == 1 ? fs[1] : 0)
     top = h > 1 ? power_of(h) : 0
     for n in 2:h÷2
         o = h ÷ gcd(n, h)
         l = o > 1 ? power_of(o) : 0
         l == 0 && continue
-        v = 1 / euler_phi(o) - (top == 0 ? 0.0 : 1 / euler_phi(h))
+        v = 1 // _totient(o) - (top == 0 ? 0//1 : 1 // _totient(h))
         v > 0 && (out[n] = (l, v))
     end
     return out
@@ -103,43 +137,55 @@ end
 const LEVEL_FIELDS = LRU{Int,LevelField}(maxsize = 64)
 const LEVEL_FIELD_LOCK = ReentrantLock()
 
-_level_field(h::Int) = get!(() -> LevelField(h), LEVEL_FIELDS, h)
+_level_field(h::Int) = lock(LEVEL_FIELD_LOCK) do
+    get!(() -> LevelField(h), LEVEL_FIELDS, h)
+end
+
+# Mutable tables grow after insertion, so an entry-count limit alone cannot bound retained memory.
+const LEVEL_FIELD_CACHE_LIMIT = Ref(64 * 1024^2)
+function _trim_level_fields!(current::LevelField)
+    sum(Base.summarysize(F) for F in values(LEVEL_FIELDS); init = 0) <= LEVEL_FIELD_CACHE_LIMIT[] && return
+    empty!(LEVEL_FIELDS)
+    Base.summarysize(current) <= LEVEL_FIELD_CACHE_LIMIT[] && (LEVEL_FIELDS[current.h] = current)
+    return nothing
+end
 
 "Tables of the i-th prime at this level, with factorials up to at least N."
 function _places(F::LevelField, i::Int, N::Int)
     lock(LEVEL_FIELD_LOCK) do
+        grew = false
         while length(F.places) < i
             p = 1 + UInt64(2F.h) * F.cursor
             F.cursor -= 1
-            is_prime_u64(p) && push!(F.places, LevelPlaces(p, F.h, max(N, 2F.h)))
+            if is_prime_u64(p)
+                push!(F.places, LevelPlaces(p, F.h, N))
+                grew = true
+            end
         end
         t = F.places[i]
         if size(t.fact, 1) <= N
             t = _grow(t, F.h, max(N, 2 * (size(t.fact, 1) - 1)))
             F.places[i] = t
+            grew = true
         end
+        grew && _trim_level_fields!(F)
         return t
     end
 end
 
-"Sizes of the factorials at the conjugates of this level, up to at least N."
-function _place_logs(F::LevelField, N::Int)
+"The fixed-point logarithms of the sines of this level, kept with its other tables."
+function _log_sines(F::LevelField)
+    F.logsines === nothing || return F.logsines
     lock(LEVEL_FIELD_LOCK) do
-        size(F.logs, 1) > N && return F.logs
-        h = F.h; N = max(N, 2h)
-        as = [a for a in 1:h-1 if gcd(a, 2h) == 1]
-        logs = zeros(Float64, N + 1, length(as))
-        for (i, a) in enumerate(as), n in 1:N
-            logs[n+1, i] = logs[n, i] + (rem(n, h) == 0 ? log2(n ÷ h) :
-                                         log2(abs(sinpi(a * n / h) / sinpi(a / h))))
-        end
-        F.logs = logs
-        return logs
+        F.logsines === nothing || return F.logsines
+        F.logsines = _log_sine_table(F.h)
+        _trim_level_fields!(F)
+        return F.logsines
     end
 end
 
 "What is needed to evaluate a rule at the places of a level: its factorial arguments, and the labels in front."
-struct LevelSum
+struct LevelRule
     args::Matrix{Int}               # one column per term
     powers::Vector{Int}
     negative::Vector{Bool}
@@ -152,8 +198,8 @@ Bits of J·C·front·S at its largest conjugate, of J and of C, each rounded up.
 line: for each prime ℓ, the smallest power of ℓ whose valuation covers theirs. The factorial table already holds
 the rational in each term, so J appears once.
 """
-function _level_sum_bound(L::LevelSum, front::Vector{Int}, es::Vector{Vector{Int}}, cs, h::Int)
-    F = _level_field(h); logs = _place_logs(F, L.top)
+function _level_sum_bound(L::LevelRule, front::Vector{Int}, es::Vector{Vector{Int}}, cs, h::Int)
+    F = _level_field(h)
     m = zeros(Int, length(front))
     for e in es, n in eachindex(m)
         m[n] = max(m[n], -(e[n] + front[n]))
@@ -162,46 +208,54 @@ function _level_sum_bound(L::LevelSum, front::Vector{Int}, es::Vector{Vector{Int
     for c in cs
         J = lcm(J, denominator(c))
     end
-    need = Dict{Int,Float64}()
+    need = Dict{Int,Rational{BigInt}}()
     for n in 2:length(m)
         l, v = F.valuation[n]
-        l != 0 && m[n] > 0 && (need[l] = get(need, l, 0.0) + m[n] * v)
+        l != 0 && m[n] > 0 && (need[l] = get(need, l, big(0)//big(1)) + big(m[n]) * v)
     end
-    Cbits = 0.0
-    for (l, v) in need
-        Cbits += ceil(v + 1e-6) * log2(l)
-    end
-    top = -Inf; scale = 1.0
-    @inbounds for a in axes(logs, 2)
-        extra = 0.0
-        for n in 2:length(front)
-            iszero(front[n]) || (extra += front[n] * (logs[n+1, a] - logs[n, a]))
+    # C clears every negative prime-ideal valuation. Integer ceilings, no floating threshold.
+    Cbits = sum(Int(cld(numerator(v), denominator(v))) * ndigits(l; base = 2) for (l, v) in need; init = 0)
+    Jbits = ndigits(J; base = 2)
+    # Each log size in fixed point: a positive power takes its upper bound, a negative one its lower bound.
+    up, lo = _log_sines(F)
+    N = length(front)
+    cbits = [ndigits(abs(numerator(c)); base = 2) - ndigits(denominator(c); base = 2) + 1 for c in cs]
+    # Nothing below can wrap around if the largest possible total fits, which keeps the integers a proof.
+    weight = maximum(e -> sum(abs(e[n] + front[n]) for n in 2:N; init = 0), es)
+    Base.Checked.checked_add(Base.Checked.checked_mul(2weight, max(maximum(abs, up), maximum(abs, lo))),
+                             Base.Checked.checked_mul(maximum(abs, cbits), 1 << LOG_FRACTION_BITS))
+    above = Vector{Int}(undef, N); below = Vector{Int}(undef, N)
+    top = typemin(Int)
+    for a in 1:h-1
+        gcd(a, 2h) == 1 || continue
+        b = min(a, h - a)
+        @inbounds for n in 2:N
+            r = rem(a * n, h); r = min(r, h - r)
+            above[n] = up[r] - lo[b]; below[n] = lo[r] - up[b]
         end
-        most = -Inf
-        for z in axes(L.args, 2)
-            b = 0.0
-            for j in axes(L.args, 1)
-                b += L.powers[j] * logs[L.args[j, z]+1, a]
+        for t in eachindex(es)
+            iszero(cs[t]) && continue
+            e = es[t]; total = cbits[t] << LOG_FRACTION_BITS
+            @inbounds for n in 2:N
+                power = e[n] + front[n]
+                total += power * (power > 0 ? above[n] : below[n])
             end
-            most = max(most, b)
+            top = max(top, total)
         end
-        scale = max(scale, abs(most), abs(extra))
-        top = max(top, most + extra)
     end
-    margin = 8 + 1e-9 * scale
-    Jbits = ndigits(J; base = 2); C = ceil(Int, Cbits + 1)
-    return max(ceil(Int, top + log2(size(L.args, 2)) + margin), 0) + Jbits + C, Jbits, C
+    bits = iszero(count(!iszero, cs)) ? 0 : cld(top, 1 << LOG_FRACTION_BITS) + ndigits(length(es); base = 2)
+    return max(bits, 0) + Jbits + Cbits, Jbits, Cbits
 end
 
-function _level_sum(s::FactorialSum, zs::Vector{Int}, front::Vector{Int}, h::Int)
+function _level_rule(s::FactorialSum, zs::Vector{Int}, front::Vector{Int}, h::Int)
     fs = collect(s.fac)
     args = [_arg(f, z) for f in fs, z in zs]
-    return LevelSum(args, [Int(f.c) for f in fs], [s.alternating && isodd(z) for z in zs],
-                    _nonzero_pairs(front), max(maximum(args; init = 1), h ÷ 2))
+    return LevelRule(args, [Int(f.c) for f in fs], [s.alternating && isodd(z) for z in zs],
+                    _nonzero_pairs(front), maximum(args; init = 1))
 end
 
 "The value at place `i`, in Montgomery form."
-function _place_value(t::LevelPlaces, L::LevelSum, i::Int, h::Int)
+function _place_value(t::LevelPlaces, L::LevelRule, i::Int, h::Int)
     m = t.m; acc = zero(UInt64)
     @inbounds for z in axes(L.args, 2)
         u = m.one
@@ -284,11 +338,11 @@ end
 The coordinates of the cleared front·S on [1], …, [d], over a common denominator: `(numerators, D)`, proved
 by the bound described at the head of this file.
 """
-function _level_coordinates(L::LevelSum, bits::Int, Jbits::Int, Cbits::Int, h::Int)
+function _level_coordinates(L::LevelRule, bits::Int, Jbits::Int, Cbits::Int, h::Int)
     F = _level_field(h); d = F.d
     acc = [big(0) for _ in 1:d]; M = big(1)
     c = Vector{UInt64}(undef, d); p = Vector{UInt64}(undef, d)
-    S = inv(sinpi(1 / h)); need = bits
+    need = bits
     i = 0
     while true
         i += 1
@@ -307,12 +361,9 @@ function _level_coordinates(L::LevelSum, bits::Int, Jbits::Int, Cbits::Int, h::I
         rec === nothing && continue
         w, D = rec
         isone(gcd(D, M)) || continue
-        wbits = 0.0
-        for n in 1:d
-            iszero(w[n]) && continue
-            wbits = max(wbits, ndigits(w[n]; base = 2) + (n < 2 ? 0.0 : log2(min(n, S))))
-        end
-        total = max(ndigits(D; base = 2) + bits, Jbits + Cbits + ceil(Int, wbits + log2(d)) + 1) + 2
+        # Every conjugate satisfies |[n]| <= n. This integer bound also covers the candidate.
+        wbound = sum(abs(w[n]) * n for n in 1:d)
+        total = max(ndigits(D; base = 2) + bits, Jbits + Cbits + ndigits(wbound; base = 2)) + 2
         ndigits(M; base = 2) > total && return w, D, i
         need = total
     end
@@ -325,7 +376,7 @@ the first prime, and the bound settles a vanishing one.
 function _level_sum_zero(s::FactorialSum, zs::Vector{Int}, es, cs, h::Int)
     F = _level_field(h)
     front = zeros(Int, length(first(es)))
-    L = _level_sum(s, zs, front, h)
+    L = _level_rule(s, zs, front, h)
     iszero(_place_value(_places(F, 1, L.top), L, 1, h)) || return false
     need = first(_level_sum_bound(L, front, es, cs, h))
     bits = 0; i = 0
@@ -341,17 +392,22 @@ function _level_sum_zero(s::FactorialSum, zs::Vector{Int}, es, cs, h::Int)
 end
 
 """
-A value at level k: (Σ a_n [n]) √(r ∏[n]^f), with n ≤ d in the sum, exponents f = 1 under the root, and the
-square part of the radicand already taken into the sum.
+    LevelValue
+
+A value at level k: (Σ_n num[n] [n]) / den · √(r ∏_{n ∈ rad} [n]), with n ≤ d = φ(2h)/2 in the sum. The root is
+positive, because r > 0 and [n] > 0 for n ≤ h/2, and (r, rad) is reduced by the relations of the level, so that
+equal roots carry equal keys as far as those relations see.
 """
 struct LevelValue
     k::Int
-    coeffs::Vector{Rational{BigInt}}
-    radcoef::Rational{BigInt}
-    rad::Vector{Pair{Int,Int}}
+    num::Vector{BigInt}
+    den::BigInt
+    r::BigInt
+    rad::Vector{Int}
 end
 
-Base.iszero(v::LevelValue) = all(iszero, v.coeffs)
+Base.iszero(v::LevelValue) = all(iszero, v.num)
+coordinates(v::LevelValue) = [a // v.den for a in v.num]
 
 "The value of a rule at a level, in q-integers."
 function level_value(s::FactorialSum, k::Integer)
@@ -364,28 +420,18 @@ function level_value(s::FactorialSum, k::Integer)
 end
 
 function _level_value(s::FactorialSum, k::Int, ::Type{R}) where {R}
-    h = k + 2; d = euler_phi(2h) ÷ 2
-    zero_value = LevelValue(k, fill(0 // big(1), d), 1 // big(1), Pair{Int,Int}[])
+    h = k + 2
     data = _level_exponents(s, k, R)
-    data === nothing && return zero_value
+    data === nothing && return zero(LevelValue, k)
     zs, pre, prerat, es, cs = data
-    front = [fld(a, 2) for a in pre]
-    rad = [n => 1 for n in eachindex(pre) if isodd(pre[n])]
-    L = _level_sum(s, zs, front, h)
+    front, outside, r, rad, roots = _canonical_class(copy(pre), Rational{BigInt}(prerat), h)
+    L = _level_rule(s, zs, front, h)
     w, D, _ = _level_coordinates(L, _level_sum_bound(L, front, es, cs, h)..., h)
-    all(iszero, w) && return zero_value
-    outside, under = _split_square(prerat)
-    scale = Int(s.sign0) * Rational{BigInt}(outside) / D
-    return LevelValue(k, [scale * a for a in w], Rational{BigInt}(under), rad)
-end
-
-function numeric_value(v::LevelValue; bits::Integer = precision(BigFloat))
-    w = setprecision(BigFloat, Int(bits) + 32) do
-        h = v.k + 2
-        qn(n) = sinpi(BigFloat(n) / h) / sinpi(inv(BigFloat(h)))
-        total = sum(BigFloat(c) * qn(n) for (n, c) in enumerate(v.coeffs))
-        total * sqrt(BigFloat(v.radcoef) * prod(qn(n)^e for (n, e) in v.rad; init = BigFloat(1)))
+    all(iszero, w) && return zero(LevelValue, k)
+    F = _level_field(h)
+    for G in roots
+        w = _label_mul(w, G, F)
     end
-    return setprecision(() -> BigFloat(w), BigFloat, Int(bits))
+    c = Int(s.sign0) * outside
+    return _level_make(k, w .* numerator(c), D * denominator(c), r, rad)
 end
-Base.float(v::LevelValue) = Float64(numeric_value(v; bits = 128))

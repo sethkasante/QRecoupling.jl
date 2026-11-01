@@ -174,19 +174,7 @@ end
 #  Sums, keyed by square class
 # ---------------------------------------------------------------------------------
 
-"""
-    ExactXSum
-
-A sum `Σ_S c_S(x)·√(∏_{e ∈ S} ψ_e(x))` at one level, keyed by the square class `S`. Products fuse classes
-and stay exact; sums cannot, so they are kept apart.
-
-Two keys may denote the same root at a level, so only an empty sum is immediately zero; `iszero` uses the
-structural and norm tests, then exact algebraic numbers.
-"""
-struct ExactXSum
-    k::Int
-    terms::Dict{Vector{Int},QQPolyRingElem}
-end
+# Polynomial coefficients are provided by Nemo.
 
 ExactXSum(k::Integer) = ExactXSum(Int(k), Dict{Vector{Int},QQPolyRingElem}())
 function ExactXSum(v::ExactX)

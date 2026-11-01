@@ -140,16 +140,7 @@ function _xpoly_terms(f, h::Int)
             if !iszero(labels[n])]
 end
 
-"A sum of labelled terms over a common factor, as text."
-function _q_sum_str(terms; most::Int)
-    isempty(terms) && return "0"
-    top = big(0); bot = big(1)
-    for (c, _) in terms
-        top = gcd(top, numerator(c)); bot = lcm(bot, denominator(c))
-    end
-    scale = top // bot
-    return _q_fraction(scale, Pair{Int,Int}[], _q_sum([(c / scale, p) for (c, p) in terms]; most = most))
-end
+
 
 "`P(x)·√(R(x))` in q-integers, for a value with no rule behind it, such as the result of arithmetic."
 function _xvalue_str(v::ExactX; most::Int)

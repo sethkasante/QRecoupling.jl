@@ -1,4 +1,4 @@
-using Test, QRecoupling
+using Test, QRecoupling, Nemo
 
 const QR = QRecoupling
 const ONES = (1, 1, 1, 1, 1, 1)

@@ -17,7 +17,7 @@
 These functions use classical values by default. `Level(k)`, `Exact()`, `Exact(k)`, `At(q)`, and `Symbolic()` select the other supported regimes. The graph helpers are currently qualified names rather than exports.
 
 ```@example symbols
-using QRecoupling
+using QRecoupling, Nemo
 k = 5
 (qdim(1; k=k), q3j(1,1,1,1,-1,0; k=k),
  fsymbol(1,1,1,1,1,1; k=k), gsymbol(1,1,1,1,1,1; k=k))

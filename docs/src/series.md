@@ -5,7 +5,7 @@
 Most recoupling symbols are a factorial prefactor times a finite alternating sum. `FactorialSum` represents that structure directly. Each triple `(a,b,c)` means `[a*z+b]!^c`, and prefactor pairs `n=>c` mean `[n]!^c` outside the sum.
 
 ```@example rules
-using QRecoupling
+using QRecoupling, Nemo
 s = FactorialSum(1:3; factors=[(2,0,1)])
 @assert isapprox(qeval(s), 746) # hide
 (qeval(s), qeval(s; q=0.8), qeval(s; k=20))

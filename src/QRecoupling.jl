@@ -1,6 +1,6 @@
 module QRecoupling
 
-using Nemo, LRUCache
+using LRUCache
 
 "Spin labels: multiples of 1/2 given as integers, rationals or floats."
 const Spin = Union{Integer, Rational, AbstractFloat}
@@ -33,12 +33,7 @@ include("fmatrix.jl")       # the associativity matrix, from shared column coeff
 include("workspace.jl")
 include("analytic_rules.jl")
 include("factorial_series.jl")
-include("generic_x.jl")     # exact values in x = q + 1/q: generic q, canonical forms, identity proofs
-include("phi_form.jl")      # the closed form a user sees: Φ factors in q
-include("exact_x.jl")       # exact level values in x = 2cos(π/h), and the radical display ladder
-include("exact_radicals.jl") # radical expressions and the Lagrange descent
-include("exact_display.jl")  # rendering of exact values
-include("exact_arithmetic.jl") # arithmetic, sums by square class, exact equality
+include("algebra_interface.jl") # stable wrappers and optional-backend entry points
 include("symbolic_value.jl") # what Symbolic() returns: the rule and its DCR, shown in x
 
 include("modular.jl")      # modular data: twists, S and T, the total dimension
@@ -51,7 +46,9 @@ include("targets.jl")
 include("qcg.jl")       # quantum Clebsch–Gordan coefficients and the quantum 3j symbol: weighted rules
 include("qcg_columns.jl") # coupling columns by the Casimir recurrence: qcg_matrix and the near-edge tier
 include("qform.jl")     # values written in quantum integers, generic and at a level
+include("level_bounds.jl") # outward enclosures used only by exact level certification
 include("level_field.jl") # exact level values in quantum integers, in plain Julia
+include("level_arithmetic.jl") # products, inverses, sums and exact zero tests of those values
 
 
 # Export physics tqft and recoupling symbols api

@@ -32,7 +32,10 @@ struct QForm{R<:Rational}
     radcoef::R                                                # r under the square root
     rad::Vector{Pair{Int,Int}}                                # ∏[n]^f under the square root
     terms::Vector{Tuple{R,Vector{Pair{Int,Int}}}}
+    rule::Union{Nothing,FactorialSum}  # retain the stable numerical evaluator, separately from display
 end
+QForm{R}(k, sign, coef, out, radcoef, rad, terms) where {R<:Rational} =
+    QForm{R}(k, sign, coef, out, radcoef, rad, terms, nothing)
 
 _qform_zero(k) = QForm{Rational{Int}}(k, 0, 0 // 1, Pair{Int,Int}[], 1 // 1, Pair{Int,Int}[],
                                       Tuple{Rational{Int},Vector{Pair{Int,Int}}}[])
@@ -217,8 +220,10 @@ factors leave their limit. With `reduce = true` the distribution relations of th
 can then merge or cancel, and a zero they reveal is returned as zero. The shorter of the two forms is returned.
 Rules with `q`-power weights (`qcg`, `q3j`) are not covered.
 
-Two equal values can print differently; `Exact(k)` decides equality. A sum that does not visibly cancel here can
-still vanish: `iszero_at` decides that.
+With `reduce = true`, a native exact check also detects additive cancellations. With `reduce = false`,
+`iszero_at` can decide cancellations left in the expression. Two equal nonzero values can still print
+differently; `Exact(k)` with the optional Nemo backend decides their equality. Numerical evaluation of a
+rule-backed form reuses the original factorial rule and its stable numerical kernels.
 
 ```julia
 qform(q6j, 1, 1, 1, 1, 1, 1)          # ([5] − 1)/[4]!, which is 1/6 at q = 1
@@ -227,12 +232,13 @@ qform(q6j, 1, 1, 1, 2, 1, 1; k = 5)   # [2]/[3]²
 ```
 """
 function qform(s::FactorialSum; k = nothing, reduce::Bool = true)
-    try
-        return _qform(s, k, reduce, Rational{Int})
+    f = try
+        _qform(s, k, reduce, Rational{Int})
     catch e
         (e isa OverflowError || e isa InexactError) || rethrow()
-        return _qform(s, k, reduce, Rational{BigInt})
+        _qform(s, k, reduce, Rational{BigInt})
     end
+    return typeof(f)(f.k, f.sign, f.coef, f.out, f.radcoef, f.rad, f.terms, s)
 end
 
 "How long a form reads: its terms first, then its exponents and the digits of its numbers."
@@ -404,7 +410,8 @@ function (f::QForm)(q::Real)
     f.k === nothing || throw(ArgumentError("this form is at level $(f.k); use `numeric_value` or `float`"))
     q > 0 || throw(DomainError(q, "a QForm is evaluated at positive real q"))
     Q = float(q)
-    return _qform_value(f, isone(Q) ? (n -> oftype(Q, n)) : (n -> (Q^n - Q^(-n)) / (Q - inv(Q))))
+    f.rule === nothing || return qeval(f.rule; q = Q, T = typeof(Q))
+    return _qform_value(f, isone(Q) ? (n -> oftype(Q, n)) : (n -> qint(n; q = Q, T = typeof(Q))))
 end
 
 function _qform_level(f::QForm)
@@ -414,6 +421,12 @@ function _qform_level(f::QForm)
 end
 
 function numeric_value(f::QForm; bits::Integer = precision(BigFloat))
+    bits > 0 || throw(ArgumentError("bits must be positive"))
+    f.k === nothing && throw(ArgumentError("a generic form is evaluated with `f(q)`"))
+    if f.rule !== nothing
+        v = setprecision(() -> qeval(f.rule; k = f.k, T = BigFloat), BigFloat, Int(bits) + 32)
+        return setprecision(() -> BigFloat(v), BigFloat, Int(bits))
+    end
     v = setprecision(() -> _qform_level(f), BigFloat, Int(bits) + 32)
     return setprecision(() -> BigFloat(v), BigFloat, Int(bits))
 end
@@ -508,4 +521,16 @@ end
 function Base.show(io::IO, f::QForm)
     print(io, _qform_body(f))
     f.k === nothing || print(io, "   (k = ", f.k, ")")
+end
+
+
+"A sum of labelled terms over a common factor, as text."
+function _q_sum_str(terms; most::Int)
+    isempty(terms) && return "0"
+    top = big(0); bot = big(1)
+    for (c, _) in terms
+        top = gcd(top, numerator(c)); bot = lcm(bot, denominator(c))
+    end
+    scale = top // bot
+    return _q_fraction(scale, Pair{Int,Int}[], _q_sum([(c / scale, p) for (c, p) in terms]; most = most))
 end

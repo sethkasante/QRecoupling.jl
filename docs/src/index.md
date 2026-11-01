@@ -6,10 +6,14 @@ QRecoupling evaluates classical and quantum Clebsch–Gordan coefficients, 3j an
 
 The package supplies local coefficients and change-of-basis matrices for angular-momentum calculations, spin networks, Turaev–Viro models, and fusion-based tensor networks. It does not assemble a triangulation or contract a complete tensor network for you.
 
+Nemo is optional. Numerical calculations, classical exact values, and unexpanded expressions
+work without it. The exact level and polynomial examples below require `using Nemo`
+after installing Nemo in your environment.
+
 ## Start with one symbol
 
 ```@example home
-using QRecoupling
+using QRecoupling, Nemo
 classical = q6j(1, 1, 1, 1, 1, 1)
 level = q6j(Level(10), 1, 1, 1, 1, 1, 1)
 exact = q6j(Exact(10), 1, 1, 1, 1, 1, 1)

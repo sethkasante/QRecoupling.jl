@@ -3,7 +3,7 @@
 For exact classical coefficients, use `Exact()`:
 
 ```@example exact_forms
-using QRecoupling
+using QRecoupling, Nemo
 c = q6j(Exact(), 1, 1, 1, 1, 1, 1)
 @assert c == 1//6 # hide
 r = q3j(Exact(), 1//2, 1//2, 0, 1//2, -1//2, 0)
@@ -16,7 +16,7 @@ This evaluates at q = 1 with the direct rational/radical evaluator. It does not 
 Use the same reciprocal variable for level values and generic formulas:
 
 ```@example exact_forms
-using QRecoupling
+using QRecoupling, Nemo
 
 v = q6j(Exact(10), 1, 1, 1, 1, 1, 1)
 # (2√3 − 3)/3 = (2x² − 7)/3, where x = 2cos(π/12)

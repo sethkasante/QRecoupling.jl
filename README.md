@@ -14,8 +14,12 @@ Evaluate classical and quantum Clebsch–Gordan coefficients, 3j/6j symbols, fus
 
 ## Quick start
 
+Numerical evaluation, exact classical values, and `qform` need only QRecoupling.
+For exact level arithmetic, expanded polynomials, and radical extraction, install the optional
+backend with `import Pkg; Pkg.add("Nemo")` and load `Nemo` alongside QRecoupling.
+
 ```julia
-using QRecoupling
+using QRecoupling, Nemo  # Nemo enables the exact level and polynomial examples below
 
 js = (1, 1, 1, 1, 1, 1)
 q6j(js...)                      # classical value ≈ 1/6

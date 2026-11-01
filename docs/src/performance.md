@@ -5,7 +5,7 @@
 For one coefficient, use a scalar symbol call. For many coefficients at one target, use a batch. For a whole fusion transformation, use `fmatrix`: its recurrence shares work across entries. Request exact or generic symbolic algebra when that algebra is needed; it is not a prerequisite for numerical evaluation.
 
 ```@example perf
-using QRecoupling
+using QRecoupling, Nemo
 work = EvaluationWorkspace()
 v = q6j(10,10,10,10,10,10; k=50, workspace=work)
 again = q6j(10,10,10,10,10,10; k=50, workspace=work)

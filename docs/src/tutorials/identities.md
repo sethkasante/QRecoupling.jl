@@ -5,7 +5,7 @@ Numerical agreement tests conventions and implementations. An exact residual can
 ## Numerical orthogonality
 
 ```@example identities
-using QRecoupling, LinearAlgebra
+using QRecoupling, Nemo, LinearAlgebra
 F, e, f = fmatrix(1,1,1,1; k=6)
 @assert transpose(F)*F ≈ I # hide
 norm(transpose(F)*F - I)

@@ -139,25 +139,17 @@ why there are none. Properties:
 
 Lower-level accessors (not exported): `radical_form`, `xpolynomial`, `radicand`, `has_radical_form`.
 """
-struct ExactX
-    k::Int
-    p::QQPolyRingElem          # P, reduced mod Ψ_h
-    sqclass::Vector{Int}       # ψ indices under the root
-    r::QQPolyRingElem          # R = ∏_{e ∈ sqclass} ψ_e, reduced mod Ψ_h
-    rule::Union{Nothing,FactorialSum}   # where the value came from, for display; arithmetic drops it
-
-    function ExactX(k::Integer, p::QQPolyRingElem, cls::Vector{Int}, r::QQPolyRingElem; rule = nothing)
-        kk = Int(k)
-        S, _ = _qqx()
-        # At a level the radicand can reduce to a rational square: fold it into P, so equal values compare
-        # equal and no `√(1)` is carried.
-        iszero(p) && return new(kk, p, Int[], S(1), nothing)
-        if !isempty(cls) && degree(r) <= 0
-            s = _rat_sqrt(Rational{BigInt}(coeff(r, 0)))
-            s === nothing || return new(kk, p * QQ(numerator(s), denominator(s)), Int[], S(1), rule)
-        end
-        return new(kk, p, cls, r, rule)
+function ExactX(k::Integer, p::QQPolyRingElem, cls::Vector{Int}, r::QQPolyRingElem; rule = nothing)
+    kk = Int(k)
+    S, _ = _qqx()
+    # At a level the radicand can reduce to a rational square: fold it into P, so equal values compare
+    # equal and no `√(1)` is carried.
+    iszero(p) && return ExactX{QQPolyRingElem}(kk, p, Int[], S(1), nothing)
+    if !isempty(cls) && degree(r) <= 0
+        s = _rat_sqrt(Rational{BigInt}(coeff(r, 0)))
+        s === nothing || return ExactX{QQPolyRingElem}(kk, p * QQ(numerator(s), denominator(s)), Int[], S(1), rule)
     end
+    return ExactX{QQPolyRingElem}(kk, p, cls, r, rule)
 end
 
 "The exact rational square root of `c`, or `nothing` when `c` is negative or not a square."
@@ -393,14 +385,3 @@ function numeric_value(v::ExactX; bits::Integer=precision(BigFloat))
     return setprecision(()->BigFloat(result),BigFloat,target)
 end
 
-"""
-    numeric_value(v::ClassicalResult; bits=precision(BigFloat)) -> BigFloat
-
-The classical exact value σ√r, rounded to `bits` bits.
-"""
-function numeric_value(v::ClassicalResult; bits::Integer=precision(BigFloat))
-    bits > 0 || throw(ArgumentError("bits must be positive"))
-    target=Int(bits)
-    result=setprecision(() -> v.sign * sqrt(BigFloat(v.sq_val)), BigFloat, target+32)
-    return setprecision(()->BigFloat(result),BigFloat,target)
-end

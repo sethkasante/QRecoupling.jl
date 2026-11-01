@@ -2,10 +2,10 @@
 
 ## v0.6.0 (in development)
 
-- Added `qform`: values written in quantum integers, the same form at every generic q, simplified at a level by the relations among its q-integers, so that terms can merge and zeros appear.
-- `qform` now shows every exact zero at a level, including those that need additive relations among the q-integers. The test is proved in plain Julia, by a kernel that holds level values as coordinates on the q-integers `[1], …, [d]`.
-- `ExactX` values print in quantum integers, including the results of arithmetic, with long sums cut short and a radical beside them when one exists and is short. `x_form` and `v.x_value` still give the polynomial.
-- **Breaking:** removed `Exact(k; form = :canonical)` with `CompositeExactResult`, the `eager` keyword, the one-argument `xvalue`, and exact level evaluation of monomials and DCRs. See [Migration](docs/src/migration.md).
+- Nemo is optional. Load it for exact level arithmetic, polynomial expansion and radicals; numerical evaluation, classical exact values and quantum-integer expressions work without it.
+- Added `qform` and quantum-integer displays for exact values, including native level zero checks. Polynomial views remain explicit.
+- Certified native bounds, bad-prime rejection, stable `qform` evaluation, and quadratic-character nonzero certificates. Faster modular table setup and bounded cache retention.
+- **Breaking:** removed the deprecated canonical/DCR exact paths, `eager`, and one-argument `xvalue`. Polynomial result types now parameterize their payload. See [Migration](docs/src/migration.md).
 
 ## Unreleased
 

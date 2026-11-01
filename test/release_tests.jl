@@ -81,8 +81,8 @@ end
     @test QR._cyclotomic_coeffs(12) == [1, 0, -1, 0, 1]
     @test QR._cyclotomic_coeffs(30) == [1, 1, 0, -1, -1, -1, 0, 1, 1]
     for n in (7, 16, 36, 105, 210)
-        p = QR.phi_q(n)
-        @test QR._cyclotomic_coeffs(n) == [Int(QR.coeff(p, i)) for i in 0:QR.degree(p)]
+        p = Base.get_extension(QR, :QRecouplingNemoExt).phi_q(n)
+        @test QR._cyclotomic_coeffs(n) == [Int(Nemo.coeff(p, i)) for i in 0:Nemo.degree(p)]
     end
 
     # the big-integer test against the exact field, on one segment and across gaps
@@ -147,6 +147,57 @@ end
     @test string(Exact(10)) == "Exact(10)"
 end
 
+# `float(f)` and `f(q)` evaluate the rule behind a form, so they cannot see a mistake in the form. These two read the
+# form itself: its fields, and the text a reader gets.
+"The value of a form's own fields, at its level or at a real q."
+form_value(f; q = nothing) = setprecision(BigFloat, 1024) do
+    Float64(q === nothing ? QR._qform_level(f) :
+            QR._qform_value(f, isone(q) ? (n -> BigFloat(n)) : (n -> (big(q)^n - big(q)^(-n)) / (big(q) - 1 / big(q)))))
+end
+
+"The value of printed text, parsed independently of the form that wrote it."
+function text_value(str::AbstractString; k = nothing, q = nothing)
+    sup = Dict('⁰' => '0', '¹' => '1', '²' => '2', '³' => '3', '⁴' => '4', '⁵' => '5', '⁶' => '6', '⁷' => '7', '⁸' => '8', '⁹' => '9')
+    t = replace(first(split(str, "   (k")), "−" => "-", "√" => "*sqrt")
+    t = replace(t, r"[⁰¹²³⁴⁵⁶⁷⁸⁹]+" => m -> "^" * join(sup[c] for c in m))
+    t = replace(t, r"\[(\d+)\]!" => s"F(\1)", r"\[(\d+)\]" => s"Q(\1)")
+    t = replace(t, r"\)\s*(?=[FQ(\d])" => ")*", r"(?<=\d)(?=[FQ(])" => "*", r"\s\*sqrt" => "*sqrt")
+    setprecision(BigFloat, 1024) do
+        Q(n) = k !== nothing ? sinpi(big(n) / (k + 2)) / sinpi(1 / big(k + 2)) :
+               isone(q) ? BigFloat(n) : (big(q)^n - big(q)^(-n)) / (big(q) - 1 / big(q))
+        F(n) = prod(Q(i) for i in 2:n; init = BigFloat(1))
+        Float64(Base.invokelatest(eval(:((Q, F) -> $(Meta.parse(t)))), Q, F))
+    end
+end
+
+@testset "forms as written" begin
+    # the helpers have to notice a wrong form, or the tests below prove nothing
+    f = qform(q6j, 1, 1, 1, 2, 1, 1; k = 5)
+    wrong = typeof(f)(f.k, f.sign, 7 * f.coef, f.out, f.radcoef, f.rad, f.terms, f.rule)
+    @test float(wrong) ≈ float(f)
+    @test form_value(wrong) ≈ 7 * float(f)
+    @test text_value(string(wrong); k = 5) ≈ 7 * float(f)
+    # at levels, prime and composite, with and without the relations, including roots and factorials
+    for k in (3, 5, 10, 12, 16, 21, 30), l in collect(all_6j(k = min(k, 12)))[1:97:end]
+        QR._admissible_at(q6j, k, l...) || continue
+        reference = q6j(Level(k), l...)
+        for reduce in (true, false)
+            g = qform(q6j, l...; k = k, reduce = reduce)
+            iszero(g) && continue
+            @test form_value(g) ≈ reference atol = 1e-12
+            length(g.terms) <= QR.QFORM_SHOWN_TERMS && @test text_value(string(g); k = k) ≈ reference atol = 1e-12
+        end
+    end
+    # at generic q, q = 1 included
+    for l in collect(all_6j(k = 10))[1:211:end], q in (0.7, 1, 1.3)
+        g = qform(q6j, l...)
+        iszero(g) && continue
+        reference = isone(q) ? q6j(l...) : q6j(At(q), l...)
+        @test form_value(g; q = q) ≈ reference rtol = 1e-10
+        length(g.terms) <= QR.QFORM_SHOWN_TERMS && @test text_value(string(g); q = q) ≈ reference rtol = 1e-10
+    end
+end
+
 @testset "values in quantum integers" begin
     sshow(f) = string(f)
     @test sshow(qform(q6j, 1, 1, 1, 1, 1, 1)) == "([5] − 1)/[4]!"
@@ -169,6 +220,8 @@ end
         @test float(qform(q6j, l...; k = k, reduce = false)) ≈ q6j(Level(k), l...) atol = 1e-13
     end
     @test numeric_value(qform(q6j, 1, 1, 1, 1, 1, 1; k = 5); bits = 256) ≈ numeric_value(q6j(Exact(5), 1, 1, 1, 1, 1, 1); bits = 256)
+    @test setprecision(() -> QR._qform_level(qform(q6j, 1, 1, 1, 1, 1, 1; k = 5)), BigFloat, 288) ≈
+          numeric_value(q6j(Exact(5), 1, 1, 1, 1, 1, 1); bits = 288) rtol = big(2.0)^-256
 
     # the relations reveal zeros that no single term shows: reflection and a sporadic one
     @test iszero(qform(q6j, 5, 5, 5, 5, 5, 5; k = 20))
@@ -205,10 +258,10 @@ end
                    (30, ntuple(_ -> 3, 6)), (41, ntuple(_ -> 10, 6)), (121, ntuple(_ -> 30, 6)))
         v = QR.level_value(QR._rule_for(q6j, l...), k)
         @test float(v) ≈ Float64(numeric_value(q6j(Exact(k), l...))) rtol = 1e-12
-        @test length(v.coeffs) == QR.euler_phi(2(k + 2)) ÷ 2
+        @test length(v.num) == QR._totient(2(k + 2)) ÷ 2
     end
     # [1], …, [d] carry the arithmetic: at k = 10 the value (2√3 − 3)/3 is (2[3] − 5)/3
-    @test QR.level_value(QR._rule_for(q6j, ntuple(_ -> 1, 6)...), 10).coeffs == [-5 // 3, 0 // 1, 2 // 3, 0 // 1]
+    @test QR.coordinates(QR.level_value(QR._rule_for(q6j, ntuple(_ -> 1, 6)...), 10)) == [-5 // 3, 0 // 1, 2 // 3, 0 // 1]
     # zeros that only additive relations show, proved without the exact field
     for (k, l) in ((20, (5//2, 9//2, 5, 4, 5, 11//2)), (22, (2, 3, 3, 5//2, 7//2, 7//2)), (10, (1, 5//2, 5//2, 5//2, 3, 3)))
         @test iszero(qform(q6j, l...; k = k))
@@ -216,6 +269,29 @@ end
         @test iszero_at(k, l...)
     end
     @test !iszero(qform(q6j, 2, 3, 3, 5//2, 7//2, 7//2; k = 23))
+    # arithmetic agrees with the exact field, with and without a shared root
+    let k = 12
+        a = q6j(Exact(k), 1, 1, 1, 1, 1, 1); b = q6j(Exact(k), 3//2, 1, 3//2, 1, 3//2, 1)
+        u = QR.level_value(QR._rule_for(q6j, 1, 1, 1, 1, 1, 1), k)
+        w = QR.level_value(QR._rule_for(q6j, 3//2, 1, 3//2, 1, 3//2, 1), k)
+        @test float(u * w) ≈ Float64(numeric_value(a * b))
+        @test float(inv(w)) ≈ Float64(numeric_value(inv(b)))
+        @test float(u + w) ≈ Float64(numeric_value(a + b))
+        @test w * inv(w) == one(w) && isone(w * inv(w))
+        @test (u + w) - w == u && u^3 * inv(u)^3 == 1
+    end
+    # the quadratic subfields: √5 at k = 3 is a field element, whose key can be merged
+    let F = QR._level_field(5), G = only(QR._quadratic_roots(F))
+        @test G[1] == 5 && QR._label_mul(G[2], G[2], F) == [big(5), big(0)]
+    end
+    @test QR.LevelValue(3, [big(1), big(0)], big(1), big(1), Int[]) * 2 == 2 * one(QR.LevelValue, 3)
+    # a zero between two keys that the relations do not merge is still proved, by the separation bound
+    let v = QR.LevelValue(3, [big(1), big(0)], big(1), big(5), Int[]),
+        g = QR.LevelValue(3, QR._quadratic_roots(QR._level_field(5))[1][2], big(1), big(1), Int[])
+        s = QR.LevelValueSum(v) - QR.LevelValueSum(g)
+        @test length(s.terms) == 2 && iszero(s)
+        @test !iszero(QR.LevelValueSum(v) - QR.LevelValueSum(2 * g))
+    end
     # the valuations behind the proof: the norm of [n] is the matching power of its prime
     for h in (4, 6, 12, 16, 30, 49, 60)
         F = QR.LevelField(h); as = [a for a in 1:h-1 if gcd(a, 2h) == 1]
@@ -240,7 +316,9 @@ end
     # the form shown is the value held
     for (k, l) in ((5, (1, 1, 1, 1, 1, 1)), (10, (2, 2, 2, 2, 2, 2)), (12, (2, 2, 1, 2, 2, 1)), (30, (3, 3, 3, 3, 3, 3)))
         u = q6j(Exact(k), l...)
-        @test float(qform(u.rule; k = k)) ≈ Float64(numeric_value(u))
+        @test form_value(qform(u.rule; k = k)) ≈ Float64(numeric_value(u))
+        shown = replace(string(u), "ExactX(k = $k, " => "")[1:end-1]
+        occursin("terms)", shown) || @test text_value(shown; k = k) ≈ Float64(numeric_value(u))
     end
     # a radical beside the form when one exists and is short, and none when it does not exist
     @test occursin("(2√3 − 3)/3", plain(q6j(Exact(10), 1, 1, 1, 1, 1, 1)))
@@ -255,9 +333,86 @@ end
     @test occursin("terms)", long) && !occursin("x", long)
     # factorials combine across runs of labels
     @test string(qform(q6j, 1, 1, 1, 1, 1, 1)) == "([5] − 1)/[4]!"
-    @test !occursin(r"\\[15\\]!.*\\[15\\]!", string(qform(q6j, ntuple(_ -> 30, 6)...; k = 200)))
+    @test !occursin(r"\[(\d+)\]![⁰¹²³⁴⁵⁶⁷⁸⁹]*\[\1\]!", string(qform(q6j, ntuple(_ -> 30, 6)...; k = 200)))
+    @test occursin(r"\[(\d+)\]![⁰¹²³⁴⁵⁶⁷⁸⁹]*\[\1\]!", "[15]!²[15]!")
     @test string(q6j(Exact(10), 1, 5//2, 5//2, 5//2, 3, 3)) == "ExactX(k = 10, 0)"
     # equality does not look at the display
     @test v == q6j(Exact(5), 1, 1, 1, 2, 1, 1) && v.rule !== nothing
 end
 
+
+@testset "v0.6 exact certification regressions" begin
+    QR = QRecoupling
+    F = QR._level_field(5)
+    p = big(QR._places(F, 1, 5).m.p)
+    # The first prime divides the whole element: reject it before updating CRT.
+    a = [p, p]
+    w, D = QR._label_inverse(a, F)
+    @test QR._label_mul(a, w, F) == [D, big(0)]
+    # A label outside the coordinate basis still has a cached inverse.
+    F12 = QR._level_field(12)
+    w, D = QR._label_inverse(5, F12)
+    @test QR._label_mul(QR._label_coordinates(5, F12), w, F12) == [D; zeros(BigInt, F12.d - 1)]
+    f = qform(q6j, 2, 2, 2, 2, 2, 2)
+    q = 1 + 1e-8
+    ref = setprecision(() -> f(BigFloat(q)), BigFloat, 256)
+    @test abs((f(q) - ref) / ref) < 1e-12
+    # The enclosure must include the value, not merely agree to a tolerance.
+    v = QR.level_value(QR._rule_for(q6j, 2, 2, 2, 2, 2, 2), 12)
+    mid, err = setprecision(() -> QR._value_ball(v, 14), BigFloat, 128)
+    exactref = numeric_value(q6j(Exact(12), 2, 2, 2, 2, 2, 2); bits = 512)
+    @test abs(mid - exactref) <= err
+    # Very small nonzero differences must not be classified as zeros.
+    v = QR.LevelValue(3, [big(1), big(0)], big(1), big(5), Int[])
+    g = QR.LevelValue(3, QR._quadratic_roots(F)[1][2], big(1), big(1), Int[])
+    @test !iszero((QR.LevelValueSum(v) - QR.LevelValueSum(g)) + QR.LevelValueSum(one(g) / (big(1) << 600)))
+end
+
+@testset "prime-count bound" begin
+    # the integer bound dominates the true largest conjugate of the cleared sum, and stays close to it
+    for (k, l) in ((1, (1//2, 1//2, 0, 1//2, 1//2, 0)), (3, (1, 1, 1, 1, 1, 1)), (10, (2, 2, 2, 2, 2, 2)), (12, (3//2, 1, 3//2, 1, 3//2, 1)), (21, (5, 5, 5, 5, 5, 5)),
+                   (30, (3, 3, 3, 3, 3, 3)), (41, (10, 10, 10, 10, 10, 10)), (59, (12, 12, 12, 12, 12, 12)), (121, (30, 30, 30, 30, 30, 30)))
+        s = QR._rule_for(q6j, l...); h = k + 2
+        zs, pre, _, es, cs = QR._level_exponents(s, k, Rational{BigInt})
+        front = [fld(a, 2) for a in pre]
+        L = QR._level_rule(s, zs, front, h)
+        bits, J, C = QR._level_sum_bound(L, front, es, cs, h)
+        truth = setprecision(BigFloat, 256) do
+            largest = BigFloat(0)
+            for a in 1:h-1
+                gcd(a, 2h) == 1 || continue
+                total = BigFloat(0)
+                for (e, c) in zip(es, cs)
+                    total += abs(BigFloat(c)) * prod((abs(sinpi(big(a * n) / h) / sinpi(big(a) / h))^(e[n] + front[n]) for n in 2:length(front)); init = BigFloat(1))
+                end
+                largest = max(largest, total)
+            end
+            Float64(log2(largest)) + J + C
+        end
+        @test truth <= bits <= truth + 16
+    end
+    # the table encloses the sines, and an exact 1 stays near zero
+    let (up, lo) = QR._log_sine_table(60)
+        for r in 1:30
+            @test lo[r] / 2.0^20 <= log2(sinpi(r / 60)) <= up[r] / 2.0^20
+        end
+        @test up[30] - lo[30] <= 2
+    end
+    # integers only after the table: enclosing every conjugate of every term cost gigabytes per call here
+    let s = QR._rule_for(q6j, ntuple(_ -> 30, 6)...), h = 202
+        zs, pre, _, es, cs = QR._level_exponents(s, 200, Rational{BigInt})
+        front = [fld(a, 2) for a in pre]
+        L = QR._level_rule(s, zs, front, h)
+        QR._level_sum_bound(L, front, es, cs, h)
+        @test (@allocated QR._level_sum_bound(L, front, es, cs, h)) < 10^6
+    end
+    # a nonzero sum and a vanishing one both still finish with a proof
+    @test !iszero(QR.level_value(QR._rule_for(q6j, ntuple(_ -> 30, 6)...), 121))
+    @test iszero(QR.level_value(QR._rule_for(q6j, 5//2, 9//2, 5, 4, 5, 11//2), 20))
+end
+
+@testset "optional backend product hooks" begin
+    @test Float64(qdim(Exact(10),1)) ≈ qdim(Level(10),1)
+    @test Float64(qfact(5;k=10,exact=true)) ≈ qfact(5;k=10)
+    @test Float64(qbinomial(5,2;k=10,exact=true)) ≈ qbinomial(5,2;k=10)
+end

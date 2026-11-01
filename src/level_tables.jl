@@ -202,7 +202,7 @@ function _cyclotomic_step(phi::Vector{Int}, p::Int)
         q[i] = c
         iszero(c) && continue
         for t in 0:d
-            a[i+t] -= c * phi[t+1]
+            a[i+t] = Base.Checked.checked_sub(a[i+t], Base.Checked.checked_mul(c, phi[t+1]))
         end
     end
     return q

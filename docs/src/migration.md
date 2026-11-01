@@ -2,6 +2,21 @@
 
 ## To v0.6
 
+### Optional exact-algebra backend
+
+Nemo is no longer a required dependency. Install it with `import Pkg; Pkg.add("Nemo")`
+and load it with `using QRecoupling, Nemo` when using `Exact(k)`, `x_form`, `phi_form`,
+polynomial identity proofs, or radical extraction. Both package load orders are supported.
+The existing exact-level representation and arithmetic remain available through the extension.
+
+Numerical targets, `Exact()` for classical values, unexpanded `Symbolic()` expressions,
+`qform`, and the numerical engine's exact zero decisions do not require Nemo.
+Missing-backend errors explain how to enable it. The native level-arithmetic implementation
+is still internal; this release does not silently switch `Exact(k)` between backends.
+
+`ExactX`, `ExactXSum`, and `XValue` now parameterize their polynomial payload. Continue
+using `v isa ExactX` rather than comparing a concrete `typeof(v)` with the unparameterized name.
+
 ### Removed after their deprecation
 
 | Removed | Use instead |
@@ -30,7 +45,7 @@ For existing code that requires the former formula, `QRecoupling.q3j_factorial` 
 At negative real q every symbol uses the square-root branch of `complex(q)`, so results are complex and agree with the same point supplied as complex. Positive real q, classical values and levels are unchanged.
 
 ```@example migration
-using QRecoupling
+using QRecoupling, Nemo
 q6j(1, 1, 1, 1, 1, 1; q = -0.8) == q6j(1, 1, 1, 1, 1, 1; q = complex(-0.8))
 ```
 
@@ -67,7 +82,7 @@ The DCR constructors, monomial helpers, callback form of `qseries`, and raw proj
 Symbol functions, `qeval`, `qint`, `qfact`, and `qbinomial` evaluate classically when no q or k is supplied. Code that used their return values as symbolic objects must request `Symbolic()` explicitly.
 
 ```@example migration
-using QRecoupling
+using QRecoupling, Nemo
 q6j(1,1,1,1,1,1)                      # approximately 1/6
 q6j(Exact(),1,1,1,1,1,1)          # exact classical coefficient
 s = q6j(Symbolic(),1,1,1,1,1,1)       # rule-backed symbolic x-form
