@@ -25,10 +25,12 @@ q6j(js...)                      # classical value ≈ 1/6
 q6j(Level(10), js...)           # value at q = exp(iπ/12)
 q6j(At(0.8 + 0.2im), js...)     # numerical complex deformation
 
-q6j(Exact(), js...)             # ([5] − 1)/[4]!  at every q, which is 1/6 at q = 1
-q6j(Exact(), js...) == 1//6     # true
+q6j(Exact(), js...)             # 1//6, exactly
 q6j(Exact(3), js...)            # −1/[2]²  at level 3
 iszero(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2))   # true, proved
+
+f = q6j(Symbolic(), js...)      # ([5] − 1)/[4]!  the formula at every q
+f(0.8), f(1)                    # (0.1704…, 1//6)
 
 using Nemo                      # the optional backend
 radical(q6j(Exact(10), js...))  # (2√3 − 3)/3
@@ -37,7 +39,7 @@ x_form(q6j(Symbolic(), js...))  # (x² − 3) / (x⁴ − 3x² + 2)
 
 The spin labels are physical spins: use `1//2` for a half-integer (also accepts `0.5`). The same target interface applies to Clebsch–Gordan coefficients, 3j, F/G symbols, dimensions, and q-integer/factorial/binomial products.
 
-`qcg` and `q3j` carry powers of q, which `Exact()` and `Exact(k)` print: `qcg(Exact(), 1//2, 1//2, 1//2, -1//2, 1)` is `q^(−1/2) √(1/[2])`. They have no `Symbolic()` form.
+`qcg` and `q3j` carry powers of q, which `Symbolic()` and `Exact(k)` print: `qcg(Symbolic(), 1//2, 1//2, 1//2, -1//2, 1)` is `q^(−1/2) √(1/[2])`. They have no `Symbolic()` form.
 
 ## What makes it useful?
 

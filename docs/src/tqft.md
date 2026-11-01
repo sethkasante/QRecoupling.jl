@@ -40,7 +40,7 @@ v = q6j(Exact(10), 1,1,1,1,1,1)
 v
 ```
 
-Exact level values are written in quantum integers, with their zeros proved. See [Exact values](tutorials/exact_forms.md). `q3j` and `qcg` carry powers of q as well, and are complex at a level.
+Exact level values are written in quantum integers, with their zeros proved, and `Symbolic()` writes the formula at every q. See [Exact values](tutorials/exact_forms.md). `q3j` and `qcg` carry powers of q as well, and are complex at a level.
 
 Braiding and twists carry q phases. `rmatrix(Symbolic(), ...)` and exact level phase calls retain a `QPhase`; these are not ordinary real x-polynomials.
 

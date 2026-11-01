@@ -1,35 +1,44 @@
 # Exact values
 
-A recoupling value already has a short exact description, its formula. `Exact()` and `Exact(k)` write that formula in quantum integers `[n]`, and never expand it.
+`Exact` always means one number, exactly. `Symbolic` means the formula, a function of q.
+
+| Call | What it is | Number? | Arithmetic? |
+|:--|:--|:--|:--|
+| `q6j(Exact(), js...)` | the value at q = 1 | yes | yes |
+| `q6j(Exact(k), js...)` | the value at level k | yes | yes |
+| `q6j(Symbolic(), js...)` | the formula | through `f(q)` | no |
+
+Zero and equal mean different things on the two sides. For `Exact(k)` they mean at this level, and for `Symbolic()` at every q. A 6j symbol can vanish at a level and not vanish as a formula: no admissible label with spins up to 3 is zero at every q, while 119 of them are zero at level 10.
+
+## A number at q = 1
+
+`Exact()` is a sign and a rational under a root, with its own arithmetic.
 
 ```@example exact_forms
 using QRecoupling, Nemo
-c = q6j(Exact(), 1, 1, 1, 1, 1, 1)
-```
-
-## Every q, and q = 1
-
-`Exact()` needs no value of q, and holds at all of them. Evaluate it with `c(q)` at a real positive q. Used as a number, it means its value at q = 1, and [`classical`](@ref) gives that value exactly.
-
-```@example exact_forms
-@assert c == 1//6 # hide
-@assert c(0.8) ≈ q6j(At(0.8), 1, 1, 1, 1, 1, 1) # hide
-(c == 1//6, classical(c), Float64(c), c(0.8))
-```
-
-`classical` returns a sign and a rational under a root, with its own arithmetic.
-
-```@example exact_forms
 r = q3j(Exact(), 1//2, 1//2, 0, 1//2, -1//2, 0)
-@assert classical(r)^2 == 1//2 # hide
-(r, classical(r), classical(r)^2)
+@assert r^2 == 1//2 && q6j(Exact(), 1, 1, 1, 1, 1, 1) == 1//6 # hide
+(q6j(Exact(), 1, 1, 1, 1, 1, 1), r, r^2)
 ```
 
-Between two `Exact()` values, `==` means equal at every q. The integer 6 is `[6]` and `[3]!` at q = 1, but those are different functions of q.
+## The formula at every q
+
+`Symbolic()` writes the formula in quantum integers `[n]` and never expands it. It holds no number. Evaluate it with `c(q)` at any q that [`At`](@ref) takes. An exact 1 gives the exact value at q = 1, while `c(1.0)` gives a float.
 
 ```@example exact_forms
-@assert qint(Exact(), 6) != qfact(Exact(), 3) # hide
-(qint(Exact(), 6), qfact(Exact(), 3), qint(Exact(), 6) == qfact(Exact(), 3))
+c = q6j(Symbolic(), 1, 1, 1, 1, 1, 1)
+@assert c(1) == 1//6 # hide
+@assert c(0.8) ≈ q6j(At(0.8), 1, 1, 1, 1, 1, 1) # hide
+(c, c(1), c(1.0), c(0.8), c(0.8 + 0.2im))
+```
+
+A formula has no arithmetic and no `float` of its own, since these need a value of q. It knows its rule but not its labels, so it does not move to a level: use `q6j(Exact(k), js...)`, which applies the level's fusion rules.
+
+`==` means equal at every q, for two formulas and for a formula and a number, which is a constant function. `[6]` and `[3]!` are both 6 at q = 1, and neither of them is 6.
+
+```@example exact_forms
+@assert qint(Symbolic(), 6) != qfact(Symbolic(), 3) && qint(Symbolic(), 6) != 6 && qint(Symbolic(), 6)(1) == 6 && qint(Symbolic(), 1) == 1 # hide
+(qint(Symbolic(), 6), qfact(Symbolic(), 3), qint(Symbolic(), 6) == qfact(Symbolic(), 3), qint(Symbolic(), 6) == 6, qint(Symbolic(), 6)(1) == 6)
 ```
 
 Nothing is expanded to decide this. Clearing denominators gives an integer polynomial in q, and a nonzero one cannot vanish at an integer larger than the sum of its coefficients. So the test reads that polynomial at one such integer, through its residues at word primes, and stops at the first nonzero residue. A vanishing sum is shown as 0. A value can vanish at q = 1 without vanishing elsewhere, and then its form is not 0 while `v == 0` is true.
@@ -110,16 +119,14 @@ s = q6j(Symbolic(), 1, 1, 1, 1, 1, 1)
 g = x_form(s)       # (x² − 3)/(x⁴ − 3x² + 2)
 ```
 
-`Symbolic()` retains a factorial rule, without evaluating the sum during construction or display. Radicals are displayed as products of ψ factors, where ψ_e(x) is the minimal polynomial of 2cos(2π/e). `phi_form(value)` requests cyclotomic factorization explicitly. Braiding and twist phases preserve their branch through `u² − x·u + 1 = 0`, with `u = q`: x alone cannot distinguish q from its reciprocal.
+`Symbolic()` writes the formula without carrying out the sum, and `x_form` expands it. Radicals are displayed as products of ψ factors.
 
-Generic square roots specify an algebraic expression. To evaluate with the package's numerical branch convention, use `qeval(s; q=...)` or a level target on the original symbolic value.
+Generic square roots specify an algebraic expression. To evaluate with the package's numerical branch convention, use `s(q)` or a level target on the original symbolic value.
 
 ## API reference
 
 ```@docs
 QForm
-classical
-SymbolicValue
 x_form
 XValue
 ExactX

@@ -35,7 +35,6 @@ include("workspace.jl")
 include("analytic_rules.jl")
 include("factorial_series.jl")
 include("algebra_interface.jl") # stable wrappers and optional-backend entry points
-include("symbolic_value.jl") # what Symbolic() returns: the rule and its DCR, shown in x
 
 include("modular.jl")      # modular data: twists, S and T, the total dimension
 include("qproducts.jl")   # [n], [n]!, [n choose m] through the same rule evaluator
@@ -65,13 +64,13 @@ export Level, Exact, At, Classical, Symbolic
 # exact values in x = q + 1/q: generic q, and identities proved for every level at once
 export prove_identity, x_form, XValue, phi_form
 export ExactX, ExactXSum, RadExpr, NoRadical, radical, numeric_value
-export qform, QForm, classical
+export QForm
 
 # structural queries and batches
 export all_6j, iszero_at, issingular_at, level_spectrum
 
 # factorial rules, workspaces and returned types
-export FactorialSum, AffineFactorial, EvaluationWorkspace, SymbolicValue, QPhase
+export FactorialSum, AffineFactorial, EvaluationWorkspace, QPhase
 export empty_caches!
 
 # Run each target once while precompiling, since a first call otherwise compiles for seconds. The tables it builds are
@@ -85,11 +84,13 @@ export empty_caches!
         rmatrix(Level(10), 1, 1, 1); qdim(Level(10), 1); twist(Level(10), 1); smatrix(10); tmatrix(10)
         qcg(Level(10), 1, 0, 1, 0, 2, 0); qcg(1, 0, 1, 0, 2, 0); q3j(Level(10), 1, 1, 2, 0, 0, 0); q3j(1, 1, 2, 0, 0, 0)
         qint(Level(10), 3); qfact(Level(10), 3); qbinomial(Level(10), 4, 2)
-        for f in (q6j(Exact(), labels...), q6j(Exact(10), labels...), qcg(Exact(10), 1, 0, 1, 0, 2, 0), qint(Exact(), 3))
-            sprint(show, MIME("text/plain"), f); iszero(f); f == f; hash(f); float(f)
+        q6j(Exact(), labels...); qcg(Exact(), 1, 0, 1, 0, 2, 0); qint(Exact(), 3)
+        for f in (q6j(Symbolic(), labels...), q6j(Exact(10), labels...), qcg(Symbolic(), 1, 0, 1, 0, 2, 0), qcg(Exact(10), 1, 0, 1, 0, 2, 0), qint(Symbolic(), 3))
+            sprint(show, MIME("text/plain"), f); iszero(f); f == f; hash(f); f == 1
+            f.k === nothing ? (f(1); f(0.8)) : float(f)
         end
         a = q6j(Exact(10), labels...); b = q6j(Exact(10), 2, 2, 2, 2, 2, 2)
-        a == b; a == 1//2; a * b; a + b; inv(a); classical(q6j(Exact(), labels...))
+        a == b; a == 1//2; a * b; a + b; inv(a)
         iszero_at(q6j, 10, labels...); level_spectrum(labels...; k = 2:6)
     end
     empty_caches!()

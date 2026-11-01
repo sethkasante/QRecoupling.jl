@@ -30,7 +30,7 @@ b = qcg((1//2, 1//2), (1//2, -1//2), (1, 0))    # the same, as (j, m) pairs
 ```@example start
 js = (1, 1, 1, 1, 1, 1)
 a = q6j(js...)                          # classical, Float64
-b = q6j(Exact(), js...)                 # exact at every q, and 1/6 at q = 1
+b = q6j(Exact(), js...)                 # exact classical value, 1//6
 c = q6j(Level(10), js...)               # equivalent to k=10
 d = q6j(Exact(10), js...)               # exact at level 10
 real_q = q6j(At(0.8), js...)
@@ -39,18 +39,18 @@ complex_q = q6j(At(0.8 + 0.2im), js...)
 (a, real_q, complex_q)
 ```
 
-Supply either `k` or `q`. Do not combine an explicit target with competing keywords. `Exact()` writes the value in quantum integers at every q, and `Exact(k)` writes it at a level. Used as a number, an `Exact()` value means its value at q = 1, which `classical` gives exactly. The keyword `exact=true` and `Classical(exact=true)` return that classical number directly, and cost less when it is all you need.
+Supply either `k` or `q`. Do not combine an explicit target with competing keywords. `Exact()` is the exact value at q = 1 and `Exact(k)` the exact value at a level, both one number. `Symbolic()` is the formula, a function of q: `f(q)` evaluates it and `f(1)` gives the exact value at q = 1. The keyword `exact=true` is the same as `Exact()`, or `Exact(k)` with `k`.
 
 ```@example start
-s = q6j(Symbolic(), js...)
+s = q6j(Symbolic(), js...)              # the formula at every q
 g = x_form(s)                           # explicit rational x-form with ψ radicals
-@assert isapprox(qeval(s; q=0.8), real_q) # hide
-g
+@assert isapprox(s(0.8), real_q) # hide
+(s, s(0.8), s(1), g)
 ```
 
-`Symbolic()` also applies to `qint`, `qfact`, `qbinomial`, dimensions, and F/G symbols. It retains and displays the rule without carrying out the sum. Use `x_form(value)`, which needs Nemo, when you need an expanded expression.
+`Symbolic()` also applies to `qint`, `qfact`, `qbinomial`, dimensions, and F/G symbols. It writes the formula without carrying out the sum. Use `x_form(value)`, which needs Nemo, when you need an expanded expression.
 
-`qcg` and `q3j` support `Classical()`, `Exact()`, `Exact(k)`, `At(q)` and `Level(k)`, with their powers of q printed by the exact targets. They have no `Symbolic()` form.
+`qcg` and `q3j` support every target, with their powers of q printed by `Symbolic()` and `Exact(k)`.
 
 ## Batches and level sweeps
 

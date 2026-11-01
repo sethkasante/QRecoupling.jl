@@ -499,6 +499,12 @@ function _generic_squares_differ(f, g)
     return _generic_square(V) != _generic_square(W)
 end
 
+"Does a generic value differ from the constant `c`, by the residue of its square?"
+function _generic_constant_differs(f, c)
+    V = LevelSquare(f.rule, collect(f.rule.zlo:f.rule.zhi), f.weight..., big(1)//big(1))
+    return _generic_square(V) != _generic_square(LevelSquare(FactorialSum(0:0), [0], 0, 0, Rational{BigInt}(c)))
+end
+
 """
 Bits an integer K needs for K·v² to be an algebraic integer, and the fixed-point sizes of K·v² at the conjugates. Only
 called once two squares agree at a first place, since this is the one step here that reads the folded rule.

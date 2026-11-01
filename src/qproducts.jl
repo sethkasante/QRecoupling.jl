@@ -6,8 +6,7 @@
 #  `q6j` — the level kernel with its running bound, the classical integer path, the analytic ladder at
 #  generic q, and the real basis when an exact value is asked for — instead of through the monomial
 #  projection they used to take. One consequence is worth stating: `qint(5)` is now a *number*, the
-#  classical value, exactly as `q6j(…)` is. The cyclotomic monomial is still there, as
-#  `qint(Symbolic(), 5).dcr`.
+#  classical value, exactly as `q6j(…)` is.
 # ---------------------------------------------------------------------------------
 
 """
@@ -459,4 +458,4 @@ Base.@constprop :aggressive @inline function qbinomial(n::Integer, m::Integer; k
 end
 
 "The rule itself, which is what `Symbolic()` asks for; the `Symbolic` methods live in `targets.jl`."
-_product_symbolic(pairs) = SymbolicValue(pairs === nothing ? _ZERO_PRODUCT_RULE : _qfact_rule(pairs))
+_product_symbolic(pairs) = qform(pairs === nothing ? _ZERO_PRODUCT_RULE : _qfact_rule(pairs))

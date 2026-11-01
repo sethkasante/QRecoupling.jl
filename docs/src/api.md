@@ -8,7 +8,7 @@ This reference covers the exported interface and two coefficient-access helpers.
 
 ## Evaluation targets
 
-Omitting q and k requests classical numerical evaluation. `Exact()` and `Exact(k)` write a value in quantum integers, at every q or at a level, and `Symbolic()` retains a factorial rule. See [Getting started](getting_started.md) for target selection and [Accuracy and performance](performance.md) for precision limits.
+Omitting q and k requests classical numerical evaluation. `Exact()` and `Exact(k)` are one number, exactly, at q = 1 or at a level, and `Symbolic()` is the formula at every q. See [Getting started](getting_started.md) for target selection and [Accuracy and performance](performance.md) for precision limits.
 
 ```@docs
 Classical
@@ -63,13 +63,12 @@ empty_caches!
 
 ## Exact values and x forms
 
-The [exact-values tutorial](tutorials/exact_forms.md#API-reference) documents `QForm`, `classical`, `SymbolicValue`, `x_form`, `XValue`, `ExactX`, `ExactXSum`, `radical`, `NoRadical`, and `numeric_value` with examples. Use `phi_form` for cyclotomic factorization and `prove_identity` to compare expanded generic expressions.
+The [exact-values tutorial](tutorials/exact_forms.md#API-reference) documents `QForm`, `x_form`, `XValue`, `ExactX`, `ExactXSum`, `radical`, `NoRadical`, and `numeric_value` with examples. Use `phi_form` for cyclotomic factorization and `prove_identity` to compare expanded generic expressions.
 
 ```@docs
 RadExpr
 phi_form
 prove_identity
-qform
 ```
 
 The following helpers return polynomial coefficients without expanding the display. They require the `QRecoupling.` qualifier.

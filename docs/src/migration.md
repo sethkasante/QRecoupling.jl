@@ -4,20 +4,20 @@
 
 ### Exact values are forms
 
-`Exact()` and `Exact(k)` return a [`QForm`](@ref): the value written in quantum integers, from its formula.
+`Exact()` is still the exact value at q = 1. `Exact(k)` and `Symbolic()` now return a [`QForm`](@ref): the value written in quantum integers, from its formula.
 
 | Before | Now |
 |---|---|
-| `q6j(Exact(), js...)` was a rational or radical | A form at every q. `== 1//6`, `Float64`, `numeric_value` and arithmetic still read its value at q = 1, and `classical(v)` gives that value exactly |
+| `q6j(Symbolic(), js...)` was a `SymbolicValue` | A form, the formula at every q, with no value of its own. `f(q)` evaluates it, `f(1)` gives the exact value at q = 1, and `Float64(f)` and arithmetic raise an error. `x_form` and `phi_form` accept it |
 | `q6j(Exact(k), js...)` was an `ExactX`, and needed Nemo | A form at the level, with no backend. `==`, `iszero` and arithmetic are exact |
-| `q3j` and `qcg` had no `Exact(k)` | `Exact()` and `Exact(k)` write them with their powers of q |
+| `q3j` and `qcg` had no `Exact(k)` or `Symbolic()` | Both write them with their powers of q |
 | `v.x_value`, `v.rad` | `QRecoupling.xpolynomial(v)`, `QRecoupling.radicand(v)`, `radical(v)`, with Nemo |
 | `ExactXSum(k)` to accumulate a sum | `sum`, or start from `zero(v)` |
 | `isempty(residual)` | `iszero(residual)`, or `==` |
 
-`q6j(js...; exact = true)` and `Classical(exact = true)` still return the classical number, and cost less than a form when that is all you need. `q6j(js...; k = k, exact = true)` is the same as `q6j(Exact(k), js...)`.
+`q6j(js...; k = k, exact = true)` is the same as `q6j(Exact(k), js...)`, and `q6j(js...; exact = true)` the same as `q6j(Exact(), js...)`.
 
-Between two `Exact()` values, `==` now means equal at every q: `qint(Exact(), 6) == qfact(Exact(), 3)` is false, although both are 6 at q = 1. Compare `classical(a) == classical(b)` for the old meaning.
+`==` on a `Symbolic()` value means equal at every q: `qint(Symbolic(), 6) == qfact(Symbolic(), 3)` and `qint(Symbolic(), 6) == 6` are false, although all are 6 at q = 1. `Exact()` compares values: `qint(Exact(), 6) == qfact(Exact(), 3)` is true.
 
 ### Optional backend
 
@@ -93,7 +93,7 @@ Symbol functions, `qeval`, `qint`, `qfact`, and `qbinomial` evaluate classically
 using QRecoupling, Nemo
 q6j(1,1,1,1,1,1)                      # approximately 1/6
 q6j(Exact(),1,1,1,1,1,1)          # exact classical coefficient
-s = q6j(Symbolic(),1,1,1,1,1,1)       # rule-backed symbolic x-form
+s = q6j(Symbolic(),1,1,1,1,1,1)       # the formula at every q
 @assert qint(5) == 5 # hide
 qint(Symbolic(),5)
 ```
@@ -106,13 +106,13 @@ qint(Symbolic(),5)
 | Exact level cyclotomic wrapper by default | `Exact(k)` returns `ExactX` |
 | `eager=true` | Remove the keyword |
 
-`SymbolicValue` retains a factorial rule; it does not have the old monomial multiplication interface. Build product rules using factorial prefactors or expand with `x_form` when algebra is needed.
+`Symbolic()` writes a formula in quantum integers; it does not have the old monomial multiplication interface. Build product rules using factorial prefactors or expand with `x_form`.
 
 ### Exact classical evaluation
 
-In v0.4 and v0.5, `Exact()` was an alias for `Classical(exact=true)`, and it also worked with the other recoupling symbols and product helpers. From v0.6 it returns a form; see above.
+`Exact()` is an alias for `Classical(exact=true)`, and it also works with the other recoupling symbols and product helpers.
 
-`exact=true` and `Classical(exact=true)` remain supported. `Exact()` takes no level or form option: use `Exact(k)` for a level.
+`exact=true` and `Classical(exact=true)` remain supported. `Exact()` takes no form option: use `Exact(k)` for a level.
 
 ### Exact levels use x
 
@@ -124,9 +124,9 @@ In v0.4 and v0.5, `Exact(k)` and `k=10, exact=true` returned an `ExactX`, a poly
 
 Use `x_form(value)` to expand a symbolic rule. The earlier `QRecoupling.xvalue(value)` spelling was removed in v0.6; `value.x_value` on an exact level result instead exposes its stored polynomials.
 
-Symbolic expressions display their finite factorial rule in x without carrying out the sum, for both small and large labels. Radicals use ψ factors. `x_form(value)` explicitly expands and caches the generic formula, returning an owned copy.
+`Symbolic()` displays the formula in quantum integers without carrying out the sum, for both small and large labels. `x_form(value)` explicitly expands it in x, with radicals in ψ factors.
 
-Dimensions and theta graphs use this interface too. R matrices and twists retain `QPhase` objects with an explicit branch over x. A classical exact R value is an integer sign; a symbolic or exact-level R value remains a phase.
+Dimensions and theta graphs use this interface too. R matrices and twists retain `QPhase` objects with an explicit branch over x. A classical exact R value or twist is an integer; a symbolic or exact-level one remains a `QPhase`.
 
 ### Targets and scratch storage
 
