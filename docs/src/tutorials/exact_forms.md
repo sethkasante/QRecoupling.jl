@@ -45,7 +45,7 @@ Nothing is expanded to decide this. Clearing denominators gives an integer polyn
 
 ## A level
 
-`Exact(k)` is the same value at q = e^{iπ/(k+2)}. The labels fold to `n ≤ (k+2)/2`, the relations among the q-integers simplify the form, and zeros are found and proved.
+`Exact(k)` is the same value at q = e^{iπ/(k+2)}. The labels fold to `n ≤ (k+2)/2`, the relations among the q-integers simplify the form up to k + 2 = 1100, and zeros are found and proved.
 
 ```@example exact_forms
 v = q6j(Exact(10), 1, 1, 1, 1, 1, 1)

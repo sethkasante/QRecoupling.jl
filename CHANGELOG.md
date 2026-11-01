@@ -11,11 +11,12 @@
 - `==` between a form and a float is exact, where it was always false. `Exact` rejects invalid levels when it is built. `twist(Exact(), j)` is 1 at q = 1, where it was a phase.
 - Fixed: `qdim(j; k)` above k/2 gives zero, as `Exact(k)` and every symbol do, where it returned [2j+1]. `T = Float32` is respected at real and complex q, where it was silently ignored.
 - Numerical calls infer their result: a level gives `Float64`, or `ComplexF64` for `qcg` and `q3j`, and q = 1 gives `Float64`, with no exact type in the union. At a real q the result can still be `Float64` or `ComplexF64`, since negative q is complex.
+- `fmatrix`, `bmatrix`, `qcg_matrix`, `qcg_row` and `fmatrix_labels` take `Level(k)`, `At(q)` and `Classical()`, and `smatrix` and `tmatrix` take `Level(k)`.
 - Nemo is optional, and needed only for nested radicals and expanded polynomials.
 - `ExactX` and `ExactXSum` are no longer exported, since `Exact(k)` no longer returns them. They remain as `QRecoupling.ExactX` and `QRecoupling.ExactXSum`, the types of `QRecoupling.exact_x`.
 - Quantum-integer displays for exact values, including native level zero checks. Polynomial views remain explicit.
 - Forms cover `qcg` and `q3j`: powers of q are printed in front and on each term, reduced by q^h = −1 at a level, where these values are complex.
-- The relations at a level are built from their distinct generators and kept reduced, with checked arithmetic. Levels such as k = 2000 no longer stall, and tables that took 384 ms at k = 1000 take 9 ms. At very smooth levels long rows are left out, so a form can stay longer there, and values are never affected.
+- The relations at a level are built from their distinct generators and kept reduced, with checked arithmetic. They only serve printing, so no table is built above h = 1100, where they almost never shorten a form and cost seconds. The first print at k = 5000 takes milliseconds, where it took 4.3 s.
 - Square classes use the generators directly, which keeps them complete at every level with small entries.
 - Certified native bounds, bad-prime rejection, stable `qform` evaluation, and quadratic-character nonzero certificates. Faster modular table setup and bounded cache retention.
 - **Breaking:** removed the deprecated canonical/DCR exact paths, `eager`, and one-argument `xvalue`. Polynomial result types now parameterize their payload. See [Migration](docs/src/migration.md).

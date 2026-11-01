@@ -63,6 +63,9 @@ Exact() = Classical(exact = true)
 
 Numerical evaluation at a given real or complex q, without assuming a root of unity.
 Use `Symbolic()` for the formula at generic q.
+
+Away from |q| = 1 values shrink quickly with the spins. A value below `floatmin(Float64)` rounds to `0.0`, which is not an
+exact zero: at q = 0.8 that is about half of random labels with spins up to 300. `T = BigFloat` gives the value.
 """
 struct At{Q} <: EvalTarget
     q::Q

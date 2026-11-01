@@ -301,9 +301,7 @@ end
 const RelationRow = Tuple{Int,Vector{Int},Rational{BigInt},Vector{Int}}
 
 "Above this h no table is built: it would be large, and the forms stay correct without one."
-const RELATION_TABLE_LIMIT = 10^4
-"Up to this h a table that lost generators in `Int` is built again in `Int128`."
-const RELATION_WIDE_LIMIT = 2600
+const RELATION_TABLE_LIMIT = 1100
 "A row with an exponent beyond this cannot make a form shorter, so it is not kept."
 const RELATION_EXPONENT_LIMIT = 1 << 13
 
@@ -312,9 +310,13 @@ The relations at h in echelon form, from the largest label down: rows `(pivot la
 nonzero exponent)`, meaning ∏[n]^(exponents[n]) = constant, with the exponent of the pivot label positive and every larger
 label absent. Labels are 2 ≤ n ≤ h/2.
 
-The reduced table has large entries at very smooth h: 3·10⁹ at h = 2002. So generators are dropped past a limit and long
-rows are left out. Rows are always true and a product reduced by them keeps its value, but at those levels reduction can
-stop short. The square classes of `_class_rows` use the generators, and do not depend on this.
+The reduced table has large entries at smooth h: 3·10⁸ at h = 1050, and 3·10⁹ at h = 2002. So generators are dropped past a
+limit and long rows are left out. Rows are always true and a product reduced by them keeps its value, but at those levels
+reduction can stop short. The square classes of `_class_rows` use the generators, and do not depend on this.
+
+Only printing reads this table. It shortens up to 20% of the forms at small composite h, but almost none at large h, where it
+costs seconds: none of 150 random forms at most h from 1000 to 5000, and 10 of 150 at worst. So no table is built above
+`RELATION_TABLE_LIMIT`, and a form there reads folded.
 """
 function _level_relations(h::Int)
     out = RelationRow[]
@@ -323,7 +325,7 @@ function _level_relations(h::Int)
     primes = _prime_factors(h)
     gens = _relation_generators(h)
     rows, dropped = _relation_echelon(gens, top, length(primes), Int, 1 << 31)
-    if dropped > 0 && h <= RELATION_WIDE_LIMIT
+    if dropped > 0
         rows, dropped = _relation_echelon(gens, top, length(primes), Int128, Int128(1) << 62)
     end
     # What survives an incomplete table is mostly long. Short rows come from building it under the limit itself.

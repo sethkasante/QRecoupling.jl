@@ -198,6 +198,7 @@ function gsymbol_sum(J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int)
 end
 
 "Merge two sorted tuples."
+@inline _merge_sorted(x::Tuple{}, y::Tuple{}) = ()
 @inline _merge_sorted(x::Tuple{}, y::Tuple) = y
 @inline _merge_sorted(x::Tuple, y::Tuple{}) = x
 @inline _merge_sorted(x::Tuple, y::Tuple) =

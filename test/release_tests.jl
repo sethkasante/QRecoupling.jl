@@ -314,9 +314,9 @@ end
         @test length(QR._level_relations(h)) == (h ÷ 2 - 1) - (count(n -> gcd(n, h) == 1, 1:h) ÷ 2 - 1)
     end
     @test isempty(QR._level_relations(101))
-    # very smooth levels: finite in time and memory, every row true, and a form still comes back right
+    # smooth levels: finite in time and memory, every row true
     logq(n, h) = log(sinpi(big(n) / h)) - log(sinpi(1 / big(h)))
-    for h in (2002, 2310)
+    for h in (910, 1050)
         t = @elapsed rows = QR._level_relations(h)
         @test t < 60 && !isempty(rows)
         @test all(r -> maximum(abs, r[2]) <= QR.RELATION_EXPONENT_LIMIT, rows)
@@ -324,18 +324,22 @@ end
             @test all(iszero, row[piv+1:end]) && row[piv] > 0
             @test abs(sum(row[n] * logq(n, h) for n in 2:h÷2 if !iszero(row[n])) - log(BigFloat(con))) < 1e-30
         end
-        # the classes stay complete without the table, with small entries
-        F = QR._level_field(h)
-        cl = QR._class_rows(F)
-        @test count(r -> r.pivot > 0, cl) == length(unique(r.pivot for r in cl if r.pivot > 0)) > length(rows)
+    end
+    # the classes do not read the table, so they stay complete above it, with small entries
+    for h in (1050, 2002, 2310)
+        cl = QR._class_rows(QR._level_field(h))
+        @test count(r -> r.pivot > 0, cl) == length(unique(r.pivot for r in cl if r.pivot > 0)) > 0
         @test maximum(maximum(abs, r.e) for r in cl) < 10^4
     end
     v = QR.level_value(QR._rule_for(q6j, 3, 3, 3, 3, 3, 3), 2000)
     @test float(v) ≈ q6j(Level(2000), 3, 3, 3, 3, 3, 3) rtol = 1e-12
     @test float(v * v) ≈ float(v)^2 rtol = 1e-12
     @test float(QR.qform(q6j, 3, 3, 3, 3, 3, 3; k = 2000)) ≈ q6j(Level(2000), 3, 3, 3, 3, 3, 3) rtol = 1e-12
-    # the largest levels go without a table, and a form is still correct
+    # above the limit there is no table to wait for, and a form still reads and evaluates right
     @test isempty(QR._level_relations(QR.RELATION_TABLE_LIMIT + 2))
+    @test (@elapsed string(q6j(Exact(5000), 5, 5, 5, 5, 5, 5))) < 1
+    @test string(q6j(Exact(5000), 5, 5, 5, 5, 5, 5)) == string(QR.qform(q6j, 5, 5, 5, 5, 5, 5; k = 5000, reduce = false))
+    @test QR._qform_level(q6j(Exact(5000), 5, 5, 5, 5, 5, 5)) ≈ numeric_value(q6j(Exact(5000), 5, 5, 5, 5, 5, 5)) rtol = 1e-12
     # an exponent past the range of Int stops a reduction, and never wraps
     @test_throws OverflowError QR._reduce_exponents!([0, typemin(Int) + 10, 100], [(3, [0, 4, 1], 1 // big(1), [2, 3])])
 
@@ -651,6 +655,50 @@ end
         @test qdim(Level(k), j) ≈ float(qdim(Exact(k), j)) atol = 1e-13
     end
     @test qdim(1; k = 2:4) == [qdim(Level(2), 1), qdim(Level(3), 1), qdim(Level(4), 1)] && qdim(Exact(2:3), 1) isa Vector{QForm}
+end
+
+@testset "matrix functions take targets" begin
+    # the same matrices as the keywords, for each numerical target
+    for (f, a) in ((fmatrix, (1, 1, 1, 1)), (bmatrix, (1, 1, 1, 1)), (qcg_matrix, (1, 1, 0)), (qcg_matrix, (1, 1)), (qcg_row, (1, 1, 0, 0)))
+        for (t, kw) in ((Level(10), (; k = 10)), (At(0.8), (; q = 0.8)), (At(0.8 + 0.2im), (; q = 0.8 + 0.2im)), (Classical(), (; q = 1)))
+            x = f(t, a...); y = f(a...; kw...)
+            @test first(x) == first(y) && x[2:end] == y[2:end]
+        end
+        @test first(f(Level(10), a...; T = ComplexF64)) == first(f(a...; k = 10, T = ComplexF64))
+        for t in (Exact(), Exact(10), Symbolic(), Classical(exact = true))
+            @test_throws ArgumentError f(t, a...)
+        end
+        @test_throws ArgumentError f(Level(10), a...; k = 3)
+        @test_throws ArgumentError f(At(0.8), a...; q = 0.7)
+    end
+    @test eltype(first(fmatrix(Level(10; T = BigFloat), 1, 1, 1, 1))) === BigFloat
+    @test eltype(first(fmatrix(Level(10; T = Float32), 1, 1, 1, 1))) === Float32
+    @test fmatrix_labels(Level(4), 1, 1, 1, 1) == fmatrix_labels(1, 1, 1, 1; k = 4) && fmatrix_labels(Classical(), 1, 1, 1, 1) == fmatrix_labels(1, 1, 1, 1)
+    @test fmatrix_labels(At(0.8), 1, 1, 1, 1) == fmatrix_labels(1, 1, 1, 1)
+    @test_throws ArgumentError fmatrix_labels(Exact(4), 1, 1, 1, 1)
+    @test smatrix(Level(10)) == smatrix(10) && tmatrix(Level(10)) == tmatrix(10)
+    @test eltype(first(smatrix(Level(10; T = Float32)))) === Float32 && tmatrix(Level(10); anomaly = false) == tmatrix(10; anomaly = false)
+    @test_throws ArgumentError smatrix(At(0.8))
+    @test_throws ArgumentError tmatrix(Exact(10))
+end
+
+@testset "forms do not mix with values at q = 1" begin
+    for f in (q6j(Exact(3), 1, 1, 1, 1, 1, 1), q6j(Symbolic(), 1, 1, 1, 1, 1, 1)), g in (+, -, *, /)
+        @test_throws ArgumentError g(f, q6j(Exact(), 1, 1, 1, 1, 1, 1))
+        @test_throws ArgumentError g(q6j(Exact(), 1, 1, 1, 1, 1, 1), f)
+    end
+    # the multiword type keeps its arithmetic with plain numbers, and has no ambiguous methods left
+    a = QR.MW{3}(0.25)
+    @test Float64(a + 1) == 1.25 && Float64(1.0 - a) == 0.75 && Float64(2a) == 0.5 && Float64(a / 2.0) == 0.125 && Float64(a * true) == 0.25 && a < 1 && 0 < a && a <= 0.25
+    @test isempty(Test.detect_ambiguities(QRecoupling; recursive = true))
+end
+
+@testset "tiny values at real q" begin
+    # a true value below floatmin rounds to zero in Float64, which is not an exact zero, and BigFloat shows it
+    l = (300, 300, 300, 300, 300, 299)
+    @test q6j(At(0.1), l...) == 0
+    @test !iszero(q6j(At(0.1), l...; T = BigFloat))
+    @test !iszero(q6j(Symbolic(), l...))
 end
 
 @testset "equality at a level, read at places" begin

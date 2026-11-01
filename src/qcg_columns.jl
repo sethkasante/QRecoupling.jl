@@ -599,3 +599,39 @@ function qcg_row(j1::Spin, m1::Spin, j2::Spin, m2::Spin; k = nothing, q = nothin
     end
     return c, js .// 2
 end
+
+# ---- targets for the functions that return matrices ----
+#
+# These give numbers, so they take the numerical targets. The keywords of each function are what a target sets.
+
+"The keywords a numerical target sets on a matrix function, which has no `exact`. Other targets have no matrices."
+function _matrix_keywords(t::EvalTarget, name)
+    t isa Level && return (; k = t.k)
+    t isa At && return (; q = t.q)
+    t isa Classical && !t.exact && return (; q = 1)
+    throw(ArgumentError("$name returns numbers: use `Level(k)`, `At(q)` or `Classical()`, not `$t`"))
+end
+_target_eltype(::Level{T}) where {T} = T === Float64 ? (;) : (; T = T)
+_target_eltype(::EvalTarget) = (;)
+
+for f in (:fmatrix, :bmatrix, :qcg_matrix, :qcg_row)
+    @eval function $f(t::EvalTarget, args...; kw...)
+        fixed = _matrix_keywords(t, $(string(f)))
+        any(key -> key === :k || key === :q, keys(kw)) &&
+            throw(ArgumentError("evaluation target conflicts with explicit evaluation keywords"))
+        return $f(args...; fixed..., _target_eltype(t)..., kw...)
+    end
+end
+
+function fmatrix_labels(t::EvalTarget, args...)
+    fixed = _matrix_keywords(t, "fmatrix_labels")
+    return t isa Level ? fmatrix_labels(args...; k = fixed.k) : fmatrix_labels(args...)
+end
+
+function _level_of(t::EvalTarget, name)
+    t isa Level || throw(ArgumentError("$name is a statement about a level: use `Level(k)`, not `$t`"))
+    return t.k
+end
+smatrix(t::EvalTarget; kw...) = smatrix(_level_of(t, "smatrix"); _target_eltype(t)..., kw...)
+tmatrix(t::EvalTarget; kw...) = tmatrix(_level_of(t, "tmatrix"); map(T -> Complex{T}, _target_eltype(t))..., kw...)
+

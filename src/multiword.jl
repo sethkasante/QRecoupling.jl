@@ -4,8 +4,12 @@
 #  gives full double output to κ ≈ 1e30 and K = 4 to κ ≈ 1e46, before BigFloat.
 # ---------------------------------------------------------------------------------
 
+"The plain numbers the multiword arithmetic takes directly. Others promote."
+const MWWord = Union{Float64,Int}
+
 struct MW{K} <: AbstractFloat
     w::NTuple{K,Float64}
+    MW{K}(w::NTuple{K,Float64}) where {K} = new{K}(w)
 end
 
 @inline Base.getindex(a::MW, i::Int) = a.w[i]
@@ -46,9 +50,9 @@ end
 Base.:<(a::MW, b::MW) = (a - b)[1] < 0
 Base.:<=(a::MW, b::MW) = (a - b)[1] <= 0
 Base.:(==)(a::MW, b::MW) = iszero((a - b)[1])
-Base.:<(a::MW, b::Real) = a < MW{length(a.w)}(Float64(b))
-Base.:<(a::Real, b::MW) = MW{length(b.w)}(Float64(a)) < b
-Base.:<=(a::MW, b::Real) = a <= MW{length(a.w)}(Float64(b))
+Base.:<(a::MW, b::MWWord) = a < MW{length(a.w)}(Float64(b))
+Base.:<(a::MWWord, b::MW) = MW{length(b.w)}(Float64(a)) < b
+Base.:<=(a::MW, b::MWWord) = a <= MW{length(a.w)}(Float64(b))
 
 
 "One VecSum pass: Σt = s + Σ errs exactly. Recursion on the tuple tail, so it unrolls at compile time."
@@ -65,6 +69,9 @@ end
 "Extract K leading words from a list of terms by K VecSum passes (type-stable: each pass is one call)."
 @inline _extract(::Val{0}, t::Tuple) = ()
 @inline _extract(::Val{K}, t::Tuple{}) where {K} = ntuple(_ -> 0.0, Val(K))
+@inline _extract(::Val{0}, t::Tuple{}) = ()
+@inline _extract(::Val{1}, t::Tuple{}) = (0.0,)
+@inline _extract(::Val{0}, t::NTuple{M,Float64}) where {M} = ()
 @inline function _extract(::Val{1}, t::NTuple{M,Float64}) where {M}
     s, rest = _vecsum(t)
     return (s + _sumall(rest),)                     # leftover ≈ u^K relative folds into the last word
@@ -79,10 +86,10 @@ case where cancellation leaves the first word zero and the value in a later one.
 
 Base.:+(a::MW{K}, b::MW{K}) where {K} = _renorm(Val(K), (a.w..., b.w...))
 Base.:-(a::MW{K}, b::MW{K}) where {K} = a + (-b)
-Base.:+(a::MW{K}, b::Real) where {K} = a + MW{K}(Float64(b))
-Base.:+(a::Real, b::MW{K}) where {K} = MW{K}(Float64(a)) + b
-Base.:-(a::MW{K}, b::Real) where {K} = a - MW{K}(Float64(b))
-Base.:-(a::Real, b::MW{K}) where {K} = MW{K}(Float64(a)) - b
+Base.:+(a::MW{K}, b::MWWord) where {K} = a + MW{K}(Float64(b))
+Base.:+(a::MWWord, b::MW{K}) where {K} = MW{K}(Float64(a)) + b
+Base.:-(a::MW{K}, b::MWWord) where {K} = a - MW{K}(Float64(b))
+Base.:-(a::MWWord, b::MW{K}) where {K} = MW{K}(Float64(a)) - b
 
 function Base.:*(a::MW{3}, b::MW{3})
     p11, e11 = _two_prod(a[1], b[1])
@@ -97,8 +104,8 @@ function Base.:*(a::MW{4}, b::MW{4})
     return _renorm(Val(4), (p11, p12, p21, e11, p13, p22, p31, e12, e21,
                             e13, e22, e31, a[1] * b[4], a[2] * b[3], a[3] * b[2], a[4] * b[1]))
 end
-Base.:*(a::MW{K}, b::Real) where {K} = a * MW{K}(Float64(b))
-Base.:*(a::Real, b::MW{K}) where {K} = MW{K}(Float64(a)) * b
+Base.:*(a::MW{K}, b::MWWord) where {K} = a * MW{K}(Float64(b))
+Base.:*(a::MWWord, b::MW{K}) where {K} = MW{K}(Float64(a)) * b
 
 "Division by Newton correction: K rounds of q ← q + (a − q·b)/b₁."
 function Base.:/(a::MW{K}, b::MW{K}) where {K}
@@ -109,8 +116,8 @@ function Base.:/(a::MW{K}, b::MW{K}) where {K}
     end
     return q
 end
-Base.:/(a::MW{K}, b::Real) where {K} = a / MW{K}(Float64(b))
-Base.:/(a::Real, b::MW{K}) where {K} = MW{K}(Float64(a)) / b
+Base.:/(a::MW{K}, b::MWWord) where {K} = a / MW{K}(Float64(b))
+Base.:/(a::MWWord, b::MW{K}) where {K} = MW{K}(Float64(a)) / b
 Base.inv(a::MW{K}) where {K} = one(MW{K}) / a
 
 function Base.sqrt(a::MW{K}) where {K}

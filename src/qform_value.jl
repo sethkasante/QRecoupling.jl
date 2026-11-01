@@ -84,6 +84,7 @@ Base.:(==)(v::Union{LevelValue,LevelValueSum}, f::QForm) = f == v
 Base.:-(f::QForm) = f.rule === nothing ? f : QForm(f.k, negated(f.rule), f.weight, f.reduce, nothing)
 Base.inv(f::QForm) = inv(_form_value(f))
 Base.:^(f::QForm, n::Integer) = _form_value(f)^n
+const _NO_MIXED_ARITHMETIC = "a form and a value at q = 1 have no arithmetic together: a level form is a number at another q, and a formula has no number"
 for op in (:+, :-, :*, :/)
     @eval begin
         function Base.$op(f::QForm, g::QForm)
@@ -92,7 +93,9 @@ for op in (:+, :-, :*, :/)
         end
         Base.$op(f::QForm, c::Union{Integer,Rational}) = $op(_form_value(f), c)
         Base.$op(c::Union{Integer,Rational}, f::QForm) = $op(c, _form_value(f))
-        Base.$op(f::QForm, v::Union{LevelValue,LevelValueSum,ClassicalResult}) = $op(_form_value(f), v)
-        Base.$op(v::Union{LevelValue,LevelValueSum,ClassicalResult}, f::QForm) = $op(v, _form_value(f))
+        Base.$op(f::QForm, v::Union{LevelValue,LevelValueSum}) = $op(_form_value(f), v)
+        Base.$op(v::Union{LevelValue,LevelValueSum}, f::QForm) = $op(v, _form_value(f))
+        Base.$op(::QForm, ::ClassicalResult) = throw(ArgumentError(_NO_MIXED_ARITHMETIC))
+        Base.$op(::ClassicalResult, ::QForm) = throw(ArgumentError(_NO_MIXED_ARITHMETIC))
     end
 end
