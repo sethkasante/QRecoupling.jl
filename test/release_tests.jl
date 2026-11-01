@@ -124,13 +124,16 @@ end
 end
 
 @testset "conversions of classical exact values" begin
-    v = q3j(Exact(), 2, 2, 0, 1, -1, 0)                  # −√(1/5)
-    @test float(v) === Float64(v) === q3j(2, 2, 0, 1, -1, 0)
-    @test big(v) == BigFloat(v)
+    f = q3j(Exact(), 2, 2, 0, 1, -1, 0)                  # −√(1/5)
+    v = classical(f)
+    @test float(v) === Float64(v) === q3j(2, 2, 0, 1, -1, 0) === float(f) === Float64(f)
+    @test big(v) == BigFloat(v) == big(f)
     @test float(typeof(v)) === Float64
-    @test numeric_value(v; bits = 256) ≈ -sqrt(big(1) / 5) atol = big(2.0)^-250
-    @test precision(numeric_value(v; bits = 256)) == 256
-    @test iszero(numeric_value(zero(v)))
+    for x in (v, f)
+        @test numeric_value(x; bits = 256) ≈ -sqrt(big(1) / 5) atol = big(2.0)^-250
+        @test precision(numeric_value(x; bits = 256)) == 256
+        @test iszero(numeric_value(zero(x)))
+    end
 end
 
 @testset "removed in v0.6" begin
@@ -149,6 +152,9 @@ end
 
 # `float(f)` and `f(q)` evaluate the rule behind a form, so they cannot see a mistake in the form. These two read the
 # form itself: its fields, and the text a reader gets.
+"The expanded value from the Nemo backend, independent of the forms and of the plain-Julia kernel."
+oracle(k, l...) = QR.exact_x(QR._rule_for(q6j, l...), k)
+
 "The value of a form's own fields, at its level or at a real q."
 form_value(f; q = nothing) = setprecision(BigFloat, 1024) do
     v = q === nothing ? QR._qform_level(f) :
@@ -254,8 +260,6 @@ end
     @test !iszero(qform(s; k = h - 2, weight = (2h ÷ 3 + 2, 0)))
     @test iszero(qform(FactorialSum(0:1; factors = [(0, 2, 1)], alternating = true); k = h - 2, weight = (2h, 0)))
     @test length(qform(FactorialSum(0:1; factors = [(0, 2, 1)], alternating = true); k = h - 2, weight = (h, 0)).terms) == 1
-    # exact values with weights are not a target yet
-    @test_throws ArgumentError qcg(Exact(5), 1, 0, 1, 0, 1, 0)
 end
 
 @testset "values in quantum integers" begin
@@ -279,9 +283,9 @@ end
         @test float(qform(q6j, l...; k = k)) ≈ q6j(Level(k), l...) atol = 1e-13
         @test float(qform(q6j, l...; k = k, reduce = false)) ≈ q6j(Level(k), l...) atol = 1e-13
     end
-    @test numeric_value(qform(q6j, 1, 1, 1, 1, 1, 1; k = 5); bits = 256) ≈ numeric_value(q6j(Exact(5), 1, 1, 1, 1, 1, 1); bits = 256)
+    @test numeric_value(qform(q6j, 1, 1, 1, 1, 1, 1; k = 5); bits = 256) ≈ numeric_value(oracle(5, 1, 1, 1, 1, 1, 1); bits = 256)
     @test setprecision(() -> QR._qform_level(qform(q6j, 1, 1, 1, 1, 1, 1; k = 5)), BigFloat, 288) ≈
-          numeric_value(q6j(Exact(5), 1, 1, 1, 1, 1, 1); bits = 288) rtol = big(2.0)^-256
+          numeric_value(oracle(5, 1, 1, 1, 1, 1, 1); bits = 288) rtol = big(2.0)^-256
 
     # the relations reveal zeros that no single term shows: reflection and a sporadic one
     @test iszero(qform(q6j, 5, 5, 5, 5, 5, 5; k = 20))
@@ -336,7 +340,7 @@ end
 
     @test_throws ArgumentError qform(q6j, 1, 1, 1, 1, 1, 1; k = 3)(0.8)
     @test_throws DomainError qform(q6j, 1, 1, 1, 1, 1, 1)(-0.8)
-    @test_throws ArgumentError numeric_value(qform(q6j, 1, 1, 1, 1, 1, 1))
+    @test numeric_value(qform(q6j, 1, 1, 1, 1, 1, 1)) ≈ big(1) / 6
 end
 
 @testset "exact level values without Nemo" begin
@@ -346,7 +350,7 @@ end
                    (10, ntuple(_ -> 2, 6)), (11, (1//2, 1, 3//2, 2, 3//2, 1)), (16, (3, 3, 2, 3, 3, 2)),
                    (30, ntuple(_ -> 3, 6)), (41, ntuple(_ -> 10, 6)), (121, ntuple(_ -> 30, 6)))
         v = QR.level_value(QR._rule_for(q6j, l...), k)
-        @test float(v) ≈ Float64(numeric_value(q6j(Exact(k), l...))) rtol = 1e-12
+        @test float(v) ≈ Float64(numeric_value(oracle(k, l...))) rtol = 1e-12
         @test length(v.num) == QR._totient(2(k + 2)) ÷ 2
     end
     # [1], …, [d] carry the arithmetic: at k = 10 the value (2√3 − 3)/3 is (2[3] − 5)/3
@@ -360,7 +364,7 @@ end
     @test !iszero(qform(q6j, 2, 3, 3, 5//2, 7//2, 7//2; k = 23))
     # arithmetic agrees with the exact field, with and without a shared root
     let k = 12
-        a = q6j(Exact(k), 1, 1, 1, 1, 1, 1); b = q6j(Exact(k), 3//2, 1, 3//2, 1, 3//2, 1)
+        a = oracle(k, 1, 1, 1, 1, 1, 1); b = oracle(k, 3//2, 1, 3//2, 1, 3//2, 1)
         u = QR.level_value(QR._rule_for(q6j, 1, 1, 1, 1, 1, 1), k)
         w = QR.level_value(QR._rule_for(q6j, 3//2, 1, 3//2, 1, 3//2, 1), k)
         @test float(u * w) ≈ Float64(numeric_value(a * b))
@@ -392,41 +396,41 @@ end
     end
 end
 
-@testset "display of exact level values" begin
+@testset "display of the expanded level values of the Nemo backend" begin
     plain(v) = sprint(show, MIME("text/plain"), v)
-    v = q6j(Exact(5), 1, 1, 1, 2, 1, 1)
+    v = oracle(5, 1, 1, 1, 2, 1, 1)
     @test string(v) == "ExactX(k = 5, [2]/[3]²)"
     @test occursin("≈ 0.3568958", plain(v)) && occursin("= [2]/[3]²", plain(v))
     @test !occursin("x²", plain(v))
     # a radical when the level has one
-    w = q6j(Exact(3), 1, 1, 1, 1, 1, 1)
+    w = oracle(3, 1, 1, 1, 1, 1, 1)
     @test string(w) == "ExactX(k = 3, −1/[2]²)"
     @test occursin("(√5 − 3)/2", plain(w))
     # the form shown is the value held
     for (k, l) in ((5, (1, 1, 1, 1, 1, 1)), (10, (2, 2, 2, 2, 2, 2)), (12, (2, 2, 1, 2, 2, 1)), (30, (3, 3, 3, 3, 3, 3)))
-        u = q6j(Exact(k), l...)
+        u = oracle(k, l...)
         @test form_value(qform(u.rule; k = k)) ≈ Float64(numeric_value(u))
         shown = replace(string(u), "ExactX(k = $k, " => "")[1:end-1]
         occursin("terms)", shown) || @test text_value(shown; k = k) ≈ Float64(numeric_value(u))
     end
     # a radical beside the form when one exists and is short, and none when it does not exist
-    @test occursin("(2√3 − 3)/3", plain(q6j(Exact(10), 1, 1, 1, 1, 1, 1)))
-    @test !occursin("√", plain(q6j(Exact(5), 1, 1, 1, 1, 1, 1)))
+    @test occursin("(2√3 − 3)/3", plain(oracle(10, 1, 1, 1, 1, 1, 1)))
+    @test !occursin("√", plain(oracle(5, 1, 1, 1, 1, 1, 1)))
     # the result of arithmetic has no rule, and still reads in q-integers
-    a = q6j(Exact(5), 1, 1, 1, 1, 1, 1) + v
+    a = oracle(5, 1, 1, 1, 1, 1, 1) + v
     @test a.rule === nothing && string(a) == "ExactX(k = 5, [3] − [2])"
     @test !occursin("x²", plain(v * v))
-    @test (v * v).rule === nothing && v * v == q6j(Exact(5), 1, 1, 1, 2, 1, 1)^2
+    @test (v * v).rule === nothing && v * v == oracle(5, 1, 1, 1, 2, 1, 1)^2
     # a long sum is cut, never replaced by a polynomial
-    long = replace(string(q6j(Exact(40), ntuple(_ -> 10, 6)...)), "ExactX" => "")
+    long = replace(string(oracle(40, ntuple(_ -> 10, 6)...)), "ExactX" => "")
     @test occursin("terms)", long) && !occursin("x", long)
     # factorials combine across runs of labels
     @test string(qform(q6j, 1, 1, 1, 1, 1, 1)) == "([5] − 1)/[4]!"
     @test !occursin(r"\[(\d+)\]![⁰¹²³⁴⁵⁶⁷⁸⁹]*\[\1\]!", string(qform(q6j, ntuple(_ -> 30, 6)...; k = 200)))
     @test occursin(r"\[(\d+)\]![⁰¹²³⁴⁵⁶⁷⁸⁹]*\[\1\]!", "[15]!²[15]!")
-    @test string(q6j(Exact(10), 1, 5//2, 5//2, 5//2, 3, 3)) == "ExactX(k = 10, 0)"
+    @test string(oracle(10, 1, 5//2, 5//2, 5//2, 3, 3)) == "ExactX(k = 10, 0)"
     # equality does not look at the display
-    @test v == q6j(Exact(5), 1, 1, 1, 2, 1, 1) && v.rule !== nothing
+    @test v == oracle(5, 1, 1, 1, 2, 1, 1) && v.rule !== nothing
 end
 
 
@@ -449,7 +453,7 @@ end
     # The enclosure must include the value, not merely agree to a tolerance.
     v = QR.level_value(QR._rule_for(q6j, 2, 2, 2, 2, 2, 2), 12)
     mid, err = setprecision(() -> QR._value_ball(v, 14), BigFloat, 128)
-    exactref = numeric_value(q6j(Exact(12), 2, 2, 2, 2, 2, 2); bits = 512)
+    exactref = numeric_value(oracle(12, 2, 2, 2, 2, 2, 2); bits = 512)
     @test abs(mid - exactref) <= err
     # Very small nonzero differences must not be classified as zeros.
     v = QR.LevelValue(3, [big(1), big(0)], big(1), big(5), Int[])
@@ -498,6 +502,121 @@ end
     # a nonzero sum and a vanishing one both still finish with a proof
     @test !iszero(QR.level_value(QR._rule_for(q6j, ntuple(_ -> 30, 6)...), 121))
     @test iszero(QR.level_value(QR._rule_for(q6j, 5//2, 9//2, 5, 4, 5, 11//2), 20))
+end
+
+@testset "exact values are forms" begin
+    # one target with no q: the form, and the number it means
+    f = q6j(Exact(), 1, 1, 1, 1, 1, 1)
+    @test f isa QForm && f.k === nothing
+    @test string(f) == "([5] − 1)/[4]!"
+    @test sprint(show, MIME("text/plain"), f) == "([5] − 1)/[4]!   (1/6 at q = 1)"
+    @test f == 1//6 && 1//6 == f && classical(f) == 1//6 && Rational(f) == 1//6
+    @test f(0.8) ≈ q6j(At(0.8), 1, 1, 1, 1, 1, 1)
+    @test sprint(show, MIME("text/plain"), q3j(Exact(), 2, 2, 0, 1, -1, 0)) == "−q √(1/[5])   (−√(1/5) at q = 1)"
+    @test sprint(show, MIME("text/plain"), qdim(Exact(), 1//2)) == "[2]   (2 at q = 1)"
+    @test iszero(q6j(Exact(), 1, 1, 1, 1, 1, 5))
+    # a classical zero is not a zero at every q, and a form says which it is
+    z = first(l for l in all_6j(k = 16) if iszero(classical(q6j(Exact(), l...))) && !iszero(q6j(At(0.8), l...)))
+    @test !iszero(q6j(Exact(), z...)) && q6j(Exact(), z...) == 0
+
+    # a level: the same form, simplified, and no backend needed for any of it
+    g = q6j(Exact(3), 1, 1, 1, 1, 1, 1)
+    @test g isa QForm && g.k == 3 && string(g) == "−1/[2]²   (k = 3)"
+    @test sprint(show, MIME("text/plain"), g) == "−1/[2]²   (k = 3)   ≈ −0.381966"
+    @test string(radical(g)) == "(√5 − 3)/2"
+    @test_throws ArgumentError classical(g)
+    @test_throws ArgumentError f == g
+    @test q6j(1, 1, 1, 1, 1, 1; k = 3, exact = true) == g
+    @test iszero(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2)) && iszero(q6j(Exact(4), 1, 1, 1, 5, 5, 5))
+    @test [q6j(Exact(k), 1, 1, 1, 1, 1, 1) for k in 2:3] == q6j(Exact(2:3), 1, 1, 1, 1, 1, 1)
+    @test length(q6j(Exact(10), [(1, 1, 1, 1, 1, 1), (2, 2, 2, 2, 2, 2)])) == 2
+
+    # the keywords of `exact = true`: a level is a form, and q = 1 stays the classical number
+    @test q6j(1, 1, 1, 1, 1, 1; exact = true) isa QR.ClassicalResult
+    @test q6j(Classical(exact = true), 1, 1, 1, 1, 1, 1) == 1//6
+    @test qcg(1, 0, 1, 0, 1; exact = true) == 0
+    @test qcg(1//2, 1//2, 1//2, -1//2, 1; k = 4, exact = true) == qcg(Exact(4), 1//2, 1//2, 1//2, -1//2, 1)
+
+    # every symbol, against numbers at a level and at generic q, and against Nemo
+    for (sym, args) in ((q6j, (2, 2, 2, 2, 2, 2)), (fsymbol, (1, 1, 1, 1, 1, 1)), (gsymbol, (3//2, 1, 3//2, 1, 3//2, 1)),
+                        (QR.tetrahedron, (1, 1, 1, 1, 1, 1)), (QR.theta_value, (1, 1, 1)), (qdim, (3//2,)),
+                        (qint, (5,)), (qfact, (5,)), (qbinomial, (5, 2)), (QR.q3j_factorial, (1, 1, 1, 1, -1, 0)),
+                        (q3j, (1, 1, 1, 1, -1, 0)), (qcg, (1, 0, 1, 0, 2)))
+        for k in (5, 10, 16)
+            h = sym(Exact(k), args...)
+            @test h isa QForm && h.k == k
+            @test float(h) ≈ sym(Level(k), args...) atol = 1e-12
+            @test form_value(h) ≈ sym(Level(k), args...) atol = 1e-12
+        end
+        h = sym(Exact(), args...)
+        @test h isa QForm && h.k === nothing
+        @test h(1.3) ≈ sym(At(1.3), args...) rtol = 1e-12
+        @test form_value(h; q = 1.3) ≈ sym(At(1.3), args...) rtol = 1e-12
+        @test float(h) ≈ sym(args...) rtol = 1e-12
+    end
+    # phases are not field values
+    @test QR.rmatrix(Exact(10), 1//2, 1//2, 1) isa QPhase && QR.rmatrix(Exact(), 1//2, 1//2, 1) isa QPhase
+    @test QR.twist(Exact(10), 1//2) isa QPhase
+    # the expressions a level has no rule for
+    @test qeval(Exact(), QR.q6j_dcr(2, 2, 2, 2, 2, 2)) == 1//6
+    @test_throws ArgumentError qeval(Exact(10), QR.q6j_dcr(2, 2, 2, 2, 2, 2))
+
+    # arithmetic at a level is exact, and it agrees with Nemo
+    a = q6j(Exact(12), 1, 1, 1, 1, 1, 1); b = q6j(Exact(12), 3//2, 1, 3//2, 1, 3//2, 1)
+    @test float(a * b) ≈ Float64(numeric_value(oracle(12, 1, 1, 1, 1, 1, 1) * oracle(12, 3//2, 1, 3//2, 1, 3//2, 1)))
+    @test float(a + b) ≈ float(a) + float(b)
+    @test (a + b) - b == a && a * inv(a) == 1 && a^2 * inv(a)^2 == 1
+    @test zero(a) + a == a && 2a == a + a && a / 2 + a / 2 == a
+    @test -a == (-1) * a
+    @test sum(q6j(Exact(12), 1, 1, x, 1, 1, 1) * q6j(Exact(12), 1, 1, x, 1, 1, 1) * qdim(Exact(12), x) * qdim(Exact(12), 1) for x in 0:2) == 1
+    # different forms of one value, at a level
+    u = q6j(Exact(4), 0, 0, 0, 1//2, 1//2, 1//2); w = q6j(Exact(4), 0, 0, 0, 3//2, 3//2, 3//2)
+    @test u == w
+    @test q6j(Exact(10), 1, 1, 1, 1, 1, 1) != q6j(Exact(10), 2, 2, 2, 2, 2, 2)
+    # classical arithmetic of generic forms keeps its old meaning
+    @test qcg(Exact(), 1//2, 1//2, 1//2, -1//2, 0)^2 == 1//2
+    @test f * f == 1//36 && 6f == 1
+
+    # with powers of q: complex numbers, decided when they differ, and the same form is equal to itself
+    c = qcg(Exact(9), 3//2, 1//2, 1, 0, 3//2, 1//2)
+    @test c == qcg(Exact(9), 3//2, 1//2, 1, 0, 3//2, 1//2)
+    @test c != qcg(Exact(9), 3//2, 1//2, 1, 0, 1//2, 1//2)
+    @test_throws ArgumentError c * c
+    @test_throws ArgumentError radical(c)
+
+    # equality at every q: different at q = 1 or not, and true across forms that differ
+    @test qint(Exact(), 6) != qfact(Exact(), 3)                   # both 6 at q = 1
+    @test classical(qint(Exact(), 6)) == classical(qfact(Exact(), 3))
+    @test qdim(Exact(), 1//2) != qdim(Exact(), 1)
+    @test q6j(Exact(), 1, 1, 1, 1, 1, 1) != q6j(Exact(), 2, 2, 2, 2, 2, 2)
+    @test qdim(Exact(), 1//2) != q6j(Exact(), 1//2, 1//2, 1, 1//2, 1//2, 1)
+    # the Regge symmetry at every q
+    regge(a, b, c, d, e, f) = (s = (b + c + e + f) // 2; (a, s - b, s - c, d, s - e, s - f))
+    done = 0
+    for l in all_6j(k = 12)
+        l2 = regge(l...)
+        (all(x -> denominator(2x) == 1 && x >= 0, l2) && l2 != l && length(qform(q6j, l...).terms) > 1) || continue
+        @test q6j(Exact(), l...) == q6j(Exact(), l2...)
+        (done += 1) == 20 && break
+    end
+    @test done == 20
+    # forms that share nothing: q-Vandermonde, a sum of 4 terms against one binomial, with a proof and not a match
+    sum_form(w, e2) = qform(FactorialSum(0:3; prefactor = (3 => 1, 4 => 1), factors = ((1, 0, -2), (-1, 3, -1), (-1, 4, -1))); weight = (w, e2))
+    @test length(sum_form(7, -24).terms) == 4 && length(qbinomial(Exact(), 7, 3).terms) == 1
+    @test sum_form(7, -24)(1.3) ≈ qbinomial(At(1.3), 7, 3)
+    @test sum_form(7, -24) == qbinomial(Exact(), 7, 3)
+    @test classical(sum_form(7, -22)) == classical(qbinomial(Exact(), 7, 3)) && sum_form(7, -22) != qbinomial(Exact(), 7, 3)
+    @test sum_form(5, -24) != qbinomial(Exact(), 7, 3)
+    # the proof itself: [2][3] = [4] + [2], q[2] = q² + 1, and near misses
+    T(c, b, p...) = (Rational{BigInt}(c), b, collect(Pair{Int,Int}, p))
+    vanishes = QR._generic_sum_vanishes
+    @test vanishes([T(1, 0, 2 => 1, 3 => 1), T(-1, 0, 4 => 1), T(-1, 0, 2 => 1)])
+    @test !vanishes([T(1, 0, 2 => 1, 3 => 1), T(-1, 0, 4 => 1)])
+    @test vanishes([T(1, 1, 2 => 1), T(-1, 2), T(-1, 0)])
+    @test !vanishes([T(1, 1, 2 => 1), T(-1, 2), T(-1, 1)])
+    @test vanishes([T(1//3, 0, 2 => 2, 5 => -1), T(-1//3, 0, 3 => 1, 5 => -1), T(-1//3, 0, 5 => -1)])  # [2]² = [3] + 1
+    @test !vanishes([T(1//3, 0, 2 => 2, 5 => -1), T(-1//3, 0, 3 => 1, 5 => -1)])
+    @test !vanishes([T(big(10)^40, 0, 2 => 1), T(-big(10)^40 + 1, 0, 2 => 1)])
 end
 
 @testset "optional backend product hooks" begin

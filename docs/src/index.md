@@ -14,15 +14,15 @@ after installing Nemo in your environment.
 
 ```@example home
 using QRecoupling, Nemo
-classical = q6j(1, 1, 1, 1, 1, 1)
+classical_value = q6j(1, 1, 1, 1, 1, 1)
 level = q6j(Level(10), 1, 1, 1, 1, 1, 1)
 exact = q6j(Exact(10), 1, 1, 1, 1, 1, 1)
-@assert isapprox(classical, 1/6) # hide
+@assert isapprox(classical_value, 1/6) # hide
 @assert isapprox(Float64(exact), level) # hide
 exact
 ```
 
-At level 10 this is `(2√3 − 3)/3`, also represented exactly by `(2x² − 7)/3` with `x = 2cos(π/12)`.
+An exact value is written in quantum integers `[n]`, from the formula itself. `radical(exact)` gives `(2√3 − 3)/3`.
 
 ```@example home
 symbolic = q6j(Symbolic(), 1, 1, 1, 1, 1, 1)
@@ -36,15 +36,15 @@ Symbolic construction and display retain the factorial rule without carrying out
 | Task | Interface | Result |
 |:--|:--|:--|
 | Classical angular momentum | `q6j(js...)` | Numerical q = 1 value |
-| Exact classical coefficients | `q6j(Exact(), js...)` | Rational/radical arithmetic |
+| Exact value at every q | `q6j(Exact(), js...)` | Quantum integers; `classical` gives the rational at q = 1 |
 | Root of unity | `q6j(Level(k), js...)` | Numerical q = exp(iπ/(k+2)) value |
-| Exact level coefficient | `q6j(Exact(k), js...)` | Real x-basis value with radicals when needed |
+| Exact level value | `q6j(Exact(k), js...)` | Quantum integers, simplified, with zeros proved |
 | Real or complex deformation | `q6j(At(q), js...)` | Adaptive numerical evaluation |
-| Generic formula | `q6j(Symbolic(), js...)` | Rule-backed symbolic x-form |
+| Polynomials in x | `q6j(Symbolic(), js...)` | Rule-backed x-form, expanded by `x_form` with Nemo |
 | Whole fusion transformation | `fmatrix(a,b,c,d; k=k)` | Matrix and its row/column labels |
 | Finite factorial series | `FactorialSum(...)`, `qeval(...)` | The same evaluation targets |
 
-Quantum CG and 3j coefficients also support the numerical targets and `Exact()` at q = 1. Their exact-level and generic symbolic forms are not yet available.
+Quantum CG and 3j coefficients support all of these except `Symbolic()`. Their exact values carry powers of q.
 
 ## Why use it?
 

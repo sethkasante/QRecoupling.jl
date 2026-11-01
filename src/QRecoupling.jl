@@ -49,6 +49,7 @@ include("qform.jl")     # values written in quantum integers, generic and at a l
 include("level_bounds.jl") # outward enclosures used only by exact level certification
 include("level_field.jl") # exact level values in quantum integers, in plain Julia
 include("level_arithmetic.jl") # products, inverses, sums and exact zero tests of those values
+include("qform_value.jl") # a form as a value: equality and arithmetic
 
 
 # Export physics tqft and recoupling symbols api
@@ -63,7 +64,7 @@ export Level, Exact, At, Classical, Symbolic
 # exact values in x = q + 1/q: generic q, and identities proved for every level at once
 export prove_identity, x_form, XValue, phi_form
 export ExactX, ExactXSum, RadExpr, NoRadical, radical, numeric_value
-export qform, QForm
+export qform, QForm, classical
 
 # structural queries and batches
 export all_6j, iszero_at, issingular_at, level_spectrum

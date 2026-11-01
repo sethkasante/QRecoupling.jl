@@ -18,15 +18,20 @@
 #  its limit b → 0. Reducing by the lattice of these relations writes large labels through small ones.
 #  Powers of q reduce by q^h = −1. The relations hold among the [n], so they act on each term whatever its power.
 #  The relations are valid identities, so reducing never changes a value. Two equal values can still print
-#  differently, so equality belongs to `Exact(k)`, not to this form.
+#  differently, so equality is decided by `==`, not by reading the form.
 # ---------------------------------------------------------------------------------
 
 """
     QForm
 
-A value written in q-integers, as returned by [`qform`](@ref). `f(q)` evaluates a generic form at a real
-positive `q`, `q = 1` included; `numeric_value(f)` and `float(f)` evaluate a form at its level. A form with powers
-of q is complex at its level, q = e^{iπ/(k+2)}.
+A value written in q-integers, as returned by `Exact()`, `Exact(k)` and [`qform`](@ref).
+
+A generic form holds at every q. `f(q)` evaluates it at a real positive `q`, and used as a number it means its value at
+q = 1: [`classical`](@ref) gives that exactly, and `==` with a number, `float`, `numeric_value` and arithmetic read it.
+Between two forms `==` means equal at every q, decided exactly.
+
+A form at a level is one number, complex when it carries powers of q. `float` and `numeric_value` give it, and
+`==`, `iszero` and arithmetic are exact.
 """
 struct QForm{R<:Rational}
     k::Union{Nothing,Int}
@@ -48,6 +53,132 @@ _qform_zero(k) = QForm{Rational{Int}}(k, 0, 0 // 1, Pair{Int,Int}[], 1 // 1, Pai
                                       Tuple{Rational{Int},Vector{Pair{Int,Int}}}[])
 
 Base.iszero(f::QForm) = iszero(f.sign)
+
+# ---- deciding a generic form ----
+
+"""
+Whether Σ c_t q^(b_t) ∏[n]^(e_t) vanishes at every q, for terms `(c_t, b_t, labels => e_t)`. Nothing is expanded.
+
+Clearing denominators gives an integer polynomial in q, of degree at most D and with coefficients summing to at most H,
+since q^(n−1)[n] has n coefficients equal to 1. A nonzero one cannot vanish at an integer Q > H. So this asks whether that
+polynomial vanishes at Q = 2^B, a number of at most log₂H + D·B bits, by its residues at word primes. A nonzero residue
+settles the question at once, and otherwise there are enough primes to make the value zero.
+"""
+function _generic_sum_vanishes(input::Vector{Tuple{Rational{BigInt},Int,Vector{Pair{Int,Int}}}})
+    # terms that two forms share cancel here, and the bound below never sees them
+    merged = Dict{Tuple{Int,Vector{Pair{Int,Int}}},Rational{BigInt}}()
+    for (c, b, p) in input
+        key = (b, sort(p; by = first))
+        merged[key] = get(merged, key, 0 // big(1)) + c
+    end
+    terms = [(c, key[1], key[2]) for (key, c) in merged if !iszero(c)]
+    isempty(terms) && return true
+    least = Dict{Int,Int}()
+    for (_, _, p) in terms, (n, e) in p
+        least[n] = min(get(least, n, 0), e)
+    end
+    for (_, _, p) in terms, n in keys(least)
+        any(x -> x.first == n, p) || (least[n] = min(least[n], 0))
+    end
+    den = foldl(lcm, (denominator(t[1]) for t in terms); init = big(1))
+    H = big(0); lo = typemax(Int); hi = typemin(Int)
+    cleared = Vector{Tuple{BigInt,Int,Dict{Int,Int}}}(undef, length(terms))
+    for (i, (c, b, p)) in enumerate(terms)
+        e = Dict(n => -a for (n, a) in least if !iszero(a))
+        for (n, a) in p
+            e[n] = get(e, n, 0) + a
+        end
+        filter!(x -> !iszero(x.second), e)
+        C = numerator(c * den)
+        H += abs(C) * prod((big(n)^a for (n, a) in e); init = big(1))
+        span = sum(a * (n - 1) for (n, a) in e; init = 0)
+        lo = min(lo, b - span); hi = max(hi, b + span)
+        cleared[i] = (C, b, e)
+    end
+    B = ndigits(H; base = 2) + 1
+    need = ndigits(H; base = 2) + (hi - lo) * B + 2
+    N = maximum((maximum(keys(e); init = 1) for (_, _, e) in cleared); init = 1)
+    bits = 0; p = UInt64(0x7fffffffffffffe7)
+    while bits <= need
+        while !is_prime_u64(p)
+            p -= 2
+        end
+        m = Montgomery(p)
+        Q = mont_pow(m, to_mont(m, 2), B)
+        Qinv = mont_inv(m, Q)
+        x = mont_add(m, Q, Qinv)
+        ints = Vector{UInt64}(undef, N + 1)
+        ints[1] = zero(UInt64); ints[2] = m.one              # [0] here is the true q-integer, and no term uses it
+        for n in 2:N
+            ints[n+1] = mont_sub(m, mont_mul(m, x, ints[n]), ints[n-1])
+        end
+        total = zero(UInt64)
+        for (C, b, e) in cleared
+            u = to_mont(m, mod(C, big(p)))
+            u = mont_mul(m, u, b >= 0 ? mont_pow(m, Q, b) : mont_pow(m, Qinv, -b))
+            for (n, a) in e
+                u = mont_mul(m, u, mont_pow(m, ints[n+1], a))
+            end
+            total = mont_add(m, total, u)
+        end
+        iszero(total) || return false
+        bits += ndigits(p; base = 2) - 1
+        p -= 2
+    end
+    return true
+end
+
+"The terms of a generic form, without its root: the front power of q is `front`, in whole powers."
+function _generic_terms(f::QForm, front::Int, scale::Int = 1)
+    out = Tuple{Rational{BigInt},Int,Vector{Pair{Int,Int}}}[]
+    for (t, (c, p)) in enumerate(f.terms)
+        e = Dict{Int,Int}(f.out)
+        for (n, a) in p
+            e[n] = get(e, n, 0) + a
+        end
+        push!(out, (Rational{BigInt}(scale * f.sign * f.coef * c), front + (isempty(f.powers) ? 0 : f.powers[t]), collect(e)))
+    end
+    return out
+end
+
+"""
+Whether a rule with many terms vanishes at every q. Such a sum vanishes at every level whose h exceeds its factorial
+arguments, so one nonzero residue at one such level, the usual screen, settles nearly every case in microseconds.
+"""
+function _generic_rule_vanishes(s::FactorialSum, w::Int, f::QForm)
+    K = nextpow(2, max(_rule_top(s, [s.zlo, s.zhi]), 16))
+    if iszero(w)
+        _level_zero_screen(s, K, level_zero_table(K)) === false && return false
+    else
+        _weighted_residue_vanishes(s, w, K) || return false
+    end
+    return _generic_sum_vanishes(_generic_terms(f, 0))
+end
+
+"Equality at every q. The [n] are multiplicatively independent, so what stays under the root has to agree."
+function _generic_equal(f::QForm, g::QForm)
+    (iszero(f) || iszero(g)) && return iszero(f) && iszero(g)
+    (f.rad == g.rad && f.radcoef == g.radcoef && iseven(f.qpow - g.qpow)) || return false
+    return _generic_sum_vanishes(vcat(_generic_terms(f, (f.qpow - g.qpow) ÷ 2), _generic_terms(g, 0, -1)))
+end
+
+"""
+    classical(f::QForm) -> ClassicalResult
+
+The value of a generic form at q = 1, exactly: a sign and the rational under the root. It compares with rationals and
+integers, and converts with `Rational` when it is one.
+
+```julia
+classical(q6j(Exact(), 1, 1, 1, 1, 1, 1))          # 1//6
+classical(q3j(Exact(), 2, 2, 0, 1, -1, 0))         # -√(1//5)
+```
+"""
+function classical(f::QForm)
+    f.k === nothing || throw(ArgumentError("this form is at level $(f.k), and has no value at q = 1"))
+    iszero(f) && return zero(ClassicalResult)
+    f.rule === nothing && throw(ArgumentError("this form holds no rule to evaluate at q = 1"))
+    return classical_exact(f.rule)
+end
 
 # ---- the relations at a level ----
 
@@ -326,10 +457,12 @@ can then merge or cancel, and a zero they reveal is returned as zero. The shorte
 `qcg` and `q3j` carry powers of q, printed in front and on each term. At a level these reduce by q^h = −1 and the value
 is complex, with `q` read as e^{iπ/(k+2)}. A rule with weights takes them as `weight = (w, e2)`, as `qcg_rule` returns them.
 
-With `reduce = true`, a native exact check also detects additive cancellations. With `reduce = false`,
-`iszero_at` can decide cancellations left in the expression. Two equal nonzero values can still print
-differently; `Exact(k)` with the optional Nemo backend decides their equality. Numerical evaluation of a
-rule-backed form reuses the original factorial rule and its stable numerical kernels.
+With `reduce = true`, an exact check also finds cancellations that need additive relations, generic or at a level. With
+`reduce = false`, `iszero_at` can decide cancellations left in the expression. Two equal nonzero values can still print
+differently, and `==` decides their equality. Numerical evaluation of a rule-backed form reuses the original factorial
+rule and its stable numerical kernels.
+
+`qform(f, labels...; k)` is what `f(Exact(k), labels...)` returns; this function also takes `reduce` and bare rules.
 
 ```julia
 qform(q6j, 1, 1, 1, 1, 1, 1)          # ([5] − 1)/[4]!, which is 1/6 at q = 1
@@ -429,8 +562,11 @@ function _qform(s::FactorialSum, k, reduce::Bool, weight::Tuple{Int,Int}, ::Type
         raw = zeros(Int, _rule_top(s, zs))
         es = [copy(_term_exponents!(raw, s, z)) for z in zs]
         cs = R[s.alternating && isodd(z) ? -one(R) : one(R) for z in zs]
-        return _qform_assemble(nothing, Int(s.sign0), _prefactor_exponents(s, length(raw)), one(R), es, cs,
-                               _term_powers(w, zs, cs, nothing), e2)
+        f = _qform_assemble(nothing, Int(s.sign0), _prefactor_exponents(s, length(raw)), one(R), es, cs,
+                            _term_powers(w, zs, cs, nothing), e2)
+        # a sum can vanish at every q although no two of its terms merge
+        reduce && length(f.terms) > 1 && _generic_rule_vanishes(s, w, f) && return _qform_zero(nothing)
+        return f
     end
     level = Int(k); h = level + 2
     data = _level_exponents(s, level, R)
@@ -590,7 +726,7 @@ _round_level(v::Complex) = complex(BigFloat(real(v)), BigFloat(imag(v)))
 
 function numeric_value(f::QForm; bits::Integer = precision(BigFloat))
     bits > 0 || throw(ArgumentError("bits must be positive"))
-    f.k === nothing && throw(ArgumentError("a generic form is evaluated with `f(q)`"))
+    f.k === nothing && return numeric_value(classical(f); bits = bits)
     iszero(f) && return setprecision(() -> zero(BigFloat), BigFloat, Int(bits))
     v = setprecision(BigFloat, Int(bits) + 32) do
         f.rule === nothing && return _qform_level(f)
@@ -604,6 +740,14 @@ function Base.float(f::QForm)
     return v isa Complex ? ComplexF64(v) : Float64(v)
 end
 Base.Float64(f::QForm) = Float64(numeric_value(f; bits = 128))
+Base.BigFloat(f::QForm) = numeric_value(f)
+Base.big(f::QForm) = BigFloat(f)
+Base.Rational(f::QForm) = Rational(classical(f))
+Base.isapprox(f::QForm, g::QForm; kw...) = isapprox(float(f), float(g); kw...)
+Base.isapprox(f::QForm, x::Number; kw...) = isapprox(float(f), x; kw...)
+Base.isapprox(x::Number, f::QForm; kw...) = isapprox(x, float(f); kw...)
+Base.zero(f::QForm) = _qform_zero(f.k)
+Base.one(f::QForm) = qform(FactorialSum(0:0); k = f.k)
 
 # ---- display ----
 
@@ -703,6 +847,23 @@ end
 function Base.show(io::IO, f::QForm)
     print(io, _qform_body(f))
     f.k === nothing || print(io, "   (k = ", f.k, isempty(f.powers) && iszero(f.qpow) ? ")" : ", q = e^{iπ/$(f.k + 2)})")
+end
+
+"The longest classical value that is printed beside a form."
+const QFORM_SHOWN_VALUE = 40
+
+"The form, with the number it stands for beside it: its value at q = 1, or its value at its level."
+function Base.show(io::IO, ::MIME"text/plain", f::QForm)
+    show(io, f)
+    iszero(f) && return
+    if f.k === nothing
+        f.rule === nothing && return
+        v = replace(sprint(show, classical(f)), "-" => "−", "//1" => "", "//" => "/")
+        length(v) <= QFORM_SHOWN_VALUE && print(io, "   (", endswith(v, "/1") ? v[1:end-2] : v, " at q = 1)")
+    elseif f.rule !== nothing
+        v = float(f)
+        print(io, "   ≈ ", replace(string(v isa Complex ? complex(round(real(v); sigdigits = 7), round(imag(v); sigdigits = 7)) : round(v; sigdigits = 7)), "-" => "−"))
+    end
 end
 
 

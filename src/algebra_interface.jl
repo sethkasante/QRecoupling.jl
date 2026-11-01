@@ -33,7 +33,7 @@ struct NoRadical
     approx::Union{Nothing,Float64}
 end
 
-_missing_algebra(name) = throw(ArgumentError("$name requires the optional Nemo backend. Install Nemo and load it with `using Nemo`. Numerical evaluation, classical exact values and qform do not require it."))
+_missing_algebra(name) = throw(ArgumentError("$name requires the optional Nemo backend. Install Nemo and load it with `using Nemo`. Numerical values, `Exact()` and `Exact(k)` do not require it."))
 _qfact_exactx(args...; kwargs...) = _missing_algebra(:Exact)
 exact_x(args...; kwargs...) = _missing_algebra(:exact_x)
 generic_value(args...; kwargs...) = _missing_algebra(:generic_value)

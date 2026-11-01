@@ -29,14 +29,14 @@ represents zero in the target's result type.
 
 Machine-precision products use direct tables or split products before reaching this fallback.
 Generic q then uses the scaled factorial-rule evaluator, preserving the input and requested precision.
-`Symbolic()` returns the rule; an exact level value uses its q-factorial content in the real basis.
+`Symbolic()` returns the rule; an exact level value is the form of that rule.
 Classical exact and numerical level fallbacks retain the monomial projectors.
 """
 function _product_value(pairs, k, q, exact::Bool, ::Type{T}; workspace = nothing) where {T}
     if exact && !isnothing(k)
         kk = Int(k); kk >= 0 || throw(DomainError(k, "level must be nonnegative"))
-        pairs === nothing && return zero(ExactX, kk)
-        return _qfact_exactx(pairs, kk)
+        pairs === nothing && return _qform_zero(kk)
+        return qform(_qfact_rule(pairs); k = kk)
     end
     if _is_classical(q) && !exact
         # At q = 1 the rule's kernel works in integer ratios, so `qint(5)` is 5.0 and not
@@ -388,14 +388,14 @@ The q-integer `[n]^p`, classical by default — `[n] = (qⁿ − q⁻ⁿ)/(q −
 convention `[0] = 1`. `n < 0` is zero.
 
 The keywords are the ones every symbol takes: `k` for a level, `q` for a parameter, `exact = true` for
-the exact classical rational or, with `k`, the real-basis level value. `qint(Symbolic(), n)` returns the
-rule-backed symbolic x-form instead; use `x_form` to expand it explicitly.
+the exact classical rational or, with `k`, the level value as a [`QForm`](@ref). `qint(Exact(), n)` is the form
+at every q. `qint(Symbolic(), n)` returns the rule-backed symbolic x-form instead; use `x_form` to expand it explicitly.
 
 ```julia
 qint(5)                 # 5.0
 qint(5; k = 10)         # [5] at q = exp(iπ/12)
 qint(5; q = 0.7)
-qint(Exact(10), 5)      # exact, as a polynomial in x; `radical` for the surd
+qint(Exact(10), 5)      # [5] at level 10, exactly; `radical` for the surd
 ```
 """
 function qint end

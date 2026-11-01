@@ -62,7 +62,7 @@ function qeval(s::FactorialSum; k=nothing,q=nothing,exact::Bool=false,
         k isa Integer || throw(ArgumentError("k must be an integer level"))
         kk=Int(k)
         kk>=0 || throw(DomainError(k,"level must be nonnegative"))
-        exact && return exact_x(s,kk)          # the real basis; see `_level_value`
+        exact && return qform(s; k = kk)       # see `_level_value`
         return value_at_level(s,kk,T;workspace=workspace,
                              fallback=()->project_discrete(_factorial_dcr(s),kk,T))
     elseif !isnothing(q)

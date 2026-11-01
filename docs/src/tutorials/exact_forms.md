@@ -1,66 +1,92 @@
-# Exact values in x
+# Exact values
 
-For exact classical coefficients, use `Exact()`:
+A recoupling value already has a short exact description, its formula. `Exact()` and `Exact(k)` write that formula in quantum integers `[n]`, and never expand it.
 
 ```@example exact_forms
 using QRecoupling, Nemo
 c = q6j(Exact(), 1, 1, 1, 1, 1, 1)
+```
+
+## Every q, and q = 1
+
+`Exact()` needs no value of q, and holds at all of them. Evaluate it with `c(q)` at a real positive q. Used as a number, it means its value at q = 1, and [`classical`](@ref) gives that value exactly.
+
+```@example exact_forms
 @assert c == 1//6 # hide
+@assert c(0.8) ≈ q6j(At(0.8), 1, 1, 1, 1, 1, 1) # hide
+(c == 1//6, classical(c), Float64(c), c(0.8))
+```
+
+`classical` returns a sign and a rational under a root, with its own arithmetic.
+
+```@example exact_forms
 r = q3j(Exact(), 1//2, 1//2, 0, 1//2, -1//2, 0)
-@assert r^2 == 1//2 # hide
-(c, r)
+@assert classical(r)^2 == 1//2 # hide
+(r, classical(r), classical(r)^2)
 ```
 
-This evaluates at q = 1 with the direct rational/radical evaluator. It does not retain a symbolic parameter or construct a level field.
-
-Use the same reciprocal variable for level values and generic formulas:
+Between two `Exact()` values, `==` means equal at every q. The integer 6 is `[6]` and `[3]!` at q = 1, but those are different functions of q.
 
 ```@example exact_forms
-using QRecoupling, Nemo
+@assert qint(Exact(), 6) != qfact(Exact(), 3) # hide
+(qint(Exact(), 6), qfact(Exact(), 3), qint(Exact(), 6) == qfact(Exact(), 3))
+```
 
+Nothing is expanded to decide this. Clearing denominators gives an integer polynomial in q, and a nonzero one cannot vanish at an integer larger than the sum of its coefficients. So the test reads that polynomial at one such integer, through its residues at word primes, and stops at the first nonzero residue. A vanishing sum is shown as 0. A value can vanish at q = 1 without vanishing elsewhere, and then its form is not 0 while `v == 0` is true.
+
+## A level
+
+`Exact(k)` is the same value at q = e^{iπ/(k+2)}. The labels fold to `n ≤ (k+2)/2`, the relations among the q-integers simplify the form, and zeros are found and proved.
+
+```@example exact_forms
 v = q6j(Exact(10), 1, 1, 1, 1, 1, 1)
-# (2√3 − 3)/3 = (2x² − 7)/3, where x = 2cos(π/12)
-
-s = q6j(Symbolic(), 1, 1, 1, 1, 1, 1)
-g = x_form(s)       # (x² − 3)/(x⁴ − 3x² + 2), where x = q + q⁻¹
 ```
 
-`Exact(k)` performs arithmetic at a specified level. `Symbolic()` retains only a factorial rule, without evaluating the sum during construction or display. It displays a finite sum using `F(n) = ∏[r=1:n] U_{r-1}(x/2)`, the symmetric q-factorial written entirely in x. This avoids an expensive polynomial expansion just because a value was printed.
-
 ```@example exact_forms
-large = q6j(Symbolic(), 8, 8, 8, 8, 8, 8)
-# A finite factorial sum in x; no large expansion on display.
-
-expanded = x_form(large)   # explicitly pay for the full generic sum
-again = x_form(large)      # reuse the cached calculation; return an owned copy
-nothing # hide
+@assert iszero(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2)) # hide
+(q6j(Exact(3), 1, 1, 1, 1, 1, 1), q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2))
 ```
 
-Dimensions and theta graphs use the same symbolic x-form interface. Radicals are displayed as products of ψ factors, where ψ_e(x) is the minimal polynomial of 2cos(2π/e). `phi_form(value)` requests cyclotomic factorization explicitly. Braiding and twist phases preserve their branch through `u² − x·u + 1 = 0`, with `u = q`: x alone cannot distinguish q from its reciprocal.
-
-Generic square roots specify an algebraic expression. To evaluate with the package's numerical branch convention, use `qeval(s; q=...)` or a level target on the original symbolic value. A polynomial identity does not license arbitrary changes of square-root branches at complex q.
-
-## Stored x-form and explicit radicals
-
-`Exact(k)` prints in quantum integers, the form [`qform`](@ref) gives, with long sums cut short. A radical is printed beside it when one exists at a field degree up to 16 and is short. The value itself is stored as `P(x)√R(x)`, and its exact coefficients remain available.
+Two equal values can print differently, so `==` decides equality and the text does not. Arithmetic with `*`, `+`, `-`, `/` and `^` is exact at a level, needs no backend, and gives a value that prints in the basis `[1], …, [d]`.
 
 ```@example exact_forms
-v.x_value               # named pair (P, R) of stored polynomials
-QRecoupling.xpolynomial(v)          # P coefficients, in ascending powers of x
-QRecoupling.radicand(v)             # R coefficients, in ascending powers of x
-radical(v)              # explicitly request a nested-square-root expression
+a = q6j(Exact(12), 1, 1, 1, 1, 1, 1)
+@assert a * inv(a) == 1 # hide
+(a^2, a * inv(a) == 1)
 ```
 
-`v.rad` is shorthand for `radical(v)`. It is a computation, not a stored display field. Treat the polynomials exposed by `v.x_value` as read-only; copy them before mutation. For sums, `s.x_value` gives the corresponding collection of polynomial pairs.
+Use `Level(k)` for numbers. It costs about 1 µs where the form costs 450 µs at spins 100, k = 401, and is accurate to about 10⁻¹⁶ in the median. `numeric_value(v; bits)` gives more digits.
 
 ```@example exact_forms
-no_surd = radical(q6j(Exact(5),1,1,1,1,1,1))
+(Float64(v), numeric_value(v; bits = 128))
+```
+
+## Powers of q
+
+`qcg` and `q3j` carry powers of q, printed in front and on each term. At a level they reduce by q^h = −1, and the value is complex.
+
+```@example exact_forms
+qcg(Exact(9), 3//2, 1//2, 1, 0, 3//2, 1//2)
+```
+
+These forms decide zeros and differences. Two different forms with powers of q that have the same value at a level are not decided yet, and `==` says so with an error instead of guessing. They have no arithmetic at a level.
+
+## Radicals
+
+With Nemo loaded, `radical` rewrites a level value in nested square roots.
+
+```@example exact_forms
+radical(v)
+```
+
+```@example exact_forms
+no_surd = radical(q6j(Exact(5), 1, 1, 1, 1, 1, 1))
 @assert no_surd isa NoRadical # hide
 @assert no_surd.kind == :none # hide
 no_surd
 ```
 
-`radical` returns a `RadExpr` when it succeeds, otherwise a `NoRadical` with a reason:
+A radical exists only when the square of the value has degree a power of two over ℚ, which is rare beyond small levels. `radical` returns a `RadExpr` when it succeeds, otherwise a `NoRadical` with a reason:
 
 | `kind` | Meaning |
 |:--|:--|
@@ -69,33 +95,26 @@ no_surd
 | `:long` | The expression exceeds an explicitly requested length budget |
 | `:failed` | The descent could not finish its required sign checks |
 
-Here “radical” means **nested square roots**, not arbitrary nth roots. A `:none` result is not a claim that no representation using more general radicals exists. The default `degree_limit` is 32; `maxlen=0` imposes no expression-length cap. Increasing the degree limit can be very expensive in both time and memory.
+Here “radical” means **nested square roots**, not arbitrary nth roots. The default `degree_limit` is 32; `maxlen=0` imposes no expression-length cap. Increasing the degree limit can be very expensive in both time and memory.
 
-To request an approximate value alongside the stored x-form:
+## Polynomials in x
 
-```@example exact_forms
-show(IOContext(stdout, :approximate=>true), MIME"text/plain"(), v)
-```
-
-Approximation is now opt-in at every degree. The old display controls `:radicals` and `:radical_degree_limit` no longer select radical extraction; call `radical` explicitly.
-
-## Numerical conversion
+With Nemo loaded, `QRecoupling.xpolynomial(v)` and `QRecoupling.radicand(v)` give a level value as `P(x)√R(x)` with `x = 2cos(π/(k+2))`, and `x_form` expands a generic expression in `x = q + q⁻¹`. Both carry out the sum, which grows quickly with the spins and is not needed to read a value or to decide one.
 
 ```@example exact_forms
-Float64(v)
-setprecision(BigFloat, 512) do
-    BigFloat(v)
-end
-numeric_value(v; bits=128)
+s = q6j(Symbolic(), 1, 1, 1, 1, 1, 1)
+g = x_form(s)       # (x² − 3)/(x⁴ − 3x² + 2)
 ```
 
-Single `ExactX` values use adaptive guard precision for their selected real embedding and round to the requested output precision. The polynomial cancellation estimate is not an interval certificate. Negative radicands are rejected rather than silently changed to zero. General factorial rules can produce complex values even at a level; a real x-value cannot silently replace the required phase.
+`Symbolic()` retains a factorial rule, without evaluating the sum during construction or display. Radicals are displayed as products of ψ factors, where ψ_e(x) is the minimal polynomial of 2cos(2π/e). `phi_form(value)` requests cyclotomic factorization explicitly. Braiding and twist phases preserve their branch through `u² − x·u + 1 = 0`, with `u = q`: x alone cannot distinguish q from its reciprocal.
 
-The numerical evaluation of a sum of several exact radical classes has a separate cancellation problem; the single-value precision guarantee above should not be assumed for arbitrary `ExactXSum` expressions. Equality and `iszero` of a sum are still decided exactly, never by a numerical tolerance; see [Checking and proving identities](identities.md).
+Generic square roots specify an algebraic expression. To evaluate with the package's numerical branch convention, use `qeval(s; q=...)` or a level target on the original symbolic value.
 
 ## API reference
 
 ```@docs
+QForm
+classical
 SymbolicValue
 x_form
 XValue

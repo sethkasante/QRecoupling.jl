@@ -41,7 +41,7 @@ Numerical evaluation does not first expand the symbolic rational function. This 
 
 ## Symbolic expansion
 
-`qeval(Symbolic(), rule)` retains the factorial rule without evaluating the sum. `x_form(value)` expands it in x; `phi_form(value)` requests cyclotomic factorization in q. Both expansions are explicit, and factorization can be substantially more expensive. See [Exact values in x](tutorials/exact_forms.md) for examples.
+`qeval(Symbolic(), rule)` retains the factorial rule without evaluating the sum. `x_form(value)` expands it in x; `phi_form(value)` requests cyclotomic factorization in q. Both expansions are explicit, and factorization can be substantially more expensive. See [Exact values](tutorials/exact_forms.md) for examples.
 
 ## Extending the symbol interface
 

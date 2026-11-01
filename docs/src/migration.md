@@ -2,26 +2,34 @@
 
 ## To v0.6
 
-### Optional exact-algebra backend
+### Exact values are forms
 
-Nemo is no longer a required dependency. Install it with `import Pkg; Pkg.add("Nemo")`
-and load it with `using QRecoupling, Nemo` when using `Exact(k)`, `x_form`, `phi_form`,
-polynomial identity proofs, or radical extraction. Both package load orders are supported.
-The existing exact-level representation and arithmetic remain available through the extension.
+`Exact()` and `Exact(k)` return a [`QForm`](@ref): the value written in quantum integers, from its formula.
 
-Numerical targets, `Exact()` for classical values, unexpanded `Symbolic()` expressions,
-`qform`, and the numerical engine's exact zero decisions do not require Nemo.
-Missing-backend errors explain how to enable it. The native level-arithmetic implementation
-is still internal; this release does not silently switch `Exact(k)` between backends.
+| Before | Now |
+|---|---|
+| `q6j(Exact(), js...)` was a rational or radical | A form at every q. `== 1//6`, `Float64`, `numeric_value` and arithmetic still read its value at q = 1, and `classical(v)` gives that value exactly |
+| `q6j(Exact(k), js...)` was an `ExactX`, and needed Nemo | A form at the level, with no backend. `==`, `iszero` and arithmetic are exact |
+| `q3j` and `qcg` had no `Exact(k)` | `Exact()` and `Exact(k)` write them with their powers of q |
+| `v.x_value`, `v.rad` | `QRecoupling.xpolynomial(v)`, `QRecoupling.radicand(v)`, `radical(v)`, with Nemo |
+| `ExactXSum(k)` to accumulate a sum | `sum`, or start from `zero(v)` |
+| `isempty(residual)` | `iszero(residual)`, or `==` |
 
-`ExactX`, `ExactXSum`, and `XValue` now parameterize their polynomial payload. Continue
-using `v isa ExactX` rather than comparing a concrete `typeof(v)` with the unparameterized name.
+`q6j(js...; exact = true)` and `Classical(exact = true)` still return the classical number, and cost less than a form when that is all you need. `q6j(js...; k = k, exact = true)` is the same as `q6j(Exact(k), js...)`.
+
+Between two `Exact()` values, `==` now means equal at every q: `qint(Exact(), 6) == qfact(Exact(), 3)` is false, although both are 6 at q = 1. Compare `classical(a) == classical(b)` for the old meaning.
+
+### Optional backend
+
+Nemo is no longer a required dependency. Install it with `import Pkg; Pkg.add("Nemo")` and load it with `using QRecoupling, Nemo` when using `radical`, `x_form`, `phi_form` or `prove_identity`. Both package load orders are supported. Missing-backend errors explain how to enable it.
+
+`ExactX`, `ExactXSum`, and `XValue` now parameterize their polynomial payload. `QRecoupling.exact_x(rule, k)` still gives an `ExactX`, with its arithmetic, when Nemo is loaded.
 
 ### Removed after their deprecation
 
 | Removed | Use instead |
 |---|---|
-| `Exact(k; form = :canonical)` and the `CompositeExactResult` values it returned | `Exact(k)`, which returns `ExactX` |
+| `Exact(k; form = :canonical)` and the `CompositeExactResult` values it returned | `Exact(k)` |
 | `form = :x` | `Exact(k)`, which is the same thing |
 | `eager = true` | Remove the keyword |
 | `QRecoupling.xvalue(value)` with one argument | `x_form(value)` |
@@ -36,7 +44,7 @@ The three-argument `QRecoupling.xvalue(rad, num, den)`, numerical evaluation of 
 
 `q3j` is now the 3j symbol of U_q(sl₂): the q-Clebsch–Gordan coefficient [`qcg`](@ref) with the 3j phase and normalisation. It includes the deformation-dependent weights missing in v0.4. Classical values are unchanged; deformed values change, and level values are complex.
 
-`q3j` and `qcg` support numerical evaluation and exact classical values through `Exact()`. `Exact(k)` and `Symbolic()` are not yet implemented for these weighted coefficients.
+`q3j` and `qcg` support numerical evaluation and exact classical values through `Exact()`. `Exact(k)` and `Symbolic()` were not implemented for these weighted coefficients in v0.5.
 
 For existing code that requires the former formula, `QRecoupling.q3j_factorial` remains available with its previous targets.
 
@@ -102,19 +110,13 @@ qint(Symbolic(),5)
 
 ### Exact classical evaluation
 
-Prefer `q6j(Exact(), js...)` over `q6j(js...; exact=true)`, and `qeval(Exact(), rule)` for a classical factorial sum. `Exact()` is an alias for `Classical(exact=true)` and preserves the existing exact result types and fast evaluator. It also works with the other recoupling symbols and product helpers.
+In v0.4 and v0.5, `Exact()` was an alias for `Classical(exact=true)`, and it also worked with the other recoupling symbols and product helpers. From v0.6 it returns a form; see above.
 
-`exact=true` and `Classical(exact=true)` remain supported without deprecation warnings in v0.4. A future release may deprecate the keyword after a migration period; this release does not remove it. `Exact()` takes no level or form option: use `Exact(k)` for level arithmetic, or `Symbolic()` for a generic formula.
+`exact=true` and `Classical(exact=true)` remain supported. `Exact()` takes no level or form option: use `Exact(k)` for a level.
 
 ### Exact levels use x
 
-```@example migration
-v = q6j(Exact(10),1,1,1,1,1,1)
-@assert v isa ExactX # hide
-v
-```
-
-This also applies to `k=10, exact=true` for the recoupling and product functions. Read coefficients with `v.x_value`, `QRecoupling.xpolynomial`, and `QRecoupling.radicand`, request nested square roots with `radical(v)` (or `v.rad`), and convert numerically with `Float64`, `BigFloat`, or `numeric_value`. Printing shows the stored x-form; radicals and numerical approximations are explicit requests. `radical` returns `RadExpr` or a reasoned `NoRadical` result.
+In v0.4 and v0.5, `Exact(k)` and `k=10, exact=true` returned an `ExactX`, a polynomial in x. From v0.6 they return a form; see above. Read coefficients with `QRecoupling.xpolynomial` and `QRecoupling.radicand`, request nested square roots with `radical(v)`, and convert numerically with `Float64`, `BigFloat`, or `numeric_value`. `radical` returns `RadExpr` or a reasoned `NoRadical` result.
 
 `Exact(k; form=:canonical)` retained the former cyclotomic representation until v0.6. `form=:deferred`, `ExactLevelWorkspace`, `canonicalize_exact`, and dedicated Biedenharn–Elliott verifier functions from development drafts are not current APIs. Write identities from the public exact arithmetic as in the [identity tutorial](tutorials/identities.md). Raw DCR/monomial projection remains a separate compatibility path; it is not automatically converted into an x-form by `qeval(Symbolic(), object)`.
 

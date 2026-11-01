@@ -11,9 +11,9 @@ A modular zero candidate is not sufficient to short-circuit an exact result.
 function _level_value(s::FactorialSum, admissible::Bool, dcr, k::Int, exact::Bool, ::Type{T};
                      labels = nothing, family=nothing, workspace=nothing) where {T}
     k >= 0 || throw(DomainError(k, "level must be nonnegative"))
-    admissible || return exact ? zero(ExactX, k) : zero(T)
-    # `exact = true` is the real basis, ℚ[x]/Ψ_h — the same value `Exact(k)` returns.
-    exact && return exact_x(s, k)
+    admissible || return exact ? _qform_zero(k) : zero(T)
+    # `exact = true` at a level is the same value `Exact(k)` returns.
+    exact && return qform(s; k = k)
     return value_at_level(s, k, T; fallback = () -> project_discrete(dcr(), k, T), labels=labels, family=family, workspace=workspace)
 end
 
@@ -161,8 +161,8 @@ function theta_value(j1::Spin,j2::Spin,j3::Spin; k=nothing,q=nothing,exact::Bool
     Js = doubled(j1,j2,j3)
     if exact && !isnothing(k)
         kk = Int(k)
-        _qδ(Js...,kk) || return zero(ExactX,kk)
-        return _qfact_exactx(_theta_qfacts(Js...),kk)
+        _qδ(Js...,kk) || return _qform_zero(kk)
+        return qform(_qfact_rule(_theta_qfacts(Js...));k=kk)
     end
     mono = !isnothing(k) && !_qδ(Js...,Int(k)) ? ZERO_MONOMIAL : theta_mono(Js...)
     return qeval(mono;k=k,q=q,exact=exact,T=T)

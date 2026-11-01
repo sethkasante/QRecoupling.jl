@@ -36,11 +36,11 @@ Keep the returned channel labels when using `fmatrix`: they specify the matrix o
 
 ```@example symbols
 v = q6j(Exact(10), 1,1,1,1,1,1)
-@assert v isa ExactX # hide
+@assert v isa QForm # hide
 v
 ```
 
-Exact level recoupling coefficients use `ExactX`, in the real algebraic variable `x = 2cos(π/(k+2))`, with square-root factors as needed. They do not default to the old cyclotomic-field wrapper. See [Exact forms](tutorials/exact_forms.md). `q3j` and `qcg` have no `Exact(k)` or `Symbolic()` form yet: their level values are complex, in ℚ(ζ) up to a square root. Use `Level(k)` for them.
+Exact level values are written in quantum integers, with their zeros proved. See [Exact values](tutorials/exact_forms.md). `q3j` and `qcg` carry powers of q as well, and are complex at a level.
 
 Braiding and twists carry q phases. `rmatrix(Symbolic(), ...)` and exact level phase calls retain a `QPhase`; these are not ordinary real x-polynomials.
 

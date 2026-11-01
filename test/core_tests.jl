@@ -11,9 +11,15 @@ const QR = QRecoupling
     s = q6j(Symbolic(),1,1,1,1,1,1)
     @test occursin("SymbolicValue", string(s))
     @test_throws ArgumentError x_form(s)
-    @test_throws ArgumentError q6j(Exact(10),1,1,1,1,1,1)
-    @test_throws ArgumentError q6j(Exact(1),1,1,1,1,1,1)
-    @test_throws ArgumentError qdim(Exact(10),1)
+    # exact values are forms and need no backend: only radicals and polynomials do
+    v = q6j(Exact(10),1,1,1,1,1,1)
+    @test v isa QForm && float(v) ≈ q6j(Level(10),1,1,1,1,1,1)
+    @test v * inv(v) == 1 && iszero(v - v)
+    @test iszero(q6j(Exact(1),1,1,1,1,1,1))
+    @test float(qdim(Exact(10),1)) ≈ qdim(Level(10),1)
+    @test q6j(Exact(),1,1,1,1,1,1) == 1//6 && q6j(Exact(),1,1,1,1,1,1) != q6j(Exact(),2,2,2,2,2,2)
+    @test float(qcg(Exact(9),3//2,1//2,1,0,3//2,1//2)) ≈ qcg(Level(9),3//2,1//2,1,0,3//2,1//2)
+    @test_throws ArgumentError radical(v)
     for q in (1+1e-8, 0.8, 1.3)
         @test qform(q6j,2,2,2,2,2,2)(q) ≈ q6j(At(q),2,2,2,2,2,2) rtol=1e-13
         # `f(q)` evaluates the rule, so test the form as written separately

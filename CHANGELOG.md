@@ -2,7 +2,9 @@
 
 ## v0.6.0 (in development)
 
-- Nemo is optional. Load it for exact level arithmetic, polynomial expansion and radicals; numerical evaluation, classical exact values and quantum-integer expressions work without it.
+- **Breaking:** `Exact()` and `Exact(k)` return a `QForm`, the value written in quantum integers from its formula. `Exact()` needs no q; used as a number it means its value at q = 1, and `classical` gives that exactly. `Exact(k)` needs no backend, with exact `==`, `iszero` and arithmetic at the level. `qcg` and `q3j` now have both, with powers of q. See [Migration](docs/src/migration.md).
+- `==` between `Exact()` values decides equality at every q, and a sum that vanishes at every q is shown as 0. Nothing is expanded: an integer polynomial cannot vanish at an integer above the sum of its coefficients, so one such point is read through residues at word primes.
+- Nemo is optional, and needed only for nested radicals and expanded polynomials.
 - Added `qform` and quantum-integer displays for exact values, including native level zero checks. Polynomial views remain explicit.
 - `qform` now covers `qcg` and `q3j`: powers of q are printed in front and on each term, reduced by q^h = −1 at a level, where these values are complex.
 - The relations at a level are built from their distinct generators and kept reduced, with checked arithmetic. Levels such as k = 2000 no longer stall, and tables that took 384 ms at k = 1000 take 9 ms. At very smooth levels long rows are left out, so a form can stay longer there, and values are never affected.
