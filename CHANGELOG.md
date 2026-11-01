@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.6.0 (in development)
+## v0.6.0
 
 - **Breaking:** `Exact()` and `Exact(k)` return a `QForm`, the value written in quantum integers from its formula. `Exact()` needs no q; used as a number it means its value at q = 1, and `classical` gives that exactly. `Exact(k)` needs no backend, with exact `==`, `iszero` and arithmetic at the level. `qcg` and `q3j` now have both, with powers of q. See [Migration](docs/src/migration.md).
 - `==` between `Exact()` values decides equality at every q, and a sum that vanishes at every q is shown as 0. Nothing is expanded: an integer polynomial cannot vanish at an integer above the sum of its coefficients, so one such point is read through residues at word primes.
@@ -14,11 +14,11 @@
 - Certified native bounds, bad-prime rejection, stable `qform` evaluation, and quadratic-character nonzero certificates. Faster modular table setup and bounded cache retention.
 - **Breaking:** removed the deprecated canonical/DCR exact paths, `eager`, and one-argument `xvalue`. Polynomial result types now parameterize their payload. See [Migration](docs/src/migration.md).
 
-## Unreleased
+## v0.5.2
 
 - Exact zero decisions in numerical evaluation and zero queries no longer use Nemo. Long sums at a level, sums with several segments and weighted sums are decided in big integers, up to about 100 times faster than through the exact field.
 - `numeric_value`, `float` and `big` accept classical exact values.
-- CI also runs on Windows and macOS.
+- Fixed loading of GMP on Julia 1.14 under Windows (thanks to Kristoffer Carlsson). CI also runs on Windows and macOS.
 - Added `benchmark/minimal.jl`, a short timed and checked benchmark. The article describing the package is now the preferred citation.
 
 ## v0.5.1
