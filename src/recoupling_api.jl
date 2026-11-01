@@ -8,13 +8,13 @@ Level-k evaluation of a recoupling symbol from its factorial rule `s`. Inadmissi
 Numeric and exact values use the factorial rule directly; `dcr()` supplies the numerical fallback.
 A modular zero candidate is not sufficient to short-circuit an exact result.
 """
-function _level_value(s::FactorialSum, admissible::Bool, dcr, k::Int, exact::Bool, ::Type{T};
+Base.@constprop :aggressive function _level_value(s::FactorialSum, admissible::Bool, dcr, k::Int, exact::Bool, ::Type{T};
                      labels = nothing, family=nothing, workspace=nothing) where {T}
     k >= 0 || throw(DomainError(k, "level must be nonnegative"))
     admissible || return exact ? _qform_zero(k) : zero(T)
     # `exact = true` at a level is the same value `Exact(k)` returns.
     exact && return qform(s; k = k)
-    return value_at_level(s, k, T; fallback = () -> project_discrete(dcr(), k, T), labels=labels, family=family, workspace=workspace)
+    return convert(T, value_at_level(s, k, T; fallback = () -> project_discrete(dcr(), k, T), labels=labels, family=family, workspace=workspace))
 end
 
 
@@ -42,7 +42,9 @@ Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exc
 retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
 """
-function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
+function q6j end
+
+Base.@constprop :aggressive function q6j(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
                   k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64,
                   workspace=nothing) where {TT}
     q = _evaluation_q(k,q,exact)
@@ -68,7 +70,9 @@ Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exc
 retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
 """
-function q3j_factorial(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin=-m1-m2;
+function q3j_factorial end
+
+Base.@constprop :aggressive function q3j_factorial(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin=-m1-m2;
                   k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64,
                   workspace=nothing) where {TT}
     q = _evaluation_q(k,q,exact)
@@ -91,7 +95,9 @@ Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exc
 retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
 """
-function fsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
+function fsymbol end
+
+Base.@constprop :aggressive function fsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
                   k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64,
                   workspace=nothing) where {TT}
     q = _evaluation_q(k,q,exact)
@@ -114,7 +120,9 @@ Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exc
 retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
 """
-function gsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
+function gsymbol end
+
+Base.@constprop :aggressive function gsymbol(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
                   k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64,
                   workspace=nothing) where {TT}
     q = _evaluation_q(k,q,exact)
@@ -137,7 +145,9 @@ Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exc
 retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
 """
-function tetrahedron(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
+function tetrahedron end
+
+Base.@constprop :aggressive function tetrahedron(j1::Spin, j2::Spin, j3::Spin, j4::Spin, j5::Spin, j6::Spin;
                   k=nothing, q=nothing, exact::Bool=false, T::Type{TT}=Float64,
                   workspace=nothing) where {TT}
     q = _evaluation_q(k,q,exact)
@@ -156,7 +166,9 @@ end
 
 Theta-graph value, classical by default. Use `Symbolic()` for a rule-backed x-form.
 """
-function theta_value(j1::Spin,j2::Spin,j3::Spin; k=nothing,q=nothing,exact::Bool=false,T::Type=Float64)
+function theta_value end
+
+Base.@constprop :aggressive function theta_value(j1::Spin,j2::Spin,j3::Spin; k=nothing,q=nothing,exact::Bool=false,T::Type=Float64)
     q = _evaluation_q(k,q,exact)
     Js = doubled(j1,j2,j3)
     if exact && !isnothing(k)
@@ -165,7 +177,13 @@ function theta_value(j1::Spin,j2::Spin,j3::Spin; k=nothing,q=nothing,exact::Bool
         return qform(_qfact_rule(_theta_qfacts(Js...));k=kk)
     end
     mono = !isnothing(k) && !_qδ(Js...,Int(k)) ? ZERO_MONOMIAL : theta_mono(Js...)
-    return qeval(mono;k=k,q=q,exact=exact,T=T)
+    v = qeval(mono;k=k,q=q,exact=exact,T=T)
+    k isa Integer && !exact && return convert(T, v)
+    # the monomial evaluation at generic q works in the type of q, so a different element type goes through the rule
+    if k === nothing && !exact && !_is_classical(q) && real(T) !== Float64 && !(q in (-1,im,-im))
+        return analytic_value(_δ(Js...) ? _qfact_rule(_theta_qfacts(Js...)) : EMPTY_FACTORIAL_SUM,q,T)
+    end
+    return v
 end
 
 """
@@ -180,7 +198,8 @@ end
 """
     qdim(j; k=nothing, q=nothing, exact=false, T=Float64)
 
-Quantum dimension [2j+1], classical by default. Use `qdim(Symbolic(), j)` for a rule-backed x-form.
+Quantum dimension [2j+1], classical by default. At a level a label above k/2 is not in the theory, and gives zero as it does
+for every symbol. Use `qdim(Symbolic(), j)` for the formula.
 """
 function qdim end
 
@@ -190,15 +209,19 @@ function qdim end
 # result unboxed even though generic real and complex q share this wrapper.
 Base.@constprop :aggressive @inline function qdim(j::Spin; k=nothing,q=nothing,exact::Bool=false,
                                           T::Type{TT}=Float64) where {TT}
+    R = _float_target(k,q)
     q = _evaluation_q(k,q,exact)
+    k isa AbstractVector && return [qdim(j;k=kk,exact=exact,T=T) for kk in k]
     J = doubled(j)
     J >= 0 || throw(DomainError(j,"spin must be nonnegative"))
+    if k !== nothing && J > k
+        return exact ? _qform_zero(Int(k)) : zero(T)
+    end
     n = J+1
-    if !exact && T === Float64 && !(k isa AbstractVector) &&
-       (q === nothing || real(typeof(float(q))) !== BigFloat)
+    if !exact && T === Float64 && (q === nothing || real(typeof(float(q))) !== BigFloat)
         v = _qnumber_float(:int,n,1,k,q)
-        v === nothing || return v
-        return _product_value(_qint_pairs(n,1),k,q,exact,T)::Union{Float64,ComplexF64}
+        v === nothing || return v::R
+        return _product_value(_qint_pairs(n,1),k,q,exact,T)::R
     end
     return _product_value(_qint_pairs(n,1),k,q,exact,T)
 end
