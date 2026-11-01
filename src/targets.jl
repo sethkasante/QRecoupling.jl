@@ -52,6 +52,10 @@ qcg(Exact(), 1//2, 1//2, 1//2, -1//2, 1)   # q^(−1/2) √(1/[2])
 """
 struct Exact{K} <: EvalTarget
     k::K
+    function Exact(k::K) where {K<:Union{Nothing,Integer,AbstractVector{<:Integer}}}
+        all(>=(0), something(k, 0)) || throw(DomainError(k, "level must be nonnegative"))
+        return new{K}(k)
+    end
 end
 Exact() = Exact(nothing)
 

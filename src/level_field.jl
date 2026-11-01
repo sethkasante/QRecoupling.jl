@@ -465,21 +465,18 @@ function _rule_square(m::Montgomery, V::LevelSquare, s::FactorialSum, fact, invf
     return acc
 end
 
-"""
-Do two generic values have different squares? Their squares are rational functions of q, read here at one point modulo
-one prime, so a different residue proves them different. Equal residues say nothing, and neither does a point where some
-[n] vanishes.
-"""
-function _generic_squares_differ(f, g)
-    V = LevelSquare(f.rule, collect(f.rule.zlo:f.rule.zhi), f.weight..., big(1)//big(1))
-    W = LevelSquare(g.rule, collect(g.rule.zlo:g.rule.zhi), g.weight..., big(1)//big(1))
-    N = max(_rule_top(f.rule, [f.rule.zlo, f.rule.zhi]), _rule_top(g.rule, [g.rule.zlo, g.rule.zhi]))
-    m = Montgomery(UInt64(0x7fffffffffffffe7))
-    Q = to_mont(m, 0x1234567); Qinv = mont_inv(m, Q); x = mont_add(m, Q, Qinv)
+# One point for reading generic squares, Q modulo the largest word prime. Its multiplicative order is above 10^18, so no
+# [n] that a rule can hold vanishes there.
+const GENERIC_POINT = (Montgomery(UInt64(0x7fffffffffffffe7)), 0x1234567)
+
+"The square of a generic value, a rational function of q, at that point."
+function _generic_square(V::LevelSquare)
+    N = _rule_top(V.s, [V.s.zlo, V.s.zhi])
+    m, q = GENERIC_POINT
+    Q = to_mont(m, q); Qinv = mont_inv(m, Q); x = mont_add(m, Q, Qinv)
     labels = Vector{UInt64}(undef, N)
     last = zero(UInt64); now = m.one
     for n in 1:N
-        iszero(now) && return false
         labels[n] = now
         last, now = now, mont_sub(m, mont_mul(m, x, now), last)
     end
@@ -492,8 +489,14 @@ function _generic_squares_differ(f, g)
     for n in N:-1:1
         invf[n, 1] = mont_mul(m, invf[n+1, 1], labels[n])
     end
-    power(a) = a >= 0 ? mont_pow(m, Q, a) : mont_pow(m, Qinv, -a)
-    return _rule_square(m, V, V.s, fact, invf, 1, power) != _rule_square(m, W, W.s, fact, invf, 1, power)
+    return _rule_square(m, V, V.s, fact, invf, 1, a -> a >= 0 ? mont_pow(m, Q, a) : mont_pow(m, Qinv, -a))
+end
+
+"Do two generic values have different squares? A different residue proves it, and equal residues say nothing."
+function _generic_squares_differ(f, g)
+    V = LevelSquare(f.rule, collect(f.rule.zlo:f.rule.zhi), f.weight..., big(1)//big(1))
+    W = LevelSquare(g.rule, collect(g.rule.zlo:g.rule.zhi), g.weight..., big(1)//big(1))
+    return _generic_square(V) != _generic_square(W)
 end
 
 """

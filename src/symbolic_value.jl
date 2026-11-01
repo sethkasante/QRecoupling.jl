@@ -94,6 +94,8 @@ project_discrete(v::SymbolicValue, k::Integer, ::Type{T} = Float64) where {T} =
     qeval(v.rule;k=k,T=T)
 project_analytic(v::SymbolicValue, q) = qeval(v.rule;q=q)
 Base.iszero(v::SymbolicValue) = is_empty_sum(v.rule)
+Base.:(==)(a::SymbolicValue, b::SymbolicValue) = a.rule == b.rule
+Base.hash(v::SymbolicValue, h::UInt) = hash(v.rule, h)
 
 """
 Largest generic polynomial the display writes out. Tighter than the level display's limit on purpose:

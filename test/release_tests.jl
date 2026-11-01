@@ -524,6 +524,49 @@ end
     @test_throws ArgumentError qform(QR._qfact_rule([5 => -1]); k = 3)
 end
 
+@testset "values in containers, and comparing with floats" begin
+    # equal values hash alike, whichever rule and printed form they came from
+    for mk in (() -> q6j(Exact(10), 1, 1, 1, 1, 1, 1), () -> q6j(Exact(), 1, 1, 1, 1, 1, 1),
+               () -> qcg(Exact(9), 3//2, 1//2, 1, 0, 3//2, 1//2), () -> q6j(Exact(4), 1, 1, 1, 5, 5, 5),
+               () -> QR.level_value(QR._rule_for(q6j, 1, 1, 1, 1, 1, 1), 10), () -> oracle(10, 1, 1, 1, 1, 1, 1),
+               () -> q6j(1, 1, 1, 1, 1, 1; exact = true), () -> q6j(1, 1, 1, 1, 1, 2; exact = true),
+               () -> q6j(Symbolic(), 1, 1, 1, 1, 1, 1))
+        a, b = mk(), mk()
+        @test a == b && isequal(a, b) && hash(a) == hash(b) && length(unique([a, b])) == 1
+    end
+    fs = [q6j(Exact(18), a, b, c, d, e, x) for a in 0:1//2:2 for b in 0:1//2:2 for c in abs(a - b):a+b
+          for d in 0:1//2:2 for e in abs(d - c):d+c for x in abs(a - e):a+e if abs(d - b) <= x <= d + b]
+    fs = filter(!iszero, fs)
+    @test length(unique(fs)) == length(unique(round.(float.(fs); sigdigits = 11)))
+    different_rules = 0
+    for f in fs, g in fs
+        if f !== g && abs(float(f) - float(g)) < 1e-9 && QR._rule_key(f) != QR._rule_key(g)
+            different_rules += 1
+            @test (f == g) && hash(f) == hash(g)
+        end
+        different_rules > 200 && break
+    end
+    @test different_rules > 0
+    @test length(Dict(q6j(Exact(10), 1, 1, 1, 1, 1, 1) => 1, q6j(Exact(10), 1, 1, 1, 1, 1, 1) => 2)) == 1
+    @test hash(q6j(1, 1, 1, 1, 1, 1; exact = true)) == hash(1//6)
+
+    # a form compares with a float as exactly as with a rational, and a generic one reads q = 1
+    @test qint(Exact(3), 1) == 1.0 && 1.0 == qint(Exact(3), 1) && qint(Exact(3), 1) != NaN && qint(Exact(3), 1) != Inf
+    f = q6j(Exact(3), 1, 1, 1, 1, 1, 1)
+    @test f != float(f) && q6j(Exact(), 1, 1, 1, 1, 1, 1) == 1/6
+    # isequal and hash need a transitive answer, which `==` with a number does not give
+    @test !isequal(qint(Exact(3), 1), 1) && !isequal(1, qint(Exact(3), 1))
+    @test !isequal(q6j(Exact(3), 1, 1, 1, 1, 1, 1), q6j(Exact(4), 1, 1, 1, 1, 1, 1))
+    @test Float32(f) ≈ float(f) && ComplexF64(f) ≈ float(f) && Float64[f, f] == fill(float(f), 2)
+    @test convert(ComplexF64, qcg(Exact(9), 3//2, 1//2, 1, 0, 3//2, 1//2)) ≈ float(qcg(Exact(9), 3//2, 1//2, 1, 0, 3//2, 1//2))
+
+    # a target says what is wrong with its level at once
+    @test_throws DomainError Exact(-1)
+    @test_throws DomainError Exact([3, -1])
+    @test_throws MethodError Exact(1.5)
+    @test Exact(3).k == 3 && Exact().k === nothing && Exact(2:4).k == 2:4
+end
+
 @testset "equality at a level, read at places" begin
     # against the dense kernel, on pairs close enough to be equal, with both signs, and with numbers
     for (k, top) in ((4, 2), (10, 5//2), (16, 5//2), (18, 5//2))

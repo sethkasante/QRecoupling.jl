@@ -7,6 +7,7 @@ keywords = ["quantum-gravity", "tqft", "tensor-networks", "spin-foam", "hypergeo
 
 [deps]
 LRUCache = "8ac3fa9e-de4c-5943-b1dc-09c6b5f20637"
+PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 
 [weakdeps]
 Nemo = "2edaba10-b0f1-5616-af89-8c11ac63239a"
@@ -17,6 +18,7 @@ QRecouplingNemoExt = "Nemo"
 [compat]
 LRUCache = "1.1"
 Nemo = "0.54"
+PrecompileTools = "1"
 julia = "1.10"
 
 [extras]

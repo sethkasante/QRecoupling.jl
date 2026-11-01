@@ -676,6 +676,14 @@ Base.:(==)(a::LevelValue, b::LevelValueSum) = LevelValueSum(a) == b
 Base.:(==)(a::LevelValueSum, b::LevelValue) = a == LevelValueSum(b)
 Base.:(==)(v::Union{LevelValue,LevelValueSum}, c::Union{Integer,Rational}) = v == c * one(LevelValue, v.k)
 Base.:(==)(c::Union{Integer,Rational}, v::Union{LevelValue,LevelValueSum}) = v == c
+Base.:(==)(v::Union{LevelValue,LevelValueSum}, x::AbstractFloat) = isfinite(x) && v == Rational{BigInt}(x)
+Base.:(==)(x::AbstractFloat, v::Union{LevelValue,LevelValueSum}) = v == x
+
+# Equal values can have different keys and roots, so all that equal values are sure to share is their level.
+Base.hash(v::Union{LevelValue,LevelValueSum}, h::UInt) = hash((:LevelValue, v.k), h)
+Base.isequal(a::Union{LevelValue,LevelValueSum}, b::Union{LevelValue,LevelValueSum}) = a.k == b.k && a == b
+Base.isequal(::Union{LevelValue,LevelValueSum}, ::Number) = false
+Base.isequal(::Number, ::Union{LevelValue,LevelValueSum}) = false
 
 "The number a value denotes, correct to `bits` even when its coordinates cancel strongly."
 function numeric_value(x::Union{LevelValue,LevelValueSum}; bits::Integer = precision(BigFloat))

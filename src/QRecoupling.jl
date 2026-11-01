@@ -1,6 +1,7 @@
 module QRecoupling
 
 using LRUCache
+using PrecompileTools: @setup_workload, @compile_workload
 
 "Spin labels: multiples of 1/2 given as integers, rationals or floats."
 const Spin = Union{Integer, Rational, AbstractFloat}
@@ -72,5 +73,26 @@ export all_6j, iszero_at, issingular_at, level_spectrum
 # factorial rules, workspaces and returned types
 export FactorialSum, AffineFactorial, EvaluationWorkspace, SymbolicValue, QPhase
 export empty_caches!
+
+# Run each target once while precompiling, since a first call otherwise compiles for seconds. The tables it builds are
+# cleared again and do not reach the image.
+@setup_workload begin
+    labels = (1, 1, 1, 1, 1, 1)
+    @compile_workload begin
+        q6j(labels...); q6j(Level(10), labels...); q6j(At(0.8), labels...); q6j(At(0.8 + 0.1im), labels...)
+        q6j(Level(10), [labels, (2, 2, 2, 2, 2, 2)]); q6j(labels...; exact = true)
+        fsymbol(Level(10), labels...); gsymbol(Level(10), labels...); fmatrix(1, 1, 1, 1; k = 10)
+        rmatrix(Level(10), 1, 1, 1); qdim(Level(10), 1); twist(Level(10), 1); smatrix(10); tmatrix(10)
+        qcg(Level(10), 1, 0, 1, 0, 2, 0); qcg(1, 0, 1, 0, 2, 0); q3j(Level(10), 1, 1, 2, 0, 0, 0); q3j(1, 1, 2, 0, 0, 0)
+        qint(Level(10), 3); qfact(Level(10), 3); qbinomial(Level(10), 4, 2)
+        for f in (q6j(Exact(), labels...), q6j(Exact(10), labels...), qcg(Exact(10), 1, 0, 1, 0, 2, 0), qint(Exact(), 3))
+            sprint(show, MIME("text/plain"), f); iszero(f); f == f; hash(f); float(f)
+        end
+        a = q6j(Exact(10), labels...); b = q6j(Exact(10), 2, 2, 2, 2, 2, 2)
+        a == b; a == 1//2; a * b; a + b; inv(a); classical(q6j(Exact(), labels...))
+        iszero_at(q6j, 10, labels...); level_spectrum(labels...; k = 2:6)
+    end
+    empty_caches!()
+end
 
 end

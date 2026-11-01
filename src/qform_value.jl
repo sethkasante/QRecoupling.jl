@@ -45,6 +45,26 @@ function Base.:(==)(f::QForm, c::Union{Integer,Rational})
     return _same_root(f, BigFloat(c))
 end
 Base.:(==)(c::Union{Integer,Rational}, f::QForm) = f == c
+Base.:(==)(f::QForm, x::AbstractFloat) = f.k === nothing ? classical(f) == x : isfinite(x) && f == Rational{BigInt}(x)
+Base.:(==)(x::AbstractFloat, f::QForm) = f == x
+
+# `==` with a number reads a generic form at q = 1, so it does not extend to `isequal` and `hash`, which have to be
+# transitive: there a form equals only a form at the same level with the same value.
+Base.isequal(f::QForm, g::QForm) = f.k == g.k && f == g
+Base.isequal(::QForm, ::Union{Number,LevelValue,LevelValueSum}) = false
+Base.isequal(::Union{Number,LevelValue,LevelValueSum}, ::QForm) = false
+
+"Equal values have equal squares, so one residue of the square hashes them without writing anything."
+function Base.hash(f::QForm, h::UInt)
+    f.rule === nothing && return hash((:QForm, f.k, zero(UInt64)), h)
+    if f.k === nothing
+        V = LevelSquare(f.rule, collect(f.rule.zlo:f.rule.zhi), f.weight..., big(1)//big(1))
+        return hash((:QForm, nothing, _generic_square(V)), h)
+    end
+    V = LevelSquare(f.rule, f.k, f.weight); n = f.k + 2
+    t = _places(_level_field(n), 1, _squares_top(V, V))
+    return hash((:QForm, f.k, _place_square(t, V, 1, t.as[1], n)), h)
+end
 
 "Equal squares leave v = ±w, both nonzero, so the certified numerical value tells which."
 function _same_root(f::QForm, w)

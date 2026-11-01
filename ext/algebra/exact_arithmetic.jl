@@ -367,6 +367,8 @@ Base.:(==)(a::ExactXSum, b::ExactXSum) = a.k == b.k && iszero(a - b)
 Base.:(==)(a::ExactX, b::ExactX) = ExactXSum(a) == ExactXSum(b)
 Base.:(==)(a::ExactX, b::ExactXSum) = ExactXSum(a) == b
 Base.:(==)(a::ExactXSum, b::ExactX) = a == ExactXSum(b)
+# Equal values can have different roots, so all that they are sure to share is their level.
+Base.hash(v::Union{ExactX,ExactXSum}, h::UInt) = hash((:ExactX, v.k), h)
 
 """
     numeric_value(s::ExactXSum) -> BigFloat or nothing

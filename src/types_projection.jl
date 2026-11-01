@@ -148,6 +148,15 @@ function Base.:(==)(a::ClassicalResult, b::Union{Integer,Rational})
     return Rational{BigInt}(b)^2 == a.sq_val
 end
 Base.:(==)(b::Union{Integer,Rational}, a::ClassicalResult) = a == b
+
+"A value that is rational hashes as that rational, since the two compare equal."
+function Base.hash(a::ClassicalResult, h::UInt)
+    iszero(a.sign) && return hash(0, h)
+    n = numerator(a.sq_val); d = denominator(a.sq_val)
+    rn = isqrt(n); rd = isqrt(d)
+    rn * rn == n && rd * rd == d && return hash(a.sign * rn // rd, h)
+    return hash((:ClassicalResult, a.sign, n, d), h)
+end
 Base.:(==)(a::ClassicalResult, b::AbstractFloat) = Float64(a) == b
 Base.:(==)(b::AbstractFloat, a::ClassicalResult) = Float64(a) == b
 Base.isapprox(a::ClassicalResult, b::Real; kwargs...) = isapprox(Float64(a), Float64(b); kwargs...)
