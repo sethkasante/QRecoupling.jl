@@ -332,12 +332,17 @@ function qeval(m::CyclotomicMonomial;
 
     # --- root of unity projection ---
     if !isnothing(k)
-        return exact ? project_exact(m, Int(k)) : project_discrete(m, Int(k), T)
+        exact && throw(_dcr_exact_error())
+        return project_discrete(m, Int(k), T)
     end
 
     throw(ArgumentError("Projection target missing. Specify `k` (integer level) or `q` (parameter)."))
 end
 
+
+"Exact level values are computed from factorial rules; the cyclotomic carrier for monomials and DCRs is gone."
+_dcr_exact_error() = ArgumentError("exact level evaluation of a monomial or DCR was removed in v0.6; " *
+                                   "evaluate a `FactorialSum` with `qeval(Exact(k), rule)`")
 
 # Compatibility evaluation of a DCR using the legacy projectors.
 function qeval(dcr::DCR; 
@@ -360,7 +365,8 @@ function qeval(dcr::DCR;
 
     # --- root of unity projection ---
     if !isnothing(k)
-        return exact ? project_exact(dcr, Int(k)) : project_discrete(dcr, Int(k), T)
+        exact && throw(_dcr_exact_error())
+        return project_discrete(dcr, Int(k), T)
     end
 
     throw(ArgumentError("Projection target missing. Specify `k` (integer level) or `q` (parameter)."))

@@ -5,7 +5,7 @@
 For one coefficient, use a scalar symbol call. For many coefficients at one target, use a batch. For a whole fusion transformation, use `fmatrix`: its recurrence shares work across entries. Request exact or generic symbolic algebra when that algebra is needed; it is not a prerequisite for numerical evaluation.
 
 ```@example perf
-using QRecoupling
+using QRecoupling, Nemo
 work = EvaluationWorkspace()
 v = q6j(10,10,10,10,10,10; k=50, workspace=work)
 again = q6j(10,10,10,10,10,10; k=50, workspace=work)
@@ -42,7 +42,7 @@ When generic-q evaluation needs an exact zero decision, it first evaluates the s
 ## Current limits to account for
 
 - **F-matrix precision:** Float64/ComplexF64 matrices use the shared column recurrence. BigFloat inputs or `T=BigFloat`/`T=Complex{BigFloat}` use scalar `fsymbol` evaluations to preserve the requested precision. This higher-precision path costs more per entry.
-- **Exact sums:** `ExactXSum` equality uses deterministic algebraic arithmetic, including dependent radical classes. The algebraic fallback can be expensive at high degree; see [Identity checks](tutorials/identities.md). Numerical conversion of a sum is a separate operation and does not yet adapt precision to cancellation between its terms.
+- **Exact values:** an `Exact()` or `Exact(k)` form costs a fraction of a microsecond until it is printed, which writes it once in microseconds to a fraction of a millisecond. `==` and `iszero` read the rule, and return in microseconds when a value differs. Proving that different forms are equal costs more, about a second for a 41-term sum at every q; see [Identity checks](tutorials/identities.md). At very smooth levels such as k = 2000 a form can stop short of its simplest writing, and its value is unaffected. Numerical conversion of a sum from level arithmetic does not yet adapt precision to cancellation between its terms.
 - **Zero queries:** `iszero_at` uses structural proofs and modular filters, then confirms unresolved candidates exactly. Exact confirmation can cost more at high degree and runs serially after threaded screening. Workers use independently writable Boolean storage. The `:cancels` entries of `level_spectrum` are screening results unless you pass `prove = true`.
 - **Custom series at singular targets:** cancellation of poles between separate summands is not generally regularized. Keep denominator factorials away from roots when possible.
 - **Caches:** modular sine tables distinguish numeric type and precision. Broader concurrent cache-clearing workflows are not supported; clear caches between evaluations.

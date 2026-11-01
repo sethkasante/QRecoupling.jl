@@ -7,7 +7,7 @@
 #      are divisor counts, and a square class is an 𝔽₂ vector over an explicit basis.
 #   2. A level is the quotient by the monic Ψ_h = ψ_{2h} (degree φ(2h)/2), so level values stay integral.
 #   3. An identity proved in ℤ[x] holds for every q, hence every level: `prove_identity` is a proof.
-#  Degrees grow like ~10j², so large spins at a fixed level use the cleared kernel of `exact_cleared.jl`.
+#  Degrees grow like ~10j², so large spins are cheaper at a fixed level, reduced modulo Ψ_h.
 # ---------------------------------------------------------------------------------
 
 const X_LOCK = ReentrantLock()
@@ -140,26 +140,7 @@ end
 #  Radical classes as 𝔽₂ exponent vectors over the ψ basis
 # ---------------------------------------------------------------------------------
 
-"""
-    psi_exponents(pairs) -> Dict{Int,Int}
 
-Multiplicity of each `ψ_e` in `∏ₙ [n]!^{cₙ}`, from `pairs` a collection of `n => c`. Since
-`[n]! = ∏_{m≤n} [m]` and `[m] = ∏_{e | 2m, e ≥ 3} ψ_e`, the multiplicity of `ψ_e` is a divisor count:
-no factoring is involved.
-"""
-function psi_exponents(pairs)
-    isempty(pairs) && return Dict{Int,Int}()
-    N = maximum(Int(p.first) for p in pairs)
-    N <= 0 && return Dict{Int,Int}()
-    E = Dict{Int,Int}()
-    # ψ_e divides [m] exactly when e divides 2m. Count those multiples in n! directly.
-    for e in 3:2N
-        step = iseven(e) ? e ÷ 2 : e
-        v = sum(Int(c) * (Int(n) ÷ step) for (n,c) in pairs; init=0)
-        iszero(v) || (E[e] = v)
-    end
-    return E
-end
 
 """
 Reduce modulo a monic `Ψ` when one is supplied; reducing at each ring operation equals reducing at the end,
@@ -227,21 +208,7 @@ function _powmod_x(f, n::Int, modulus)
     return result
 end
 
-"""
-Halve a ψ exponent vector into square-part exponents and odd-multiplicity indices, still symbolic, so the
-square part can merge with the first term before anything is expanded.
-"""
-function _halve_exponents(E::Dict{Int,Int})
-    half = Dict{Int,Int}(); rad = Int[]
-    for e in sort!(collect(keys(E)))
-        v = E[e]
-        r = mod(v, 2)
-        r == 1 && push!(rad, e)
-        f = (v - r) ÷ 2
-        iszero(f) || (half[e] = f)
-    end
-    return half, rad
-end
+
 
 "Merge `b` into `a`, summing exponents and dropping the cancellations."
 function _merge_exponents!(a::Dict{Int,Int}, b::Dict{Int,Int})
@@ -282,25 +249,13 @@ end
 # ---------------------------------------------------------------------------------
 
 
-"""
-    XValue
-
-The exact value `√(∏_{e ∈ rad} ψ_e(x)) · num/den` with `num, den ∈ ℤ[x]`, built by `xvalue(rad, num, den)`,
-which normalises (sorted distinct `rad`, `gcd(num, den) = 1`, primitive with positive leading coefficient).
-Normalised values are equal exactly when the structs are, so `==` decides equality. The square-root branch
-is fixed by the construction; `prove_identity` compares like with like.
-"""
-struct XValue
-    rad::Vector{Int}
-    num::ZZPolyRingElem
-    den::ZZPolyRingElem
-end
+# The polynomial payload is provided by Nemo.
 
 """
     xvalue(rad, num, den = 1) -> XValue
 
 The `XValue` constructor — not to be confused with [`x_form`](@ref), which expands a symbolic value
-into one. This spelling stays; the one-argument `xvalue(v)` is the deprecated name of `x_form`.
+into one.
 
 Normalising constructor: cancels `gcd(num, den)`, makes `den` primitive with positive leading coefficient,
 and sorts the radical indices. A zero numerator gives the canonical zero.
@@ -460,7 +415,7 @@ Base.:*(a::XValue, b::XSum) = XSum(a) * b
 
 The exact value of a factorial rule as an element of `ℚ(x)` times one square root, `x = q + q⁻¹`. Prefactor
 and first term are ψ exponents (divisor counts); the sum is the cleared recursion P ← B·Q ± A·P, Q ← B·Q over
-ℤ[x], as in `exact_cleared.jl`.
+ℤ[x].
 """
 function generic_value(s::FactorialSum; modulus = nothing, level = nothing)
     R, _ = xring()

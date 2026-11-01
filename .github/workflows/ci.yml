@@ -37,6 +37,9 @@ jobs:
       - name: Build package
         uses: julia-actions/julia-buildpkg@v1
 
+      - name: Test without Nemo
+        run: julia --startup-file=no test/core_environment.jl
+
       - name: Run tests
         uses: julia-actions/julia-runtest@v1
 

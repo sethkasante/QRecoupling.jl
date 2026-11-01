@@ -14,24 +14,30 @@ Evaluate classical and quantum Clebsch–Gordan coefficients, 3j/6j symbols, fus
 
 ## Quick start
 
+Numerical values and exact values need only QRecoupling. For nested radicals and expanded polynomials,
+install the optional backend with `import Pkg; Pkg.add("Nemo")` and load `Nemo` alongside QRecoupling.
+
 ```julia
 using QRecoupling
 
 js = (1, 1, 1, 1, 1, 1)
 q6j(js...)                      # classical value ≈ 1/6
-q6j(Exact(), js...)             # exact classical rational = 1//6
 q6j(Level(10), js...)           # value at q = exp(iπ/12)
-v = q6j(Exact(10), js...)       # x-form: (2x² − 7)/3
-radical(v)                     # explicitly request (2√3 − 3)/3
 q6j(At(0.8 + 0.2im), js...)     # numerical complex deformation
 
-s = q6j(Symbolic(), js...)      # symbolic form, unexpanded sum
-x_form(s)                      # explicit x-form = (x² − 3) / (x⁴ − 3x² + 2)
+q6j(Exact(), js...)             # ([5] − 1)/[4]!  at every q, which is 1/6 at q = 1
+q6j(Exact(), js...) == 1//6     # true
+q6j(Exact(3), js...)            # −1/[2]²  at level 3
+iszero(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2))   # true, proved
+
+using Nemo                      # the optional backend
+radical(q6j(Exact(10), js...))  # (2√3 − 3)/3
+x_form(q6j(Symbolic(), js...))  # (x² − 3) / (x⁴ − 3x² + 2)
 ```
 
 The spin labels are physical spins: use `1//2` for a half-integer (also accepts `0.5`). The same target interface applies to Clebsch–Gordan coefficients, 3j, F/G symbols, dimensions, and q-integer/factorial/binomial products.
 
-`qcg` and `q3j` support numerical targets and exact classical values through `Exact()`. Their `Exact(k)` and `Symbolic()` forms are not yet implemented.
+`qcg` and `q3j` carry powers of q, which `Exact()` and `Exact(k)` print: `qcg(Exact(), 1//2, 1//2, 1//2, -1//2, 1)` is `q^(−1/2) √(1/[2])`. They have no `Symbolic()` form.
 
 ## What makes it useful?
 
@@ -106,7 +112,7 @@ See the [migration guide](https://sethkasante.github.io/QRecoupling.jl/stable/mi
 **What the numbers mean:** Floating-point values, exact values, and zero tests are computed separately, each stated in the [accuracy guide](https://sethkasante.github.io/QRecoupling.jl/stable/performance/):
 
 - *Floating point:* factorial-rule sums with compensated arithmetic; precision is raised when cancellation would otherwise cost significant digits. Final conversion can underflow a nonzero value to zero.
-- *Exact:* algebraic numbers in the x-basis; equality, including `ExactXSum`, is decided by algebraic arithmetic, never by a numerical tolerance.
+- *Exact:* a value is written in quantum integers from its formula and is never expanded to read it. Zeros and equality are decided from residues at word primes with a proved bound, never by a numerical tolerance.
 - *Zero tests:* `iszero_at` confirms unresolved modular candidates with exact arithmetic. The `:cancels` entries of `level_spectrum` are screening results unless you pass `prove = true`.
 
 The fast paths are Float64 and machine-size labels. High-degree exact sums and BigFloat F matrices are supported but cost more. Batches and level grids can run on several threads; do not clear caches while other threads are evaluating.

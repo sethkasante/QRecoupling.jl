@@ -33,39 +33,31 @@ Level(k; T::Type = Float64) = Level{T,typeof(k)}(k)
 
 """
     Exact()
-    Exact(k; form=:x)
+    Exact(k)
 
-`Exact()` requests exact classical evaluation at q = 1. It is shorthand for
-`Classical(exact=true)`, reusing the direct classical evaluator and its rational/radical
-result types without constructing a level field. Use `Symbolic()` to retain q.
+The value written exactly, as a [`QForm`](@ref) in quantum integers. No value of q is needed: `Exact()` holds at every
+generic q, and used as a number it means its value at q = 1, which [`classical`](@ref) gives exactly. `Exact(k)` is the
+same value at the level, folded and simplified, with its zeros found and proved.
 
-`Exact(k)` requests exact level values:
-
-* `form=:x` (**the default**) returns an [`ExactX`](@ref): the value in the real basis
-  `x = q + q⁻¹ = 2cos(π/(k+2))`, at half the degree of the cyclotomic field, printed as the polynomial
-  in `x` it is stored as. [`radical`](@ref) rewrites it in nested square roots where they exist. It is
-  closed under `*`, `inv` and `^`, and sums of it are [`ExactXSum`](@ref).
-* `form=:canonical` returns canonical cyclotomic coefficients in ℚ(ζ₂ₕ). This was the default before the
-  real basis existed, and it is deprecated: it will be removed later.
-
-Both use deterministic arithmetic; modular screening alone never establishes an exact zero. Exact
-braiding phases retain their `QPhase` form in either.
+Numbers come from [`Level`](@ref) and [`At`](@ref), and exact questions from `iszero` and `==`. At a level, `*`, `+` and
+`^` are exact too, and [`radical`](@ref), which needs Nemo, rewrites a value in nested square roots where they exist.
+Braiding phases stay a `QPhase`.
 
 ```julia
-q6j(Exact(), 1, 1, 1, 1, 1, 1)                     # 1//6
-q6j(Exact(3), 1, 1, 1, 1, 1, 1)                    # x − 2 at x = 2cos(π/5)
-radical(q6j(Exact(3), 1, 1, 1, 1, 1, 1))           # (√5 − 3)/2, the Fibonacci level
+q6j(Exact(), 1, 1, 1, 1, 1, 1)             # ([5] − 1)/[4]!, which is 1/6 at q = 1
+q6j(Exact(), 1, 1, 1, 1, 1, 1) == 1//6     # true
+q6j(Exact(3), 1, 1, 1, 1, 1, 1)            # −1/[2]²
+qcg(Exact(), 1//2, 1//2, 1//2, -1//2, 1)   # q^(−1/2) √(1/[2])
 ```
 """
 struct Exact{K} <: EvalTarget
     k::K
-    form::Symbol
-    function Exact(k::K; form::Symbol=:x) where K
-        form in (:canonical,:x) ||
-            throw(ArgumentError("exact form must be :x or :canonical"))
-        new{K}(k,form)
+    function Exact(k::K) where {K<:Union{Nothing,Integer,AbstractVector{<:Integer}}}
+        all(>=(0), something(k, 0)) || throw(DomainError(k, "level must be nonnegative"))
+        return new{K}(k)
     end
 end
+Exact() = Exact(nothing)
 
 """
     At(q)
@@ -81,14 +73,12 @@ end
     Classical(; exact = false)
 
 The q → 1 limit: ordinary SU(2) recoupling. With `exact = true` the result is a rational/radical value
-rather than floating point. Prefer `Exact()` for this exact classical request;
-`Classical(exact=true)` remains supported.
+rather than floating point, as [`classical`](@ref) gives from an `Exact()` value.
 """
 struct Classical <: EvalTarget
     exact::Bool
 end
 Classical(; exact::Bool = false) = Classical(exact)
-Exact() = Classical(exact=true)
 
 target_kwargs(t::Level{T}) where {T} = (; k = t.k, T = T)
 target_kwargs(t::Exact) = (; k = t.k, exact = true)
@@ -96,7 +86,7 @@ target_kwargs(t::At) = (; q = t.q)
 target_kwargs(t::Classical) = (; q = 1, exact = t.exact)
 
 Base.show(io::IO, t::Level{T}) where {T} = print(io, "Level(", t.k, T === Float64 ? "" : "; T = $T", ")")
-Base.show(io::IO, t::Exact) = print(io, "Exact(", t.k, t.form === :x ? "" : "; form=:$(t.form)", ")")
+Base.show(io::IO, t::Exact) = print(io, "Exact(", t.k === nothing ? "" : t.k, ")")
 Base.show(io::IO, t::At) = print(io, "At(", t.q, ")")
 Base.show(io::IO, t::Classical) = print(io, "Classical(", t.exact ? "; exact = true" : "", ")")
 
@@ -104,15 +94,10 @@ for f in (:q6j, :q3j_factorial, :fsymbol, :gsymbol, :rmatrix, :tetrahedron, :the
           :twist, :qint, :qfact, :qbinomial)
     @eval function $f(t::EvalTarget, args...; kw...)
         t isa Symbolic && throw(ArgumentError("Symbolic() does not accept evaluation keywords"))
-        if t isa Exact && t.form === :x
+        if t isa Exact
             isempty(kw) || throw(ArgumentError("`Exact($(t.k))` already sets the target and takes no keywords; remove " *
                                                join(("`$key`" for key in keys(kw)), ", ")))
-            return _exact_x_target($f,t.k,args...)
-        end
-        if t isa Exact && t.form === :canonical
-            isempty(kw) || throw(ArgumentError("canonical exact targets do not accept evaluation keywords"))
-            _deprecated_cyclotomic()
-            return _canonical_target($f,t.k,args...)
+            return _exact_target($f,t.k,args...)
         end
         fixed = target_kwargs(t)
         any(key -> key in (:k,:q) || haskey(fixed,key),keys(kw)) &&
@@ -188,95 +173,42 @@ end
 
 
 
-"""
-Warn once. The cyclotomic carrier ℚ(ζ₂ₕ) is no longer what the package means by an exact level value —
-`Exact(k)` and `exact = true` both give the real basis ℚ[x]/Ψ_h now. `form = :canonical`
-still returns the former carrier, so that anything reading
-`CompositeExactResult` keeps working while it migrates; it is scheduled for
-removal later.
-"""
-_deprecated_cyclotomic() = @warn(
-    "the cyclotomic exact form `Exact(k; form = :canonical)` is deprecated; " *
-    "use `Exact(k)` for the real basis ℚ[x]/Ψ_h. The `form = :canonical` option will be removed in a later release.",
-    maxlog = 1)
+# The exact target. It reuses the symbol interface for the rule and its admissibility, so a symbol added to
+# `symbols.jl` reaches this form with no work here.
+_exact_target(f,k::AbstractVector,args...) = [_exact_target(f,kk,args...) for kk in k]
 
-# The cyclotomic target, kept reachable under its own name while it is deprecated. It goes straight to
-# `project_exact` rather than through `exact = true`, which now means the real basis.
-_canonical_target(f,k::AbstractVector,args...) = [_canonical_target(f,kk,args...) for kk in k]
+"The form of a rule, or zero at a level where the labels are not admissible."
+_exact_form(rule,k,admissible) = k !== nothing && !admissible(k) ? _qform_zero(k) : qform(rule;k=k)
 
-function _canonical_target(f,k,args...)
-    k isa Integer || throw(ArgumentError("exact level must be an integer"))
-    kk=Int(k); kk>=0 || throw(DomainError(kk,"level must be nonnegative"))
-    f === rmatrix && return rmatrix(args...;k=kk,exact=true)
-    f === twist && return twist(only(args);k=kk,exact=true)
-    if f === qint || f === qfact || f === qbinomial
-        # the deprecated carrier keeps its monomial route; the real basis is what `Exact(k)` uses
-        mono = f === qint ? qint_mono(Int.(args)...) :
-               f === qfact ? qfact_mono(Int.(args)...) : qbinomial_mono(Int.(args)...)
-        return qeval(mono;k=kk,exact=true)
-    end
-    if f === qdim || f === theta_value
-        mono = f === qdim ? qdim_mono(doubled(only(args))) :
-               (Js = doubled(args...); _qδ(Js...,kk) ? theta_mono(Js...) : ZERO_MONOMIAL)
-        return qeval(mono;k=kk,exact=true)
-    end
+function _exact_target(f,k,args...)
+    k === nothing || k isa Integer || throw(ArgumentError("exact level must be an integer"))
+    kk = k === nothing ? nothing : Int(k)
+    kk === nothing || kk >= 0 || throw(DomainError(kk,"level must be nonnegative"))
+    f === qdim && return _exact_form(qdim(Symbolic(),only(args)).rule,kk,l -> doubled(only(args)) <= l)
+    f === theta_value && return _exact_form(theta_value(Symbolic(),args...).rule,kk,l -> _qδ(doubled(args...)...,l))
+    f === tetrahedron && return _exact_form(tetrahedron_sum(doubled(args...)...),kk,l -> _qδtet(doubled(args...)...,l))
+    # phases: a `QPhase`, not a field value
+    f === rmatrix && return kk === nothing ? rmatrix(Symbolic(),args...) : rmatrix(args...;k=kk,exact=true)
+    f === twist && return kk === nothing ? twist(Symbolic(),only(args)) : twist(only(args);k=kk,exact=true)
+    # the bare products carry a rule but no labels
+    f === qint && return qform(qint(Symbolic(),args...).rule;k=kk)
+    f === qfact && return qform(qfact(Symbolic(),args...).rule;k=kk)
+    f === qbinomial && return qform(qbinomial(Symbolic(),args...).rule;k=kk)
     if f === qeval
         length(args)==1 || throw(ArgumentError("qeval requires one expression"))
         s=only(args)
-        s isa SymbolicValue && return project_exact(s.dcr,kk;rule=s.rule)
-        s isa FactorialSum && (_validate_rule(s); return project_exact(_factorial_dcr(s),kk;rule=s))
-        s isa DCR && return project_exact(s,kk)
-        s isa CyclotomicMonomial && return project_exact(s,kk)
-        throw(ArgumentError("unsupported canonical exact expression"))
-    end
-    if length(args)==1 && !(only(args) isa Spin)
-        L=_normalize_labels(only(args),f === q3j_factorial ? (5,6) : (6,),string(f))
-        return [_canonical_target(f,kk,l...) for l in L]
-    end
-    s = f === tetrahedron ? tetrahedron_sum(doubled(args...)...) : _rule_for(f,args...)
-    admissible = f === tetrahedron ? _qδtet(doubled(args...)...,kk) : _admissible_at(f,kk,args...)
-    admissible || return _cyclotomic_zero(kk)
-    return project_exact(_factorial_dcr(s),kk;rule=s)
-end
-
-function _cyclotomic_zero(k::Int)
-    _, ζ = cyclotomic_field(2*(k+2),"ζ")
-    return CompositeExactResult(k, ZERO_MONOMIAL, zero(ζ))
-end
-
-# The real-basis target. It reuses the symbol interface for the rule and its admissibility, so a symbol
-# added to `symbols.jl` reaches this form with no work here, and it mirrors the canonical route's handling
-# of level sweeps and label collections.
-_exact_x_target(f,k::AbstractVector,args...) = [_exact_x_target(f,kk,args...) for kk in k]
-
-function _exact_x_target(f,k,args...)
-    k isa Integer || throw(ArgumentError("exact level must be an integer"))
-    kk=Int(k); kk>=0 || throw(DomainError(kk,"level must be nonnegative"))
-    f === qdim && return qdim(only(args);k=kk,exact=true)
-    f === theta_value && return theta_value(args...;k=kk,exact=true)
-    f === tetrahedron && return (_qδtet(doubled(args...)...,kk) ?
-        exact_x(tetrahedron_sum(doubled(args...)...),kk) : zero(ExactX,kk))
-    f === rmatrix && return rmatrix(args...;k=kk,exact=true)   # a phase: a `QPhase`, not a field value
-    f === twist && return twist(only(args);k=kk,exact=true)
-    # the bare products: they carry a rule but no labels, so they answer for themselves
-    f === qint && return qint(args...;k=kk,exact=true)
-    f === qfact && return qfact(args...;k=kk,exact=true)
-    f === qbinomial && return qbinomial(args...;k=kk,exact=true)
-    if f === qeval
-        length(args)==1 || throw(ArgumentError("qeval requires one expression"))
-        s=only(args)
-        s isa SymbolicValue && return exact_x(s.rule,kk)
-        s isa FactorialSum && (_validate_rule(s); return exact_x(s,kk))
-        throw(ArgumentError("`form = :x` evaluates a factorial rule; got a $(typeof(s))"))
+        s isa SymbolicValue && return qform(s.rule;k=kk)
+        s isa FactorialSum && return qform(_validate_rule(s);k=kk)
+        kk === nothing && return qeval(s;q=1,exact=true)
+        throw(ArgumentError("`Exact(k)` evaluates a factorial rule; got a $(typeof(s))"))
     end
     sym=symbol_of(f)
     sym === nothing && throw(ArgumentError(
-        "`form = :x` has no rule for $(f). The symbols it knows are q6j, QRecoupling.q3j_factorial, fsymbol, gsymbol, " *
+        "`Exact` has no rule for $(f). The symbols it knows are q6j, q3j, qcg, QRecoupling.q3j_factorial, fsymbol, gsymbol, " *
         "tetrahedron, qdim, theta_value and rmatrix."))
     if length(args)==1 && !(only(args) isa Spin)
         L=_normalize_labels(only(args),(nlabels(sym),),string(f))
-        return [_exact_x_target(f,kk,l...) for l in L]
+        return [_exact_target(f,kk,l...) for l in L]
     end
-    level_admissible(sym,kk,args...) || return zero(ExactX,kk)
-    return exact_x(symbol_rule(sym,args...),kk)
+    return _exact_form(symbol_rule(sym,args...),kk,l -> level_admissible(sym,l,args...))
 end

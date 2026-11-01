@@ -12,7 +12,7 @@ Use q6j coefficients and quantum dimensions for tetrahedral and edge weights, wi
 
 ## Exact identities and special levels
 
-Explore when a coefficient vanishes, reduces to a rational number, or admits a short radical expression. `Symbolic()` and `x_form` expose generic formulas; `Exact(k)` specializes to the real algebraic basis of a level. Generic polynomial identities can establish a relation wherever its denominators and branch assumptions permit specialization. The [identity tutorial](tutorials/identities.md) separates such proofs from numerical checks.
+Explore when a coefficient vanishes, reduces to a rational number, or admits a short radical expression. `Exact()` writes a value at every q and `Exact(k)` at a level, with zeros and equality decided exactly. Generic identities can establish a relation wherever its denominators and branch assumptions permit specialization. The [identity tutorial](tutorials/identities.md) separates such proofs from numerical checks.
 
 ## Deformations and asymptotics
 
@@ -28,8 +28,8 @@ Encode factorial-product sums with `FactorialSum` and test the same expression c
 |:--|:--|:--|
 | How do fusion spaces grow with k? | `fmatrix_labels`, `QRecoupling.level_labels` | Check channel admissibility |
 | Are my tensor phases consistent? | F/R matrices and scalar symbols | Orthogonality and local identities |
-| Does a relation hold beyond sampled levels? | `x_form`, `prove_identity` | Exact polynomial residual and exceptional levels |
-| Is a small numerical coefficient really zero? | Exact level or generic formula | Exact cancellation, not only a tolerance |
+| Does a relation hold beyond sampled levels? | `==` on `Exact()` values, or `prove_identity` with Nemo | Exact at every q, and exceptional levels |
+| Is a small numerical coefficient really zero? | `iszero` on `Exact(k)`, or `iszero_at` | Exact cancellation, not only a tolerance |
 | Does a custom series recover a classical identity? | `FactorialSum`, `Exact()` | Independent factorial/binomial formula |
 
 Performance depends on the labels, target, precision, and workload. Benchmark the intended application rather than extrapolating a scalar timing to a full tensor contraction.

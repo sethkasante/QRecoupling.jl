@@ -1,4 +1,4 @@
-using Test, QRecoupling
+using Test, QRecoupling, Nemo
 
 const QR = QRecoupling
 const ONES = (1, 1, 1, 1, 1, 1)
@@ -17,7 +17,7 @@ const ONES = (1, 1, 1, 1, 1, 1)
             @test q6j(At(q), ONES...) ≈ formula(q+inv(q)) rtol=1e-13
         end
         v = q6j(Exact(10), ONES...)
-        @test v isa ExactX
+        @test v isa QForm
         @test Float64(v) ≈ formula(2cospi(1/12)) rtol=1e-13
         @test q6j(Level(10), ONES...) ≈ Float64(v) rtol=1e-13
         @test string(radical(v)) == "(2√3 − 3)/3"

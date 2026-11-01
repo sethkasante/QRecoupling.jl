@@ -174,19 +174,7 @@ end
 #  Sums, keyed by square class
 # ---------------------------------------------------------------------------------
 
-"""
-    ExactXSum
-
-A sum `Σ_S c_S(x)·√(∏_{e ∈ S} ψ_e(x))` at one level, keyed by the square class `S`. Products fuse classes
-and stay exact; sums cannot, so they are kept apart.
-
-Two keys may denote the same root at a level, so only an empty sum is immediately zero; `iszero` uses the
-structural and norm tests, then exact algebraic numbers.
-"""
-struct ExactXSum
-    k::Int
-    terms::Dict{Vector{Int},QQPolyRingElem}
-end
+# Polynomial coefficients are provided by Nemo.
 
 ExactXSum(k::Integer) = ExactXSum(Int(k), Dict{Vector{Int},QQPolyRingElem}())
 function ExactXSum(v::ExactX)
@@ -379,6 +367,8 @@ Base.:(==)(a::ExactXSum, b::ExactXSum) = a.k == b.k && iszero(a - b)
 Base.:(==)(a::ExactX, b::ExactX) = ExactXSum(a) == ExactXSum(b)
 Base.:(==)(a::ExactX, b::ExactXSum) = ExactXSum(a) == b
 Base.:(==)(a::ExactXSum, b::ExactX) = a == ExactXSum(b)
+# Equal values can have different roots, so all that they are sure to share is their level.
+Base.hash(v::Union{ExactX,ExactXSum}, h::UInt) = hash((:ExactX, v.k), h)
 
 """
     numeric_value(s::ExactXSum) -> BigFloat or nothing
@@ -406,7 +396,7 @@ evaluate_exact(s::ExactXSum, ::Type{T} = ComplexF64) where {T} = T(float(s, Floa
 
 function Base.show(io::IO, s::ExactXSum)
     isempty(s.terms) && return print(io, "ExactXSum(k = ", s.k, ", 0)")
-    parts = [_xform_str(_term(s, S)) for S in sort!(collect(keys(s.terms)))]
+    parts = [_qform_str(_term(s, S)) for S in sort!(collect(keys(s.terms)))]
     print(io, "ExactXSum(k = ", s.k, ", ", join(parts, " + "), ")")
 end
 
@@ -426,18 +416,9 @@ function Base.show(io::IO, ::MIME"text/plain", s::ExactXSum)
         print(io, lines[1], "\n  = 0")
         return
     end
-    long = false
     for (i, S) in enumerate(sort!(collect(keys(s.terms))))
-        t = _term(s, S)
-        push!(lines, (i == 1 ? "  = " : "  + ") * _xform_str(t))
-        if _xform_long(t)
-            long = true
-            for l in _xform_dims(t)
-                push!(lines, "      " * l)
-            end
-        end
+        push!(lines, (i == 1 ? "  = " : "  + ") * _qform_str(_term(s, S)))
     end
-    long && push!(lines, "    `v.x_value` gives each (P, R) in full")
     if get(io, :approximate, false)
         v = numeric_value(s)
         push!(lines, v === nothing ? "  (the value could not be certified numerically)" :

@@ -1,11 +1,12 @@
 # Minimal benchmark of QRecoupling.jl: a few representative calls, each timed and checked.
 #
-#   julia --project=. benchmark/minimal.jl
+#   julia --project=benchmark -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
+#   julia --project=benchmark benchmark/minimal.jl
 #
-# It needs only the package. Every case compares its value with an exact result, a higher-precision
+# The benchmark environment includes Nemo for exact reference values. Every case compares its value with an exact result, a higher-precision
 # evaluation or an identity, and the script fails if a comparison does. Times depend on the machine and are
 # printed for comparison between versions; they are not tested.
-using QRecoupling, Printf
+using QRecoupling, Nemo, Printf
 
 """
 Median time of one call of `f` in nanoseconds. A sample is the mean over `evals` consecutive calls, because

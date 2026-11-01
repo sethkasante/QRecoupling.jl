@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.6.0
+
+- **Breaking:** `Exact()` and `Exact(k)` return a `QForm`, the value written in quantum integers from its formula. `Exact()` needs no q; used as a number it means its value at q = 1, and `classical` gives that exactly. `Exact(k)` needs no backend, with exact `==`, `iszero` and arithmetic at the level. `qcg` and `q3j` now have both, with powers of q. See [Migration](docs/src/migration.md).
+- `==` between `Exact()` values decides equality at every q, and a sum that vanishes at every q is shown as 0. Nothing is expanded: an integer polynomial cannot vanish at an integer above the sum of its coefficients, so one such point is read through residues at word primes.
+- `==` at a level expands nothing and covers forms with powers of q. It compares squares at places modulo word primes, from the rule's factorials: different values take 5 µs at spins 100, k = 401, where they took 270 ms, and a proof of equality takes 6.5 ms. The number of places comes from a bound on the norm, which cut them 7-fold at that size and also applies to zero tests. Sign comes from the certified number.
+- A `QForm` holds its rule and writes what it prints the first time it is shown. `Exact(k)` takes 0.15 µs at any size, where it took up to 490 µs at spins 100, k = 401, and printed forms are unchanged. Comparing different generic forms takes 85 µs at spins 100, where it took 24 ms.
+- A first call no longer compiles for seconds. `q6j(Level(10), …)` took 4.7 s and takes 1 ms, through a precompile workload using PrecompileTools, at the cost of about 0.05 s more at `using` and 30 s more when the package is installed.
+- Fixed: equal `QForm`, `LevelValue`, `ExactX` and `SymbolicValue` values had different hashes, so `unique` and `Dict` kept duplicates, and hashing a `ClassicalResult` threw. `isequal` between a form and a number is now false, because `==` with a number reads a generic form at q = 1 and is not transitive.
+- `==` between a form and a float is exact, where it was always false. `Exact` rejects invalid levels when it is built.
+- Nemo is optional, and needed only for nested radicals and expanded polynomials.
+- Added `qform` and quantum-integer displays for exact values, including native level zero checks. Polynomial views remain explicit.
+- `qform` now covers `qcg` and `q3j`: powers of q are printed in front and on each term, reduced by q^h = −1 at a level, where these values are complex.
+- The relations at a level are built from their distinct generators and kept reduced, with checked arithmetic. Levels such as k = 2000 no longer stall, and tables that took 384 ms at k = 1000 take 9 ms. At very smooth levels long rows are left out, so a form can stay longer there, and values are never affected.
+- Square classes use the generators directly, which keeps them complete at every level with small entries.
+- Certified native bounds, bad-prime rejection, stable `qform` evaluation, and quadratic-character nonzero certificates. Faster modular table setup and bounded cache retention.
+- **Breaking:** removed the deprecated canonical/DCR exact paths, `eager`, and one-argument `xvalue`. Polynomial result types now parameterize their payload. See [Migration](docs/src/migration.md).
+
 ## v0.5.2
 
 - Exact zero decisions in numerical evaluation and zero queries no longer use Nemo. Long sums at a level, sums with several segments and weighted sums are decided in big integers, up to about 100 times faster than through the exact field.

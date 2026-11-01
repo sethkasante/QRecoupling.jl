@@ -5,7 +5,7 @@
 Most recoupling symbols are a factorial prefactor times a finite alternating sum. `FactorialSum` represents that structure directly. Each triple `(a,b,c)` means `[a*z+b]!^c`, and prefactor pairs `n=>c` mean `[n]!^c` outside the sum.
 
 ```@example rules
-using QRecoupling
+using QRecoupling, Nemo
 s = FactorialSum(1:3; factors=[(2,0,1)])
 @assert isapprox(qeval(s), 746) # hide
 (qeval(s), qeval(s; q=0.8), qeval(s; k=20))
@@ -41,7 +41,7 @@ Numerical evaluation does not first expand the symbolic rational function. This 
 
 ## Symbolic expansion
 
-`qeval(Symbolic(), rule)` retains the factorial rule without evaluating the sum. `x_form(value)` expands it in x; `phi_form(value)` requests cyclotomic factorization in q. Both expansions are explicit, and factorization can be substantially more expensive. See [Exact values in x](tutorials/exact_forms.md) for examples.
+`qeval(Symbolic(), rule)` retains the factorial rule without evaluating the sum. `x_form(value)` expands it in x; `phi_form(value)` requests cyclotomic factorization in q. Both expansions are explicit, and factorization can be substantially more expensive. See [Exact values](tutorials/exact_forms.md) for examples.
 
 ## Extending the symbol interface
 

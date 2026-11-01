@@ -20,7 +20,7 @@
     row, js = qcg_row(1,1,1,-1; q=0.8)
     @test row ≈ [qcg(1,1,1,-1,j; q=0.8) for j in js] atol=1e-13
     @test qcg(1,1,1,0,1,0) == 0 # magnetic labels do not sum to m
-    @test_throws ArgumentError q3j(Exact(5), 1,1,1,1,-1,0)
+    @test float(q3j(Exact(5), 1,1,1,1,-1,0)) ≈ q3j(Level(5), 1,1,1,1,-1,0)
     @test_throws ArgumentError qcg(Symbolic(), 1,1,1,-1,1)
     for f in (qcg,q3j)
         @test_throws ArgumentError f(NTuple{6,Int}[]; k=3,q=0.8)

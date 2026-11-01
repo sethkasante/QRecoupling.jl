@@ -21,7 +21,7 @@ s = qseries([(1, 0, -2), (-1, n, -2)], 0:n;
 
 # [n]!^2 * sum(1 / ([j]!^2 * [n-j]!^2), j=0:n)
 qeval(s)                         # 252.0
-qeval(Exact(), s)              # exact classical result
+qeval(Exact(), s)                # exact at every q, and 252 at q = 1
 qeval(s; q=0.8)                   # positive real deformation
 qeval(s; q=0.8 + 0.2im)          # complex deformation
 qeval(s; k=20)                    # level evaluation

@@ -50,10 +50,6 @@ q3j_rule(J1::Int, J2::Int, J3::Int, M1::Int, M2::Int, M3::Int) =
 "q = e^{iπ/(k+2)} in the precision of `T`."
 _level_q(::Type{T}, k::Int) where {T} = cispi(one(real(float(T))) / (k + 2))
 
-_weighted_exact_error(f) = ArgumentError(
-    "$(f) at a level is complex, with values in ℚ(ζ_{4h}) up to a square root, and has no exact form yet. " *
-    "Use `Level(k)` for numerical level values, or `Exact()` for exact classical values.")
-
 _weighted_symbolic_error(f) = ArgumentError(
     "$(f) carries q-power weights that the factorial-rule display cannot hold yet. " *
     "Use `At(q)` or `Level(k)` for numerical values.")
@@ -249,6 +245,15 @@ Prove that the weighted sum vanishes at a level, after two inconclusive precisio
 modulo a prime excludes a zero; a zero residue is confirmed in integers.
 """
 function _weighted_level_zero(s::FactorialSum, w::Int, k::Int)
+    _weighted_residue_vanishes(s, w, k) || return false
+    # A modular zero alone is not a proof. This rare path decides it in integers;
+    # the square-root prefactor is not needed for deciding whether the sum is zero.
+    z = _level_integer_zero(s, s.zlo, s.zhi, k, w)
+    return z === nothing ? _level_ring_zero(s, (s.zlo:s.zhi,), k, w) : z
+end
+
+"Whether the weighted sum vanishes modulo one prime at a level. False proves it nonzero there, and true proves nothing."
+function _weighted_residue_vanishes(s::FactorialSum, w::Int, k::Int)
     tab = level_zero_table(k)
     m = tab.m; order = 2(k + 2)
     r = to_mont(m, root_of_unity(m.p, order))
@@ -268,11 +273,7 @@ function _weighted_level_zero(s::FactorialSum, w::Int, k::Int)
         acc = s.alternating && isodd(z) ? mont_sub(m, acc, term) : mont_add(m, acc, term)
         phase = mont_mul(m, phase, step)
     end
-    iszero(acc) || return false
-    # A modular zero alone is not a proof. This rare path decides it in integers;
-    # the square-root prefactor is not needed for deciding whether the sum is zero.
-    z = _level_integer_zero(s, s.zlo, s.zhi, k, w)
-    return z === nothing ? _level_ring_zero(s, (s.zlo:s.zhi,), k, w) : z
+    return iszero(acc)
 end
 
 """
@@ -323,8 +324,8 @@ end
 @inline function _weighted_value(f, s::FactorialSum, weight::Tuple{Int,Int}, admissible::A, k, q, exact::Bool,
                          ::Type{T}; workspace = nothing, near_edge::N = nothing) where {A,T,N}
     if !isnothing(k)
-        exact && throw(_weighted_exact_error(f))
         kk = Int(k)
+        exact && return _qform_weighted(s, weight, admissible, kk, true)
         Z = promote_type(T, Complex{real(float(T))})        # the type of a value at q = e^{iπ/(k+2)}
         admissible(kk) || return zero(Z)
         is_empty_sum(s) && return zero(Z)
@@ -349,8 +350,9 @@ three `(j, m)` tuples.
 Use `q` for a real or complex parameter and `k` for the level, q = e^{iπ/(k+2)} (mutually exclusive). At real
 q > 0 the coefficients form an orthogonal matrix in (j, m₁) at fixed m; at complex q, including a level,
 orthogonality is bilinear, Cᵀ C = 1 (at a level, for complete sectors). Negative real q is evaluated as
-`complex(q)`. At a level, labels outside the fusion rule j₁ + j₂ + j ≤ k give zero. `exact = true` and
-`Exact()` give the exact classical value; exact level values and `Symbolic()` are not available yet.
+`complex(q)`. At a level, labels outside the fusion rule j₁ + j₂ + j ≤ k give zero. `Exact()` and `Exact(k)` write the
+coefficient in quantum integers and powers of q, and `exact = true` gives the exact classical value. `Symbolic()` is
+not available.
 [`qcg_matrix`](@ref) and [`qcg_row`](@ref) build whole matrices and rows by recurrence.
 
 Square roots follow the balanced-factor convention: `[n] = Π_{d|n,d>1} Ψ_d(q)`, `Ψ_d(q) = q^{−φ(d)} Φ_d(q²)`,
@@ -390,14 +392,13 @@ relabellings by q-powers: (j₂ j₁ j₃; m₂ m₁ m₃)_q = (−1)^{j₁+j₂
 m → −m, and (j₂ j₃ j₁; m₂ m₃ m₁)_q = q^{m₂} (j₁ j₂ j₃; m₁ m₂ m₃)_q.
 
 From v0.5, the deformation-dependent weights are included; classical values are unchanged.
-`Exact()` is supported; `Exact(k)` and `Symbolic()` are not available yet.
-`eager=true` remains a deprecated alias for the standard evaluator.
+`Exact()` and `Exact(k)` write the symbol in quantum integers and powers of q, and `exact = true` gives the exact
+classical value. `Symbolic()` is not available.
 """
 function q3j(j1::Spin, j2::Spin, j3::Spin, m1::Spin, m2::Spin, m3::Spin = -m1 - m2;
              k = nothing, q = nothing, exact::Bool = false, T::Type{TT} = Float64,
-             workspace = nothing, eager::Bool = false) where {TT}
+             workspace = nothing) where {TT}
     q = _evaluation_q(k, q, exact)
-    eager && _deprecated_eager()
     k isa AbstractVector && workspace !== nothing &&
         throw(ArgumentError("workspace is for scalar calls; level sweeps do not accept caller-owned scratch"))
     k isa AbstractVector && return [q3j(j1, j2, j3, m1, m2, m3; k = kk, exact = exact, T = T) for kk in k]
@@ -417,7 +418,11 @@ end
 for f in (:q3j, :qcg)
     @eval function $f(t::EvalTarget, args...; kw...)
         t isa Symbolic && throw(_weighted_symbolic_error($(string(f))))
-        t isa Exact && throw(_weighted_exact_error($(string(f))))
+        if t isa Exact
+            isempty(kw) || throw(ArgumentError("`Exact` already sets the target and takes no keywords"))
+            t.k isa AbstractVector && return [qform($f, args...; k = kk) for kk in t.k]
+            return qform($f, args...; k = t.k)
+        end
         fixed = target_kwargs(t)
         any(key -> key in (:k, :q) || haskey(fixed, key), keys(kw)) &&
             throw(ArgumentError("evaluation target conflicts with explicit evaluation keywords"))
@@ -437,7 +442,6 @@ for f in (:q3j, :qcg)
     @eval function $f(labels::Union{AbstractVector,Base.Generator,Base.Iterators.Filter,Tuple{Any,Vararg{Any}}};
                       k = nothing, q = nothing, exact::Bool = false, T::Type = Float64, threads = nothing)
         q = _evaluation_q(k,q,exact)
-        exact && k !== nothing && throw(_weighted_exact_error($(string(f))))
         L = _normalize_labels(labels, (5, 6), $(string(f)))
         k isa AbstractVector && return [$f(l...; k = kk, q = q, exact = exact, T = T) for l in L, kk in k]
         isempty(L) && return Any[]
