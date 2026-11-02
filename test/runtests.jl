@@ -24,7 +24,7 @@ const ONES = (1, 1, 1, 1, 1, 1)
         @test iszero(v-v) && isone(v*inv(v))
 
         s = q6j(Symbolic(), ONES...)
-        @test s isa QForm && s.k === nothing && x_form(s) isa XValue
+        @test s isa QForm && s.k === nothing && xform(s) isa XValue
         @test s(1) == 1//6 && qeval(Exact(), QRecoupling._rule_for(q6j, ONES...)) == 1//6
         @test qeval(s; q=0.8) ≈ formula(0.8+inv(0.8)) rtol=1e-13
     end
@@ -138,22 +138,22 @@ const ONES = (1, 1, 1, 1, 1, 1)
         @test all(==(want), got)
         @test length(QRecoupling._ratio_slots()) >= Threads.nthreads()
     end
-    @testset "x_form at a level" begin
-        v = x_form(q6j(Exact(10), 1, 1, 1, 1, 1, 1))
+    @testset "xform at a level" begin
+        v = xform(q6j(Exact(10), 1, 1, 1, 1, 1, 1))
         @test v isa LevelXValue && string(v) == "LevelXValue(k = 10, (2x² − 7)/3)"
         @test occursin("(2x² − 7)/3", sprint(show, MIME"text/plain"(), v)) && occursin("2cos(π/12)", sprint(show, MIME"text/plain"(), v))
-        @test string(x_form(q6j(Exact(3), 1, 1, 1, 1, 1, 1))) == "LevelXValue(k = 3, x − 2)"
-        @test v == x_form(q6j(Exact(10), 1, 1, 1, 1, 1, 1)) && hash(v) == hash(x_form(q6j(Exact(10), 1, 1, 1, 1, 1, 1)))
-        @test iszero(x_form(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2)))
-        @test string(x_form(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2))) == "LevelXValue(k = 10, 0)"
-        @test_throws ArgumentError x_form(q3j(Exact(5), 1, 1, 1, 1, -1, 0))
+        @test string(xform(q6j(Exact(3), 1, 1, 1, 1, 1, 1))) == "LevelXValue(k = 3, x − 2)"
+        @test v == xform(q6j(Exact(10), 1, 1, 1, 1, 1, 1)) && hash(v) == hash(xform(q6j(Exact(10), 1, 1, 1, 1, 1, 1)))
+        @test iszero(xform(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2)))
+        @test string(xform(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2))) == "LevelXValue(k = 10, 0)"
+        @test_throws ArgumentError xform(q3j(Exact(5), 1, 1, 1, 1, -1, 0))
         # the printed polynomials are the value: read them back at x = 2cos(π/h), with and without a root
         rooted = 0
         for (f, l) in ((q6j, (1, 1, 1, 1, 1, 1)), (q6j, (2, 2, 2, 2, 2, 2)), (q6j, (3//2, 3//2, 1, 1, 1, 1)), (fsymbol, (1, 1, 1, 1, 1, 1)),
                        (fsymbol, (1, 1, 1, 1, 1, 2)), (gsymbol, (1, 1, 1, 1, 1, 1)), (fsymbol, (3//2, 3//2, 1, 3//2, 3//2, 2))), k in 4:3:40
             form = f(Exact(k), l...)
             iszero(form) && continue
-            x = x_form(form)
+            x = xform(form)
             setprecision(BigFloat, 256) do
                 x0 = 2cospi(inv(big(k + 2)))
                 P, R = QRecoupling.xpolynomial(x), QRecoupling.radicand(x)
@@ -163,6 +163,37 @@ const ONES = (1, 1, 1, 1, 1, 1)
             @test occursin("k = $k", string(x)) && float(x) ≈ float(form)
         end
         @test rooted > 0
+    end
+    @testset "labels past the level, and what the old layer used to do" begin
+        # [n + h] = −[n]: the sign has to survive folding, in the form and in everything that reads it
+        @test string(qint(Exact(3), 7)) == "−[2]   (k = 3)" && qint(Exact(3), 7) == -qint(Exact(3), 2)
+        limit(n, h) = Float64(sinpi(big(n) / h) / sinpi(big(1) / h))
+        for k in 0:8, n in 2:14
+            h = k + 2
+            n % h == 0 && continue
+            f = qint(Exact(k), n)
+            @test float(f) ≈ limit(n, h) && qint(n; k = k) ≈ limit(n, h) && qint(n; k = k, T = BigFloat) ≈ limit(n, h)
+            @test setprecision(() -> Float64(QRecoupling._qform_level(f)), BigFloat, 256) ≈ limit(n, h)
+        end
+        # a custom series past the level: zeros and poles cancel between factors, and the limit along q decides the sign
+        alt = FactorialSum(0:4; prefactor = [4 => 1], factors = [(1, 0, -1), (-1, 4, -1)], alternating = true)
+        @test qeval(alt; k = 1) == 4 && string(qeval(Exact(1), alt)) == "4   (k = 1)"
+        long = FactorialSum(0:9; prefactor = [9 => 1], factors = [(1, 0, -1), (-1, 9, -1)])
+        @test qeval(long; k = 0) === 0.0 && iszero(qeval(Exact(0), long))
+        @test qeval(alt; k = 1, T = BigFloat) == 4 && qeval(alt; k = 1, T = Float32) === 4.0f0
+        # the rule route takes every target of a product and of the theta graph
+        @test QRecoupling.theta_value(1, 1, 1) === 3.0 && QRecoupling.theta_value(1, 1, 1; q = 1, T = ComplexF64) === 3.0 + 0.0im
+        @test QRecoupling.theta_value(1, 1, 1; exact = true) == 3 && iszero(QRecoupling.theta_value(1, 1, 3))
+        @test qint(5; q = 1, T = ComplexF64) === 5.0 + 0.0im && qfact(3; exact = true) == 6
+        # the degenerate roots: only a product that is identically 0 or 1 has an answer
+        @test_throws DomainError qint(3; q = im)
+        @test_throws DomainError qint(3; q = -1)
+        @test qint(1; q = im) == 1 && iszero(qint(-1; q = -1))
+        # the removed names, and the renamed one
+        @test !any(isdefined.(Ref(QRecoupling), (:DCR, :CyclotomicMonomial, :project_discrete, :phi_form, :splits_completely)))
+        @test_throws MethodError qseries(z -> 1, 1:3)
+        @test_deprecated x_form(q6j(Symbolic(), 1, 1, 1, 1, 1, 1))
+        @test (@test_logs (:warn, r"xform") min_level = Base.CoreLogging.Warn match_mode = :any x_form(q6j(Symbolic(), 1, 1, 1, 1, 1, 1))) isa XValue
     end
     @testset "a batch along one column agrees with scalar calls" begin
         column = [(30, 31, e, 32, 33, 20) for e in 2:60]

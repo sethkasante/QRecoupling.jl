@@ -8,10 +8,10 @@
 
 | Before | Now |
 |---|---|
-| `q6j(Symbolic(), js...)` was a `SymbolicValue` | A form, the formula at every q, with no value of its own. `f(q)` evaluates it, `f(1)` gives the exact value at q = 1, and `Float64(f)` and arithmetic raise an error. `x_form` and `phi_form` accept it |
+| `q6j(Symbolic(), js...)` was a `SymbolicValue` | A form, the formula at every q, with no value of its own. `f(q)` evaluates it, `f(1)` gives the exact value at q = 1, and `Float64(f)` and arithmetic raise an error. `xform` and `phi_form` accept it |
 | `q6j(Exact(k), js...)` was an `ExactX`, and needed Nemo | A form at the level, with no backend. `==`, `iszero` and arithmetic are exact |
 | `q3j` and `qcg` had no `Exact(k)` or `Symbolic()` | Both write them with their powers of q |
-| `v.x_value`, `v.rad` | `x_form(v)` to print it, `QRecoupling.xpolynomial(v)`, `QRecoupling.radicand(v)`, `radical(v)`, with Nemo |
+| `v.x_value`, `v.rad` | `xform(v)` to print it, `QRecoupling.xpolynomial(v)`, `QRecoupling.radicand(v)`, `radical(v)`, with Nemo |
 | `ExactXSum(k)` to accumulate a sum | `sum`, or start from `zero(v)`. `ExactX` and `ExactXSum` are no longer exported; `QRecoupling.exact_x` still returns them, with Nemo |
 | `isempty(residual)` | `iszero(residual)`, or `==` |
 
@@ -21,7 +21,7 @@
 
 ### Optional backend
 
-Nemo is no longer a required dependency. Install it with `import Pkg; Pkg.add("Nemo")` and load it with `using QRecoupling, Nemo` when using `radical`, `x_form`, `phi_form` or `prove_identity`. Both package load orders are supported. Missing-backend errors explain how to enable it.
+Nemo is no longer a required dependency. Install it with `import Pkg; Pkg.add("Nemo")` and load it with `using QRecoupling, Nemo` when using `radical`, `xform` or `prove_identity`. Both package load orders are supported. Missing-backend errors explain how to enable it.
 
 `ExactX`, `ExactXSum`, and `XValue` now parameterize their polynomial payload. `QRecoupling.exact_x(rule, k)` still gives an `ExactX`, with its arithmetic, when Nemo is loaded.
 
@@ -32,11 +32,18 @@ Nemo is no longer a required dependency. Install it with `import Pkg; Pkg.add("N
 | `Exact(k; form = :canonical)` and the `CompositeExactResult` values it returned | `Exact(k)` |
 | `form = :x` | `Exact(k)`, which is the same thing |
 | `eager = true` | Remove the keyword |
-| `QRecoupling.xvalue(value)` with one argument | `x_form(value)` |
+| `QRecoupling.xvalue(value)` with one argument | `xform(value)` |
+| `x_form(f)` | `xform(f)`. `x_form` still works for now, with a deprecation warning |
+| `phi_form(f)`, `splits_completely(f)` | Removed. `xform(f)` expands a formula in x, and `radical` gives nested roots |
+| `qseries(z -> monomial, range)` | Removed. Use `qseries(factors, range)` or `FactorialSum`, with factorial triples |
+| `CyclotomicMonomial`, `DCR` and their helpers, such as `build_dcr!`, `add_qfact!`, `build_series`, `qint_mono`, `qfact_mono`, `qbinomial_mono` | Removed. Use `FactorialSum` |
+| `project_discrete`, `project_analytic`, `project_classical`, `project_classical_exact`, `value.dcr` | Removed. Use `qeval` with `Level(k)`, `At(q)`, `Classical()` or `Exact()` |
 | `qeval(m; k, exact = true)` for a monomial or DCR | `qeval(Exact(k), rule)` with a `FactorialSum` |
 | `QRecoupling.project_exact`, `QRecoupling.evaluate_exact` on the removed type | `Exact(k)` and `numeric_value` |
 
-The three-argument `QRecoupling.xvalue(rad, num, den)`, numerical evaluation of monomials and DCRs, and exact classical evaluation of them are unchanged.
+The three-argument `QRecoupling.xvalue(rad, num, den)` is unchanged.
+
+Two numerical behaviours changed with the removal. `qint`, `qfact`, `qbinomial`, `qdim` and `theta_value` at q = ±i, which is the root of unity of level 0, now raise an error that names `Level(0)` unless the product is identically 0 or 1. They used to answer for some labels and raise for others. Values of these functions and of custom series at a level come from the same rule evaluator as the symbols, so a few last digits differ, and `T = Float32` is now rounded from `Float64` accuracy.
 
 ## To v0.5
 
@@ -67,17 +74,12 @@ These names are no longer exported. They still exist: call them as `QRecoupling.
 
 | Group | Names |
 |---|---|
-| Cyclotomic/DCR layer (compatibility; planned for retirement) | `CyclotomicMonomial`, `DCR`, `build_dcr!`, `add_qint!`, `add_qfact!`, `build_series`, `qint_mono`, `qfact_mono`, `qbinomial_mono`, `symbolic_terms`, `project_discrete`, `project_exact`, `project_analytic`, `project_classical`, `project_classical_exact` |
 | Symbol interface, for adding symbols | `QSymbol`, `SixJ`, `ThreeJ`, `FSymbol`, `GSymbol`, `Tetrahedron`, `ThetaValue`, `symbol_rule`, `level_admissible`, `symbol_family`, `symbol_of`, `nlabels` |
-| Lower-level exact access | `exact_x` (use `Exact(k)`), `generic_sixj` (use `x_form(q6j(Symbolic(), …))`), `xvalue` (the `XValue` constructor; use `x_form` to expand), `radical_form`, `has_radical_form`, `radical_levels`, `xpolynomial`, `radicand` (use `v.x_value`), `splits_completely` |
+| Lower-level exact access | `exact_x` (use `Exact(k)`), `generic_sixj` (use `xform(q6j(Symbolic(), …))`), `xvalue` (the `XValue` constructor; use `xform` to expand), `radical_form`, `has_radical_form`, `radical_levels`, `xpolynomial`, `radicand` (use `v.x_value`) |
 | Modular data helpers | `level_labels`, `central_charge`, `total_qdim`, `gauss_sum`, `monodromy`, `verlinde` |
 | Other | `EvalTarget` |
 
 `smatrix`, `tmatrix`, `bmatrix`, `twist`, `rmatrix` and `fmatrix` remain exported.
-
-### DCR compatibility
-
-The DCR constructors, monomial helpers, callback form of `qseries`, and raw projection functions remain available for existing code and are planned for retirement. New code should use `FactorialSum` or factorial-triple `qseries`, `qeval`, and the evaluation targets. `value.dcr` still constructs a compatibility representation lazily; callbacks must return cyclotomic monomials. The public `phi_form(value)` operation remains available for cyclotomic factorization.
 
 ### New
 
@@ -106,7 +108,7 @@ qint(Symbolic(),5)
 | Exact level cyclotomic wrapper by default | `Exact(k)` returns `ExactX` |
 | `eager=true` | Remove the keyword |
 
-`Symbolic()` writes a formula in quantum integers; it does not have the old monomial multiplication interface. Build product rules using factorial prefactors or expand with `x_form`.
+`Symbolic()` writes a formula in quantum integers; it does not have the old monomial multiplication interface. Build product rules using factorial prefactors or expand with `xform`.
 
 ### Exact classical evaluation
 
@@ -122,9 +124,9 @@ In v0.4 and v0.5, `Exact(k)` and `k=10, exact=true` returned an `ExactX`, a poly
 
 ### Symbolic output is bounded and lazy
 
-Use `x_form(value)` to expand a symbolic rule. The earlier `QRecoupling.xvalue(value)` spelling was removed in v0.6; `value.x_value` on an exact level result instead exposes its stored polynomials.
+Use `xform(value)` to expand a symbolic rule. The earlier `QRecoupling.xvalue(value)` spelling was removed in v0.6; `value.x_value` on an exact level result instead exposes its stored polynomials.
 
-`Symbolic()` displays the formula in quantum integers without carrying out the sum, for both small and large labels. `x_form(value)` explicitly expands it in x, with radicals in ψ factors.
+`Symbolic()` displays the formula in quantum integers without carrying out the sum, for both small and large labels. `xform(value)` explicitly expands it in x, with radicals in ψ factors.
 
 Dimensions and theta graphs use this interface too. R matrices and twists retain `QPhase` objects with an explicit branch over x. A classical exact R value or twist is an integer; a symbolic or exact-level one remains a `QPhase`.
 

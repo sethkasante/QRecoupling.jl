@@ -25,10 +25,10 @@ An exact value is written in quantum integers `[n]`, from the formula itself. Wi
 ```@example home
 using Nemo  # optional polynomial backend
 symbolic = q6j(Symbolic(), 1, 1, 1, 1, 1, 1)
-x_form(symbolic)
+xform(symbolic)
 ```
 
-`Symbolic()` writes the formula in quantum integers without carrying out its sum, and `x_form(symbolic)` explicitly expands it in x, which needs Nemo.
+`Symbolic()` writes the formula in quantum integers without carrying out its sum, and `xform(symbolic)` explicitly expands it in x, which needs Nemo.
 
 ## Choose the calculation
 
@@ -39,7 +39,7 @@ x_form(symbolic)
 | Root of unity | `q6j(Level(k), js...)` | Numerical q = exp(iπ/(k+2)) value |
 | Exact level value | `q6j(Exact(k), js...)` | Quantum integers, with zeros and equality proved |
 | Real or complex deformation | `q6j(At(q), js...)` | Adaptive numerical evaluation |
-| Formula at every q | `q6j(Symbolic(), js...)` | Quantum integers; `f(q)` evaluates it, and `x_form` expands it with Nemo |
+| Formula at every q | `q6j(Symbolic(), js...)` | Quantum integers; `f(q)` evaluates it, and `xform` expands it with Nemo |
 | Whole fusion transformation | `fmatrix(Level(k), a,b,c,d)` | Matrix and its row/column labels |
 | Finite factorial series | `FactorialSum(...)`, `qeval(...)` | The same evaluation targets |
 

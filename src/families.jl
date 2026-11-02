@@ -773,10 +773,7 @@ function _entry_value(Q::LevelQ, X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3
     s = sixj_sum(X2, J2, J3, L1, L2, L3)
     v, st, segs = level_pass1(s, k, Q.tab)
     st === :done && return v
-    if st === :fallback
-        js = canonical_spins(X2 // 2, J2 // 2, J3 // 2, L1 // 2, L2 // 2, L3 // 2)
-        return real(project_discrete(q6j_dcr(js...), k, Float64))
-    end
+    st === :fallback && return _value_past_tables(s, k, Float64)
     return level_escalate(s, segs, k, Float64)
 end
 _entry_value(::ClassicalQ, X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int) =

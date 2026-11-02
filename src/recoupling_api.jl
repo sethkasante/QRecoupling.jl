@@ -5,25 +5,25 @@
 
 """
 Level-k evaluation of a recoupling symbol from its factorial rule `s`. Inadmissible labels give zero.
-Numeric and exact values use the factorial rule directly; `dcr()` supplies the numerical fallback.
+Numeric and exact values use the factorial rule directly.
 A modular zero candidate is not sufficient to short-circuit an exact result.
 """
-Base.@constprop :aggressive function _level_value(s::FactorialSum, admissible::Bool, dcr, k::Int, exact::Bool, ::Type{T};
+Base.@constprop :aggressive function _level_value(s::FactorialSum, admissible::Bool, k::Int, exact::Bool, ::Type{T};
                      labels = nothing, family=nothing, workspace=nothing) where {T}
     k >= 0 || throw(DomainError(k, "level must be nonnegative"))
     admissible || return exact ? _qform_zero(k) : zero(T)
     # `exact = true` at a level is the same value `Exact(k)` returns.
     exact && return qform(s; k = k)
-    return convert(T, value_at_level(s, k, T; fallback = () -> project_discrete(dcr(), k, T), labels=labels, family=family, workspace=workspace))
+    return convert(T, value_at_level(s, k, T; labels=labels, family=family, workspace=workspace))
 end
 
 
 
-"Evaluate one symbol rule, constructing its DCR only for projections that need it."
+"Evaluate one symbol rule."
 @inline function _symbol_value(s::FactorialSum, admissible::A, k, q, exact, ::Type{T};
                                labels=nothing, family=nothing, workspace=nothing) where {A,T}
     if !isnothing(k)
-        return _level_value(s, admissible(), () -> _factorial_dcr(s), Int(k), exact, T;
+        return _level_value(s, admissible(), Int(k), exact, T;
                             labels=labels, family=family, workspace=workspace)
     elseif _is_classical(q)
         return exact ? classical_exact(s) :
@@ -39,7 +39,7 @@ end
 Evaluate the q6j symbol; the default is its classical value.
 Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
 `exact=true` requests an exact classical or level value. `q6j(Symbolic(), ...)`
-retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
+retains a factorial rule with bounded x-form display; `xform` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
 """
 function q6j end
@@ -67,7 +67,7 @@ for q ≠ 1 it is *not* the U_q(sl₂) coupling coefficient: the quantum 3j symb
 the function that was called `q3j` up to v0.4.0. It is not exported: call it as `QRecoupling.q3j_factorial`.
 Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
 `exact=true` requests an exact classical or level value. `q3j_factorial(Symbolic(), ...)`
-retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
+retains a factorial rule with bounded x-form display; `xform` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
 """
 function q3j_factorial end
@@ -92,7 +92,7 @@ end
 Evaluate (−1)^(j1+j2+j4+j5) √([2j3+1][2j6+1]) {6j}, classically by default.
 Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
 `exact=true` requests an exact classical or level value. `fsymbol(Symbolic(), ...)`
-retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
+retains a factorial rule with bounded x-form display; `xform` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
 """
 function fsymbol end
@@ -117,7 +117,7 @@ end
 Evaluate √(Πᵢ[2ji+1]) {6j}, classically by default.
 Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
 `exact=true` requests an exact classical or level value. `gsymbol(Symbolic(), ...)`
-retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
+retains a factorial rule with bounded x-form display; `xform` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
 """
 function gsymbol end
@@ -142,7 +142,7 @@ end
 Evaluate the closed tetrahedron in the package’s existing normalization, classically by default.
 Use `k` for a root-of-unity level or `q` for an analytic parameter (mutually exclusive).
 `exact=true` requests an exact classical or level value. `tetrahedron(Symbolic(), ...)`
-retains a factorial rule with bounded x-form display; `x_form` expands it explicitly.
+retains a factorial rule with bounded x-form display; `xform` expands it explicitly.
 Numerical classical/level calls evaluate the rule directly.
 """
 function tetrahedron end
@@ -169,26 +169,20 @@ Theta-graph value, classical by default. Use `Symbolic()` for a rule-backed x-fo
 function theta_value end
 
 Base.@constprop :aggressive function theta_value(j1::Spin,j2::Spin,j3::Spin; k=nothing,q=nothing,exact::Bool=false,T::Type=Float64)
+    R = _float_target(k,q)
     q = _evaluation_q(k,q,exact)
     Js = doubled(j1,j2,j3)
-    if exact && !isnothing(k)
-        kk = Int(k)
-        _qδ(Js...,kk) || return _qform_zero(kk)
-        return qform(_qfact_rule(_theta_qfacts(Js...));k=kk)
+    admissible = isnothing(k) ? _δ(Js...) : _qδ(Js...,Int(k))
+    pairs = admissible ? _theta_qfacts(Js...) : nothing
+    if !exact && T === Float64 && (q === nothing || real(typeof(float(q))) !== BigFloat)
+        return _product_value(pairs,k,q,exact,T)::R
     end
-    mono = !isnothing(k) && !_qδ(Js...,Int(k)) ? ZERO_MONOMIAL : theta_mono(Js...)
-    v = qeval(mono;k=k,q=q,exact=exact,T=T)
-    k isa Integer && !exact && return convert(T, v)
-    # the monomial evaluation at generic q works in the type of q, so a different element type goes through the rule
-    if k === nothing && !exact && !_is_classical(q) && real(T) !== Float64 && !(q in (-1,im,-im))
-        return analytic_value(_δ(Js...) ? _qfact_rule(_theta_qfacts(Js...)) : EMPTY_FACTORIAL_SUM,q,T)
-    end
-    return v
+    return _product_value(pairs,k,q,exact,T)
 end
 
 """
-The q-factorial content of [`theta_mono`](@ref), as `n => c` pairs, so that the exact route builds the
-same value the monomial route does rather than a second opinion about it.
+The q-factorial content of the theta graph, θ(A,B,C) = [T+1]! [m₁]! [m₂]! [m₃]! / ([A]! [B]! [C]!), as `n => c` pairs.
+It closes on one edge to the quantum dimension, θ(A, A, 0) = [A+1].
 """
 function _theta_qfacts(A::Int,B::Int,C::Int)
     m1 = (A+B-C)÷2; m2 = (A-B+C)÷2; m3 = (-A+B+C)÷2; t = (A+B+C)÷2+1
@@ -234,7 +228,6 @@ end
 
 function clear_sieve_caches!()
     @lock _SIN_LOCK empty!(_SIN_TABLE)
-    @lock ROU_TABLE_LOCK empty!(ROU_TABLE_CACHE)
     @lock QINT_TABLES_LOCK (empty!(QINT_TABLES); QINT_TABLES_BYTES[] = 0)
     empty!(QINT_F64_TABLES)
     empty!(LEVEL_HALF_PHASES)   # high and low phase parts in qcg.jl
@@ -256,7 +249,7 @@ end
 """
     empty_caches!()
 
-Clear the cached level-k tables (numeric, root-of-unity, q-integer, modular and exact cyclotomic).
+Clear the cached level-k tables (numeric, q-integer and modular).
 Useful for freeing numerical-table memory in long sessions or before benchmarking. Reusable symbolic
 polynomials and number fields are retained, as is the small classical prime-power sieve. The per-level
 numerical caches also empty themselves when one passes `QRecoupling.LEVEL_CACHE_LIMIT[]` bytes (512 MiB by

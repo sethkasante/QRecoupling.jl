@@ -63,11 +63,10 @@ empty_caches!
 
 ## Exact values and x forms
 
-The [exact-values tutorial](tutorials/exact_forms.md#API-reference) documents `QForm`, `x_form`, `XValue`, `ExactX`, `ExactXSum`, `radical`, `NoRadical`, and `numeric_value` with examples. Use `phi_form` for cyclotomic factorization and `prove_identity` to compare expanded generic expressions.
+The [exact-values tutorial](tutorials/exact_forms.md#API-reference) documents `QForm`, `xform`, `XValue`, `ExactX`, `ExactXSum`, `radical`, `NoRadical`, and `numeric_value` with examples. Use `prove_identity` to compare expanded generic expressions.
 
 ```@docs
 RadExpr
-phi_form
 prove_identity
 ```
 

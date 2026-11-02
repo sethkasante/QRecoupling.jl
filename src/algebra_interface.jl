@@ -17,7 +17,7 @@ end
     LevelXValue
 
 A value at a level written out in x = 2cos(π/(k+2)) as `P(x)√R(x)` over one integer denominator, from
-[`x_form`](@ref) on an `Exact(k)` form. The polynomials are reduced below the degree of the number field, so they hold only
+[`xform`](@ref) on an `Exact(k)` form. The polynomials are reduced below the degree of the number field, so they hold only
 at this level. `QRecoupling.xpolynomial` and `QRecoupling.radicand` give their coefficients, lowest degree first.
 """
 struct LevelXValue{E}
@@ -46,8 +46,8 @@ end
 _missing_algebra(name) = throw(ArgumentError("$name requires the optional Nemo backend. Install Nemo and load it with `using Nemo`. Numerical values, `Exact()` and `Exact(k)` do not require it."))
 _qfact_exactx(args...; kwargs...) = _missing_algebra(:Exact)
 exact_x(args...; kwargs...) = _missing_algebra(:exact_x)
-generic_value(args...; kwargs...) = _missing_algebra(:x_form)
-level_x_value(args...; kwargs...) = _missing_algebra(:x_form)
+generic_value(args...; kwargs...) = _missing_algebra(:xform)
+level_x_value(args...; kwargs...) = _missing_algebra(:xform)
 generic_sixj(args...; kwargs...) = _missing_algebra(:generic_sixj)
 """
     radical(v; kwargs...)
@@ -66,17 +66,10 @@ A proof that two expressions in x = q + 1/q agree at every q. It needs Nemo: loa
 prove_identity(args...; kwargs...) = _missing_algebra(:prove_identity)
 xpolynomial(args...; kwargs...) = _missing_algebra(:xpolynomial)
 radicand(args...; kwargs...) = _missing_algebra(:radicand)
-"""
-    phi_form(f; kwargs...)
-
-A formula expanded in q and factored over the cyclotomic polynomials. It needs Nemo: load it with `using Nemo`.
-"""
-phi_form(args...; kwargs...) = _missing_algebra(:phi_form)
-splits_completely(args...; kwargs...) = _missing_algebra(:splits_completely)
 xvalue(rad, num) = _missing_algebra(:xvalue)
 xvalue(rad, num, den) = _missing_algebra(:xvalue)
 ExactXSum(k) = _missing_algebra(:ExactXSum)
-function x_form end
+function xform end
 
 "Largest generic polynomial the display of an `XValue` writes out, and its length."
 const GENERIC_MAX_DEGREE = 16

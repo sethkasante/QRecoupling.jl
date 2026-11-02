@@ -2,6 +2,10 @@
 
 ## v0.6.0
 
+- **Breaking:** the old cyclotomic layer is gone: `CyclotomicMonomial`, `DCR`, the `project_*` functions, the callback form of `qseries`, `phi_form` and `splits_completely`. Everything now runs from factorial rules. `qseries(factors, range)` is unchanged.
+- `x_form` is now `xform`. The old name still works, with a deprecation warning.
+- Fixed: `Exact(k)` printed and multiplied the wrong sign for a product whose labels pass the level, such as `qint(Exact(3), 7)`, which is −[2] and printed `[2]`. Symbols with admissible labels never reach this. `float` was already right.
+- Custom series whose factorials pass the level now read exact zeros as 0, where rounding noise was possible, and `T = Float32` values of `qint`, `qfact`, `qbinomial`, `qdim` and `theta_value` at a level are rounded from `Float64` accuracy. Those functions at q = ±i now always raise an error naming `Level(0)`, unless the product is identically 0 or 1.
 - With Nemo, `x_form` on an `Exact(k)` form prints it as a polynomial in x = 2cos(π/(k+2)), such as `(2x² − 7)/3`, where it threw an error. It returns a `LevelXValue`.
 - `float` of a `QForm` at a level takes 0.3–0.5 µs where it took 18–30 µs, and gives the same correctly rounded value on every input tested, because it comes from the compensated pass when that pass can certify it. Forms with powers of q and sums that cancel heavily keep the wide route.
 - A 6j symbol evaluated along its column no longer allocates its scratch on each call, and real q skips a double-word pass that could only fail.

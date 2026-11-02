@@ -321,22 +321,32 @@ const RTOL_CERTIFIED = 2.0^-44
 _target_digits(::Type{T}) where {T} = T === BigFloat ? _decimal_digits(T) - 4 : min(12.0, _decimal_digits(T) - 4)
 
 """
-    value_at_level(s, k, T; fallback) -> T
+    value_at_level(s, k, T) -> T
 
 Value at q = e^{iπ/(k+2)}. Poles (a `DomainError`) and vanishing terms are decided from valuations. When
 cancellation leaves too few digits, identities or exact confirmation decide zeros and nonzero values
-escalate precision. `fallback()` handles factorials outside the level tables. With `labels` (a 6j's doubled
+escalate precision. Factorials outside the level tables go through the exact form (`_value_past_tables`). With `labels` (a 6j's doubled
 labels), escalation first tries the column recurrence.
 """
-function value_at_level(s::FactorialSum, k::Int, ::Type{T}; fallback, labels = nothing, family = nothing, workspace = nothing) where {T}
+function value_at_level(s::FactorialSum, k::Int, ::Type{T}; labels = nothing, family = nothing, workspace = nothing) where {T}
     tab = qint_tables(T, k)
     vs, small = _small_level(s, k, tab, family)
     small == SMALL_ACCEPTED && return vs
     small == SMALL_DECLINED && _small_level_zero(s, k, family) && return zero(T)
     v, status, segs = level_pass1(s, k, tab; family=family, workspace=workspace)
     status === :done && return v
-    status === :fallback && return fallback()
+    status === :fallback && return _value_past_tables(s, k, T)
     return level_escalate(s, segs, k, T; labels=labels, family=family, workspace=workspace)
+end
+
+"""
+A rule whose factorials reach past the level tables, as a custom series can at a low level, where its zeros and poles cancel
+only between factors. The exact form knows how, so the number is read from it, in enough bits for the written sum.
+"""
+function _value_past_tables(s::FactorialSum, k::Int, ::Type{T}) where {T}
+    f = qform(s; k = k)
+    iszero(f) && return zero(T)
+    return convert(T, setprecision(() -> _qform_level(f), BigFloat, max(256, precision(real(T)) + 64)))
 end
 
 """

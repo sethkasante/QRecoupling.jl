@@ -4,9 +4,8 @@
 #  These are not sums: each is a bare product `Π [n]!^{c}`, which is a `FactorialSum` whose range is a
 #  single point and whose factor list is empty. Saying so routes them through the same evaluator as
 #  `q6j` — the level kernel with its running bound, the classical integer path, the analytic ladder at
-#  generic q, and the real basis when an exact value is asked for — instead of through the monomial
-#  projection they used to take. One consequence is worth stating: `qint(5)` is now a *number*, the
-#  classical value, exactly as `q6j(…)` is.
+#  generic q, and the real basis when an exact value is asked for. One consequence is worth stating:
+#  `qint(5)` is a *number*, the classical value, exactly as `q6j(…)` is.
 # ---------------------------------------------------------------------------------
 
 """
@@ -29,37 +28,24 @@ represents zero in the target's result type.
 Machine-precision products use direct tables or split products before reaching this fallback.
 Generic q then uses the scaled factorial-rule evaluator, preserving the input and requested precision.
 `Symbolic()` returns the rule; an exact level value is the form of that rule.
-Classical exact and numerical level fallbacks retain the monomial projectors.
 """
 function _product_value(pairs, k, q, exact::Bool, ::Type{T}; workspace = nothing) where {T}
-    if exact && !isnothing(k)
+    s = pairs === nothing ? _ZERO_PRODUCT_RULE : _qfact_rule(pairs)
+    if !isnothing(k)
         kk = Int(k); kk >= 0 || throw(DomainError(k, "level must be nonnegative"))
-        pairs === nothing && return _qform_zero(kk)
-        return qform(_qfact_rule(pairs); k = kk)
+        exact && return pairs === nothing ? _qform_zero(kk) : qform(s; k = kk)
+        return qeval(s; k = kk, T = T, workspace = workspace)
     end
-    if _is_classical(q) && !exact
-        # At q = 1 the rule's kernel works in integer ratios, so `qint(5)` is 5.0 and not
-        # 4.999999999999999 — which is what the monomial route returns, since it multiplies floating
-        # values of Φ_d(1). Eight times the cost of that route and still a microsecond; for the one
-        # place a user checks a package's arithmetic by eye, the right trade.
-        return classical_value(pairs === nothing ? _ZERO_PRODUCT_RULE : _qfact_rule(pairs), T;
-                               workspace = workspace)
+    if _is_classical(q)
+        exact && return pairs === nothing ? zero(ClassicalResult) : classical_exact(s)
+        # At q = 1 the rule's kernel works in integer ratios, so `qint(5)` is 5.0 and not 4.999999999999999.
+        return convert(T, classical_value(s, real(T); workspace = workspace))
     end
-    if k === nothing && !exact && !_is_classical(q)
-        # The monomial projector can overflow q² before a representable answer
-        # is formed. Reuse the scaled rule path for non-machine inputs and the
-        # cases declined by the fast product kernels.
-        s = pairs === nothing ? _ZERO_PRODUCT_RULE : _qfact_rule(pairs)
-        if q in (-1, im, -im)
-            # Preserve the legacy projector's treatment of special roots,
-            # which the generic summation evaluator deliberately rejects.
-            R = real(T)
-            qq = R === BigFloat ? (q isa Real ? BigFloat(q) : Complex{BigFloat}(q)) : q
-            return _analytic_result(T, project_analytic(_pairs_mono(pairs), qq))
-        end
-        return analytic_value(s,q,T;workspace=workspace)
+    # The evaluator rejects these degenerate roots, which a zero or a product that is identically 1 never reaches.
+    if q in (-1, im, -im) && (pairs === nothing || isempty(psi_exponents(pairs)))
+        return _analytic_result(T, pairs === nothing ? zero(float(q)) : one(float(q)))
     end
-    return qeval(_pairs_mono(pairs); k = k, q = q, exact = exact, T = T)
+    return analytic_value(s, q, T; workspace = workspace)
 end
 
 # ---------------------------------------------------------------------------------
@@ -67,11 +53,9 @@ end
 #
 #  A q-integer is one table entry, a q-factorial one split entry, a q-binomial three. Reading them is what
 #  the symbols do already, so the cheap route is also the accurate one: the level table holds [n] correctly
-#  rounded, and the split factorials hold [n]! as a correctly rounded mantissa and an exact exponent. The
-#  monomial route this replaces built a cyclotomic monomial on every call (7–10 allocations, and 21 with
-#  1.2 µs for a classical `qint(5)`), multiplied floating values of Φ_d, and near q = 1 lost up to 4e-10.
+#  rounded, and the split factorials hold [n]! as a correctly rounded mantissa and an exact exponent.
 #  Anything these paths do not cover — other element types, exact targets, a level factorial that reaches
-#  [h] = 0 — returns `nothing` and takes the route it always took.
+#  [h] = 0 — returns `nothing` and takes the rule route (`_product_value`).
 # ---------------------------------------------------------------------------------
 
 "[n] at q = e^{iπ/(k+2)}, correctly rounded from the level table, for every integer n by periodicity."
@@ -108,8 +92,7 @@ end
 # [n]! = q^{−n(n−1)/2} ∏_{j=2}^{n} g_j,  g_j = (q^{2j} − 1)/(q² − 1),
 #
 # kept as a mantissa and a binary exponent throughout, so a value that fits in a Float64 is returned even
-# when its factors or its prefactor do not: the monomial route overflowed `qfact(30; q = 2.7)` (true value
-# 3.1·10¹⁸⁹) to Inf, and 39 representable cases of a test grid to Inf or 0. Each g_j is taken the way
+# when its factors or its prefactor do not, such as `qfact(30; q = 2.7)` = 3.1·10¹⁸⁹. Each g_j is taken the way
 # `_qint_analytic` takes [n] — from `expm1` when q^{2j} is near 1, from an exact-base power otherwise, and
 # for |q| > 1 as q^{2j}(1 − q^{−2j}) with the large power split — so its error stays a few units whatever
 # the size of q^{2j}.
@@ -351,17 +334,6 @@ function _qnumber_float(what::Symbol, a::Int, b::Int, k, q)
     return nothing
 end
 
-"The cyclotomic monomial of `Π [n]!^{c}` — what the numeric projections consume."
-function _pairs_mono(pairs)
-    pairs === nothing && return ZERO_MONOMIAL
-    isempty(pairs) && return ONE_MONOMIAL
-    buf = CycloBuffer(max(maximum(first, pairs), 1))
-    for (m, c) in pairs
-        add_qfact!(buf, Int(m), Int(c))
-    end
-    return snapshot(buf)
-end
-
 "`nothing` for a vanishing product, `Pair[]` for one that is identically 1, else the q-factorial content."
 function _qint_pairs(n::Int, p::Int)
     n < 0 && return nothing
@@ -393,7 +365,7 @@ convention `[0] = 1`. `n < 0` is zero.
 
 The keywords are the ones every symbol takes: `k` for a level, `q` for a parameter, `exact = true` for
 the exact classical rational or, with `k`, the level value as a [`QForm`](@ref). `qint(Exact(), n)` is the form
-at every q. `qint(Symbolic(), n)` returns the rule-backed symbolic x-form instead; use `x_form` to expand it explicitly.
+at every q. `qint(Symbolic(), n)` returns the rule-backed symbolic x-form instead; use `xform` to expand it explicitly.
 
 ```julia
 qint(5)                 # 5.0

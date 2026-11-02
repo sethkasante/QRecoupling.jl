@@ -25,19 +25,19 @@ _as_vector(labels::AbstractVector) = labels
 _as_vector(labels) = collect(labels)
 
 """
-    _value_prefetched(s, k, tab, fallback) -> value
+    _value_prefetched(s, k, tab) -> value
 
 One level value from a prefetched table. The caller validates level admissibility before
 selecting a standard-symbol family shortcut and owns its workspace for the whole worker task.
 """
-function _value_prefetched(s::FactorialSum, k::Int, tab::QIntTables{T}, fallback::F;
-                           labels=nothing, family=nothing, workspace=nothing) where {T,F}
+function _value_prefetched(s::FactorialSum, k::Int, tab::QIntTables{T};
+                           labels=nothing, family=nothing, workspace=nothing) where {T}
     vs, small = _small_level(s, k, tab, family)
     small == SMALL_ACCEPTED && return vs
     small == SMALL_DECLINED && _small_level_zero(s, k, family) && return zero(T)
     v, st, segs = level_pass1(s,k,tab; family=family,workspace=workspace)
     st === :done && return v
-    st === :fallback && return T(fallback())
+    st === :fallback && return _value_past_tables(s, k, T)
     return level_escalate(s,segs,k,T; labels=labels,family=family,workspace=workspace)
 end
 
@@ -78,23 +78,23 @@ function _batch_scratch(L, family, ::Type{T}) where {T}
 end
 
 """
-    _level_batch(rule, fallback, labels, k, T, threads) -> Vector{T}
+    _level_batch(rule, labels, k, T, threads) -> Vector{T}
 
 One symbol family over many labels at one level, tables built once and labels threaded. `rule(label)`
-builds the factorial rule; `fallback(label)` handles labels outside the level tables.
+builds the factorial rule.
 """
-function _level_batch(rule::R, fallback::F, labels, k::Int, ::Type{T}, threads;
-                      family = nothing) where {R,F,T}
+function _level_batch(rule::R, labels, k::Int, ::Type{T}, threads;
+                      family = nothing) where {R,T}
     L = _as_vector(labels)
     n = length(L)
     out = Vector{T}(undef, n)
     n == 0 && return out
-    _level_batch!(out, rule, fallback, L, k, T, threads, family, _batch_scratch(L, family, T))
+    _level_batch!(out, rule, L, k, T, threads, family, _batch_scratch(L, family, T))
     return out
 end
 
-function _level_batch!(out, rule::R, fallback::F, L, k::Int, ::Type{T}, threads, family,
-                       sc) where {R,F,T}
+function _level_batch!(out, rule::R, L, k::Int, ::Type{T}, threads, family,
+                       sc) where {R,T}
     n = length(L)
     tab = qint_tables(T, k)                     # built once here, read-only afterwards
     J = sc === nothing ? nothing : sc.J
@@ -108,7 +108,7 @@ function _level_batch!(out, rule::R, fallback::F, L, k::Int, ::Type{T}, threads,
                     out[i] = zero(T)
                     continue
                 end
-                out[i] = _value_prefetched(s,k,tab,()->fallback(l);
+                out[i] = _value_prefetched(s,k,tab;
                                           family=_rule_family(rule),workspace=work)
             end
         end
@@ -119,9 +119,7 @@ function _level_batch!(out, rule::R, fallback::F, L, k::Int, ::Type{T}, threads,
             if is_empty_sum(s) || s.zlo > k      # the level bound, read off the rule (see `_rule_admissible`)
                 out[i] = zero(T)
             else
-                out[i] = _value_prefetched(s,k,tab,
-                                           ()->_family_fallback(family,J[i],k,T);
-                                           labels=J[i],family=family,workspace=work)
+                out[i] = _value_prefetched(s,k,tab; labels=J[i],family=family,workspace=work)
             end
         end
     end
@@ -266,14 +264,6 @@ end
 
 _doubled_labels(L::DoubledLabels, family) = family === nothing ? nothing : L.J
 
-"The generic (DCR) route for one family member, from doubled labels."
-_family_fallback(::Val{:sixj}, J::NTuple{6,Int}, k::Int, ::Type{T}) where {T} =
-    project_discrete(q6j_dcr(J...), k, T)
-_family_fallback(::Val{:f}, J::NTuple{6,Int}, k::Int, ::Type{T}) where {T} =
-    project_discrete(fsymbol_dcr(J...), k, T)
-_family_fallback(::Val{:g}, J::NTuple{6,Int}, k::Int, ::Type{T}) where {T} =
-    project_discrete(gsymbol_dcr(J...), k, T)
-
 """
     _column_normalisation(family, Q, J, p) -> (xdim, cfac)
 
@@ -368,7 +358,7 @@ function _family_run!(out, done, J, run, family, Q, work)
 end
 
 "Values for a collection of labels over a collection of levels: rows are labels, columns are levels."
-function _level_grid(rule::R, fallback::F, labels, ks, ::Type{T}, threads; family = nothing) where {R,F,T}
+function _level_grid(rule::R, labels, ks, ::Type{T}, threads; family = nothing) where {R,T}
     L = _as_vector(labels); K = _as_vector(ks)
     out = Matrix{T}(undef, length(L), length(K))
     isempty(L) && return out
@@ -376,7 +366,7 @@ function _level_grid(rule::R, fallback::F, labels, ks, ::Type{T}, threads; famil
     col = Vector{T}(undef, length(L))
     for (j, k) in enumerate(K)
         kk = Int(k)
-        _level_batch!(col, rule, l -> fallback(l, kk), L, kk, T, threads, family, sc)
+        _level_batch!(col, rule, L, kk, T, threads, family, sc)
         @inbounds out[:, j] = col
     end
     return out
@@ -404,7 +394,7 @@ function _sweep_levels(symbol::S, args, ks; q, exact::Bool, T::Type, threads) wh
     return out
 end
 
-# ---- rules and fallbacks per symbol family ----
+# ---- rules per symbol family ----
 
 _pad3j(l) = length(l) == 5 ? (l[1], l[2], l[3], l[4], l[5], -l[4] - l[5]) : l
 
@@ -428,11 +418,6 @@ bound is `zlo ≤ k`; the 3j checks its one triangle.
 _rule_admissible(rule, s::FactorialSum, l, k) = s.zlo <= k
 _rule_admissible(::typeof(_rule_3j), s::FactorialSum, l, k) = _qδ(doubled(l[1],l[2],l[3])...,k)
 
-_fb_6j(l, k, ::Type{T}) where {T} = project_discrete(q6j_dcr(regge_canonical(doubled(l...)...)...), k, T)
-_fb_3j(l, k, ::Type{T}) where {T} = (p = _pad3j(l); project_discrete(q3j_dcr(doubled(p...)...), k, T))
-_fb_f(l, k, ::Type{T}) where {T} = project_discrete(fsymbol_dcr(doubled(l...)...), k, T)
-_fb_g(l, k, ::Type{T}) where {T} = project_discrete(gsymbol_dcr(canonical_spins(l...)...), k, T)
-
 """
     _normalize_labels(labels, nlab, fname) -> Vector of label tuples
 
@@ -450,20 +435,20 @@ function _normalize_labels(labels, nlab, fname)
 end
 
 """
-    _batched(rule, fallback, labels, nlab, fname; k, q, exact, T, threads)
+    _batched(rule, symbol, labels, nlab, fname; k, q, exact, T, threads)
 
 Shared implementation of the collection-argument methods: the fast level path when `k` is given and `q` is
 not, otherwise an element-by-element fall back to the generic single-symbol route.
 """
-function _batched(rule::R, fallback::F, symbol::S, labels, nlab, fname;
-                  k, q, exact::Bool, T::Type, threads) where {R,F,S}
+function _batched(rule::R, symbol::S, labels, nlab, fname;
+                  k, q, exact::Bool, T::Type, threads) where {R,S}
     q = _evaluation_q(k,q,exact)
     labels = _normalize_labels(labels, nlab, fname)
     fam = _family(symbol)
     if !isnothing(k) && isnothing(q) && !exact
         k isa AbstractVector &&
-            return _level_grid(rule, (l, kk) -> fallback(l, kk, T), labels, k, T, threads; family = fam)
-        return _level_batch(rule, l -> fallback(l, Int(k), T), labels, Int(k), T, threads; family = fam)
+            return _level_grid(rule, labels, k, T, threads; family = fam)
+        return _level_batch(rule, labels, Int(k), T, threads; family = fam)
     end
     _is_classical(q) && !exact && !(k isa AbstractVector) &&
         return _classical_batch(rule, labels, T, threads; family = fam)
@@ -490,13 +475,13 @@ function _batched(rule::R, fallback::F, symbol::S, labels, nlab, fname;
     return [symbol(l...; k = k, q = q, exact = exact, T = T) for l in L]
 end
 
-for (f, rule, fb, nlab) in ((:q6j, :_rule_6j, :_fb_6j, :((6,))),
-                            (:q3j_factorial, :_rule_3j, :_fb_3j, :((5, 6))),
-                            (:fsymbol, :_rule_f, :_fb_f, :((6,))),
-                            (:gsymbol, :_rule_g, :_fb_g, :((6,))))
+for (f, rule, nlab) in ((:q6j, :_rule_6j, :((6,))),
+                        (:q3j_factorial, :_rule_3j, :((5, 6))),
+                        (:fsymbol, :_rule_f, :((6,))),
+                        (:gsymbol, :_rule_g, :((6,))))
     @eval function $f(labels::Union{AbstractVector,Base.Generator,Base.Iterators.Filter,Tuple{Any,Vararg{Any}}};
                       k = nothing, q = nothing, exact::Bool = false, T::Type = Float64, threads = nothing)
-        _batched($rule, $fb, $f, labels, $nlab, $(string(f)); k = k, q = q, exact = exact, T = T, threads = threads)
+        _batched($rule, $f, labels, $nlab, $(string(f)); k = k, q = q, exact = exact, T = T, threads = threads)
     end
 end
 

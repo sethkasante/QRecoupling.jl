@@ -237,7 +237,7 @@ function _table_inverses(tab::AnalyticRuleTable)
 end
 
 # [n] = product_{d|n,d>=2} Psi_d. These balanced factors retain cyclotomic
-# square extraction without constructing any DCR ratios.
+# square extraction.
 function _table_balanced(tab::AnalyticRuleTable)
     length(tab.balanced) == length(tab.ints) && return tab.balanced
     N = length(tab.ints)

@@ -44,12 +44,12 @@ Supply either `k` or `q`. Do not combine an explicit target with competing keywo
 ```@example start
 s = q6j(Symbolic(), js...)              # the formula at every q
 using Nemo                             # optional backend for expansion
-g = x_form(s)                           # explicit rational x-form with ψ radicals
+g = xform(s)                           # explicit rational x-form with ψ radicals
 @assert isapprox(s(0.8), real_q) # hide
 (s, s(0.8), s(1), g)
 ```
 
-`Symbolic()` also applies to `qint`, `qfact`, `qbinomial`, dimensions, and F/G symbols. It writes the formula without carrying out the sum. Use `x_form(value)`, which needs Nemo, when you need an expanded expression.
+`Symbolic()` also applies to `qint`, `qfact`, `qbinomial`, dimensions, and F/G symbols. It writes the formula without carrying out the sum. Use `xform(value)`, which needs Nemo, when you need an expanded expression.
 
 `qcg` and `q3j` support every target, with their powers of q printed by `Symbolic()` and `Exact(k)`.
 

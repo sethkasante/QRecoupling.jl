@@ -128,8 +128,8 @@ evaluates it at any q that [`At`](@ref) takes, and `f(1)` gives the exact value 
 and are decided exactly without expanding anything. `float` and arithmetic need a value of q, and say so.
 
 `rmatrix` and `twist` keep `QPhase` objects, and `qeval(Symbolic(), rule)` writes a `FactorialSum` the same way. With Nemo,
-`x_form(f)` and `phi_form(f)` expand a form in x = q + 1/q or in q, and `x_form` also writes an `Exact(k)` form in
-x = 2cos(π/(k+2)). No evaluation keywords are accepted.
+`xform(f)` expands a form in x = q + 1/q, and writes an `Exact(k)` form in x = 2cos(π/(k+2)). No evaluation keywords are
+accepted.
 
 ```julia
 f = q6j(Symbolic(), 1, 1, 1, 1, 1, 1)       # ([5] − 1)/[4]!
@@ -165,13 +165,13 @@ function theta_value(::Symbolic,js::Vararg{Spin,3})
 end
 function rmatrix(::Symbolic,js::Vararg{Spin,3})
     Js = doubled(js...)
-    return _δ(Js...) ? rmatrix_mono(Js...) : zero(QPhase)
+    return _δ(Js...) ? _rmatrix_phase(Js...) : zero(QPhase)
 end
 qint(::Symbolic,n::Integer,p::Integer=1) = _product_symbolic(_qint_pairs(Int(n),Int(p)))
 qfact(::Symbolic,n::Integer,p::Integer=1) = _product_symbolic(_qfact_pairs(Int(n),Int(p)))
 qbinomial(::Symbolic,n::Integer,m::Integer) = _product_symbolic(_qbinomial_pairs(Int(n),Int(m)))
 qeval(::Symbolic,s::FactorialSum) = qform(_validate_rule(s))
-qeval(::Symbolic,s::Union{DCR,CyclotomicMonomial,QPhase}) = s
+qeval(::Symbolic,s::QPhase) = s
 
 for (f,nlab) in ((:q6j,:((6,))),(:q3j_factorial,:((5,6))),(:fsymbol,:((6,))),(:gsymbol,:((6,))))
     @eval function $f(t::Symbolic,labels::Union{AbstractVector,Base.Generator,Base.Iterators.Filter,Tuple{Any,Vararg{Any}}})

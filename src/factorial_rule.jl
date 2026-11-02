@@ -4,14 +4,14 @@
 #
 #  value = σ₀ · (√) Π_n [n]!^{c_n} · Σ_{z = zlo}^{zhi} (±1)^z Π_i [a_i z + b_i]!^{c_i}
 #
-#  A DCR expands such a sum into one cyclotomic monomial per term ratio. The rule itself is a few
+#  The rule is a few
 #  integers (16 prefactor and 8 term factorials for a 6j symbol, at any spin), and it answers the
 #  questions asked before evaluating anything:
 #
 #  * Valuations. The Φ_h exponent of [n]! is ⌊n/h⌋ (Legendre), so a term's valuation is
 #    V(z) = Σ_i c_i ⌊(a_i z + b_i)/h⌋, piecewise constant between points where an argument crosses a
 #    multiple of h. Poles, vanishing terms and contributing z-ranges follow without expanding.
-#    Convention (as for DCR projections): with the prefactor under a square root, the doubled valuation
+#    Convention: with the prefactor under a square root, the doubled valuation
 #    of a term is v_pre + 2V(z); negative is a pole, positive means the term vanishes.
 #  * Cancellation zeros. The contributing sum vanishes in ℚ(ζ) iff it vanishes at every Galois
 #    conjugate. Testing two conjugates modulo one prime screens for zero candidates;

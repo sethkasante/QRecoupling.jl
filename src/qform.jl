@@ -554,13 +554,19 @@ function _level_exponents(s::FactorialSum, level::Int, ::Type{R}) where {R}
     N = _rule_top(s, zs); h = level + 2
     raw = zeros(Int, N)
     lab, neg = _fold_table(N, h)
-    pre, prerat, ps, nhp = _fold_exponents(_prefactor_exponents(s, N), h, lab, neg, R)
+    rawpre = _prefactor_exponents(s, N)
+    pre, prerat, ps, nhp = _fold_exponents(rawpre, h, lab, neg, R)
     ps < 0 && throw(ArgumentError("the radicand is negative at level $level"))
+    # Without a root these exponents are doubled, which hides the sign of a label past h from the fold.
+    outer = 1
+    s.sqrt_pre || @inbounds for i in 2:N
+        neg[i] && isodd(rawpre[i] ÷ 2) && (outer = -outer)
+    end
     es = Vector{Vector{Int}}(undef, length(zs)); cs = Vector{R}(undef, length(zs))
     for (t, z) in enumerate(zs)
         e, r, ts, nh = _fold_exponents(_term_exponents!(raw, s, z), h, lab, neg, R)
         nhp + 2nh == 0 || throw(ArgumentError("the terms of this rule have different valuations at level $level"))
-        c = ts * r
+        c = outer * ts * r
         s.alternating && isodd(z) && (c = -c)
         es[t] = e; cs[t] = c
     end
@@ -909,25 +915,20 @@ end
 # ---- expansions, with Nemo ----
 
 """
-    x_form(f::QForm) -> XValue or LevelXValue
+    xform(f::QForm) -> XValue or LevelXValue
 
 An `Exact(k)` form written out in x = 2cos(π/(k+2)) as a [`LevelXValue`](@ref), `P(x)√R(x)` over one integer denominator.
 A `Symbolic()` form is the formula expanded in x = q + 1/q, as `√(∏_{e ∈ rad} ψ_e(x)) · num(x)/den(x)`. It needs Nemo, and may be expensive at large
-labels. [`phi_form`](@ref) carries the sum out in q and factors it, at 30 to 50 times the cost.
+labels.
 """
-function x_form(f::QForm)
-    f.weight == (0, 0) || throw(ArgumentError("`x_form` is not available for forms with powers of q"))
+function xform(f::QForm)
+    f.weight == (0, 0) || throw(ArgumentError("`xform` is not available for forms with powers of q"))
     f.k === nothing || return level_x_value(f)
     return generic_value(something(f.rule, EMPTY_FACTORIAL_SUM))
 end
-x_form(s::FactorialSum) = generic_value(_validate_rule(s))
+xform(s::FactorialSum) = generic_value(_validate_rule(s))
+@deprecate x_form(f) xform(f)
 
-function phi_form(f::QForm; kwargs...)
-    f.k === nothing || throw(ArgumentError("`phi_form` expands a generic form: use `Symbolic()`"))
-    f.weight == (0, 0) || throw(ArgumentError("`phi_form` is not available for forms with powers of q"))
-    return phi_form(_factorial_dcr(something(f.rule, EMPTY_FACTORIAL_SUM)); kwargs...)
-end
-splits_completely(f::QForm) = splits_completely(phi_form(f))
 qeval(::Symbolic, f::QForm) = f
 qeval(f::QForm; kwargs...) = f.k === nothing ? qeval(something(f.rule, EMPTY_FACTORIAL_SUM); kwargs...) :
     throw(ArgumentError("this form is at level $(f.k); use `numeric_value` or `float`"))

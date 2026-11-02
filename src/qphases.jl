@@ -96,27 +96,7 @@ function Base.show(io::IO, ::MIME"text/plain", p::QPhase)
     print(io,"  u² − x·u + 1 = 0, with u = q; fractional powers retain the q-phase branch")
 end
 
-# --- QPhase * CyclotomicMonomial ---
-function Base.:*(phase::QPhase, m::CyclotomicMonomial)
-    (iszero(phase) || iszero(m)) && return ZERO_MONOMIAL 
-    
-    if denominator(phase.q_pow) == 1
-        # It's a clean integer! Safe to absorb.
-        return CyclotomicMonomial(phase.sign * m.sign,
-            m.q_pow + Int(numerator(phase.q_pow)),
-            m.phi_exps,
-            m.max_d     
-        )
-    else
-        throw(ArgumentError("Cannot absorb fractional QPhase (q^$(phase.q_pow)) into a CyclotomicMonomial; retain the phase separately."))
-    end
-end
-
-Base.:*(m::CyclotomicMonomial, phase::QPhase) = phase * m
-Base.:/(m::CyclotomicMonomial, phase::QPhase) = m * inv(phase)
-
-
-# --- Helpers ---- 
+# --- Helpers ----
 
 """
     q_phase(pow; sign=1)
@@ -126,25 +106,14 @@ Creates a pure `QPhase` object with a fractional/rational power of q.
 q_phase(pow; sign=1) = QPhase(Int8(sign), Rational{Int}(pow))
 
 """
-    q_phi(d::Int, e::Int=1)
-
-Creates an isolated `CyclotomicMonomial` for the polynomial Φ_d(q^2)^e.
+The braiding phase (-1)^{j1+j2-j3} q^{j3(j3+1) - j1(j1+1) - j2(j2+1)} as an exact `QPhase`; the exponent can be a
+half-integer. Inputs are doubled spins (J = 2j).
 """
-q_phi(d::Int, e::Int=1) = CyclotomicMonomial(Int8(1), 0, [d => e], d)
-
-"""
-    q_mono(q_pow::Int; sign=1, phi_exps=Pair{Int,Int}[])
-
-Creates a full `CyclotomicMonomial` requiring a strict integer power for q.
-Automatically calculates `max_d` from the provided polynomial exponents.
-"""
-function q_mono(q_pow::Int; sign=1, phi_exps=Pair{Int,Int}[])
-    # Compute max_d 
-    d_max = isempty(phi_exps) ? 1 : maximum(first, phi_exps)
-    return CyclotomicMonomial(Int8(sign), q_pow, phi_exps, d_max)
+function _rmatrix_phase(J1::Int, J2::Int, J3::Int)
+    p = (J3*(J3+2) - J1*(J1+2) - J2*(J2+2)) ÷ 2
+    s = iseven((J1 + J2 - J3) ÷ 2) ? Int8(1) : Int8(-1)
+    return QPhase(s, p // 2)
 end
-
-
 
 # apis 
 

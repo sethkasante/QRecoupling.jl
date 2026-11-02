@@ -1,11 +1,4 @@
-
-# -------------------------------------------------------------
-#  -- Types and structures for DCR projections ---
-# Discrete, analytical, exact and classical (q→1) projections
-# -------------------------------------------------------------
-
-
-# --- Classical projection types (Rational BigInt) ---- 
+# The exact value at q = 1: a sign and a rational under a root.
 
 """
     ClassicalResult

@@ -81,7 +81,7 @@ end
     @test QR._cyclotomic_coeffs(12) == [1, 0, -1, 0, 1]
     @test QR._cyclotomic_coeffs(30) == [1, 1, 0, -1, -1, -1, 0, 1, 1]
     for n in (7, 16, 36, 105, 210)
-        p = Base.get_extension(QR, :QRecouplingNemoExt).phi_q(n)
+        p = Nemo.cyclotomic(n, Nemo.polynomial_ring(Nemo.ZZ, "q")[2])
         @test QR._cyclotomic_coeffs(n) == [Int(Nemo.coeff(p, i)) for i in 0:Nemo.degree(p)]
     end
 
@@ -140,12 +140,6 @@ end
     @test_throws MethodError q6j(1, 1, 1, 1, 1, 1; eager = true)
     @test_throws MethodError QR.xvalue(q6j(Symbolic(), 1, 1, 1, 1, 1, 1))
     @test !isdefined(QR, :CompositeExactResult) && !isdefined(QR, :project_exact)
-    m = QR.qint_mono(3)
-    @test_throws ArgumentError qeval(m; k = 10, exact = true)
-    @test_throws ArgumentError qeval(QR.q6j_dcr(2, 2, 2, 2, 2, 2); k = 10, exact = true)
-    # what stays: numerical and classical evaluation of the same objects
-    @test qeval(m; k = 10) ≈ qint(3; k = 10)
-    @test qeval(m; q = 1, exact = true) == 3
     @test string(Exact(10)) == "Exact(10)"
 end
 
@@ -601,9 +595,9 @@ end
     @test iszero(q6j(Exact(10), z...)) && string(q6j(Exact(10), z...)) == "0   (k = 10)" && iszero(q6j(Level(10), z...))
     @test !iszero(q6j(Symbolic(), z...)) && string(q6j(Symbolic(), z...)) == "([7] − [2]²)/([3][4][5])"
     # the expansions read a formula, and refuse what they cannot expand
-    @test x_form(q6j(Symbolic(), js...)) isa XValue && string(phi_form(q6j(Symbolic(), js...))) == string(phi_form(QR.q6j_dcr(2, 2, 2, 2, 2, 2)))
-    @test x_form(q6j(Exact(10), js...)) isa LevelXValue
-    @test_throws ArgumentError x_form(qcg(Symbolic(), 1//2, 1//2, 1//2, -1//2, 1))
+    @test xform(q6j(Symbolic(), js...)) isa XValue
+    @test xform(q6j(Exact(10), js...)) isa LevelXValue
+    @test_throws ArgumentError xform(qcg(Symbolic(), 1//2, 1//2, 1//2, -1//2, 1))
     @test_throws ArgumentError q6j(Symbolic(), js...; k = 3)
     @test_throws ArgumentError qcg(Symbolic(), 1//2, 1//2, 1//2, -1//2, 1; k = 3)
     @test_throws ArgumentError q6j(Exact(10), js...)(0.8)
@@ -820,8 +814,6 @@ end
     @test QR.rmatrix(Exact(10), 1//2, 1//2, 1) isa QPhase && QR.rmatrix(Symbolic(), 1//2, 1//2, 1) isa QPhase
     @test QR.twist(Exact(10), 1//2) isa QPhase
     # the expressions a level has no rule for
-    @test qeval(Exact(), QR.q6j_dcr(2, 2, 2, 2, 2, 2)) == 1//6
-    @test_throws ArgumentError qeval(Exact(10), QR.q6j_dcr(2, 2, 2, 2, 2, 2))
 
     # arithmetic at a level is exact, and it agrees with Nemo
     a = q6j(Exact(12), 1, 1, 1, 1, 1, 1); b = q6j(Exact(12), 3//2, 1, 3//2, 1, 3//2, 1)

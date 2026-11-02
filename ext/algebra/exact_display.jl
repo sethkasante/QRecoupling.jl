@@ -81,7 +81,7 @@ Longest polynomial the display writes out in full; past it the line shows the sh
 const XPOLY_MAX_DEGREE = 24
 const XPOLY_MAX_CHARS = 240
 
-"A polynomial too large to read, described instead: the same courtesy `phi_form` extends."
+"A polynomial too large to read, described instead."
 function _xpoly_summary(f)
     d = degree(f)
     cs = [Rational{BigInt}(coeff(f, i)) for i in 0:d]
@@ -260,7 +260,7 @@ end
 
 """
 Printing an `ExactX` shows its value in q-integers, cut short when it is long, and the radical when one exists
-and is short. `radical(v)`, `x_form(v)` and `v.x_value` give the other forms in full.
+and is short. `radical(v)`, `xform(v)` and `v.x_value` give the other forms in full.
 """
 function Base.show(io::IO, ::MIME"text/plain", v::ExactX)
     h = v.k + 2

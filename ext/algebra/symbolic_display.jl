@@ -1,7 +1,7 @@
 """
 Numerator, denominator and radical of the x-form, rendered — or described when too large to read.
 
-Lives here because `show(::XValue)` is the only thing that needs it; losing it is what made `x_form(v)`
+Lives here because `show(::XValue)` is the only thing that needs it; losing it is what made `xform(v)`
 throw `UndefVarError: _xvalue_str` rather than print.
 """
 function _xvalue_str(xv::XValue)

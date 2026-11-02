@@ -3,9 +3,6 @@ module QRecouplingNemoExt
 using Nemo, LRUCache
 import QRecoupling
 import QRecoupling: _qfact_exactx, psi_exponents, _halve_exponents, At,
-    CycloBuffer,
-    CyclotomicMonomial,
-    DCR,
     Exact,
     ExactX,
     ExactXSum,
@@ -37,9 +34,7 @@ import QRecoupling: _qfact_exactx, psi_exponents, _halve_exponents, At,
     has_radical_form,
     is_empty_sum,
     level_admissible,
-    mul!,
     numeric_value,
-    phi_form,
     prove_identity,
     q3j_factorial,
     q6j,
@@ -49,20 +44,16 @@ import QRecoupling: _qfact_exactx, psi_exponents, _halve_exponents, At,
     radical_form,
     radical_levels,
     radicand,
-    reset!,
     sixj_sum,
-    snapshot,
-    splits_completely,
     symbol_of,
     symbol_rule,
     to_subscript,
     to_superscript,
-    x_form,
+    xform,
     xpolynomial,
     xvalue
 
 include("algebra/generic_x.jl")
-include("algebra/phi_form.jl")
 include("algebra/exact_x.jl")
 include("algebra/exact_radicals.jl")
 include("algebra/exact_display.jl")

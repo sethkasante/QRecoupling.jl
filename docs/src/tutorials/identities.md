@@ -62,8 +62,8 @@ With Nemo loaded, the same diagonal orthogonality relation can be compared in ex
 ```@example identities
 lhs_x = let total = zero(XValue)
     for x in 0:2
-        v = x_form(q6j(Symbolic(),1,1,x,1,1,1))
-        weight = x_form(qdim(Symbolic(),1)) * x_form(qdim(Symbolic(),x))
+        v = xform(q6j(Symbolic(),1,1,x,1,1,1))
+        weight = xform(qdim(Symbolic(),1)) * xform(qdim(Symbolic(),x))
         total = total + weight * v^2
     end
     total

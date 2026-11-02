@@ -7,19 +7,11 @@ using PrecompileTools: @setup_workload, @compile_workload
 const Spin = Union{Integer, Rational, AbstractFloat}
 
 # --- Internal Includes ---
-include("types_cyclotomic.jl")
-include("cyclotomic_values.jl")
-include("types_projection.jl")
+include("helpers.jl")
+include("classical_result.jl")
 include("admissibility.jl")
 include("symmetries.jl")
-
-include("generic_series_dcr.jl")
-include("recoupling_symbols_dcr.jl") # recoupling symbols and tqft invariants
 include("qphases.jl")
-
-include("projection_classical.jl")
-include("projection_discrete.jl")
-include("projection_analytic.jl")
 
 include("modular_arithmetic.jl")
 include("factorial_rule.jl")
@@ -62,7 +54,7 @@ export qint, qfact, qbinomial, qseries, qeval
 export Level, Exact, At, Classical, Symbolic
 
 # exact values in x = q + 1/q: generic q, and identities proved for every level at once
-export prove_identity, x_form, XValue, LevelXValue, phi_form
+export prove_identity, xform, XValue, LevelXValue
 export RadExpr, NoRadical, radical, numeric_value
 export QForm
 

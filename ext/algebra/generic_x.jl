@@ -228,7 +228,7 @@ end
 """
     xvalue(rad, num, den = 1) -> XValue
 
-The `XValue` constructor — not to be confused with [`x_form`](@ref), which expands a symbolic value
+The `XValue` constructor — not to be confused with [`xform`](@ref), which expands a symbolic value
 into one.
 
 Normalising constructor: cancels `gcd(num, den)`, makes `den` primitive with positive leading coefficient,
