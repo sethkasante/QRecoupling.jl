@@ -128,7 +128,8 @@ evaluates it at any q that [`At`](@ref) takes, and `f(1)` gives the exact value 
 and are decided exactly without expanding anything. `float` and arithmetic need a value of q, and say so.
 
 `rmatrix` and `twist` keep `QPhase` objects, and `qeval(Symbolic(), rule)` writes a `FactorialSum` the same way. With Nemo,
-`x_form(f)` and `phi_form(f)` expand a form in x = q + 1/q or in q. No evaluation keywords are accepted.
+`x_form(f)` and `phi_form(f)` expand a form in x = q + 1/q or in q, and `x_form` also writes an `Exact(k)` form in
+x = 2cos(π/(k+2)). No evaluation keywords are accepted.
 
 ```julia
 f = q6j(Symbolic(), 1, 1, 1, 1, 1, 1)       # ([5] − 1)/[4]!

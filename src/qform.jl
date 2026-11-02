@@ -909,14 +909,15 @@ end
 # ---- expansions, with Nemo ----
 
 """
-    x_form(f::QForm) -> XValue
+    x_form(f::QForm) -> XValue or LevelXValue
 
-The formula expanded in x = q + 1/q, as `√(∏_{e ∈ rad} ψ_e(x)) · num(x)/den(x)`. It needs Nemo, and may be expensive at large
+An `Exact(k)` form written out in x = 2cos(π/(k+2)) as a [`LevelXValue`](@ref), `P(x)√R(x)` over one integer denominator.
+A `Symbolic()` form is the formula expanded in x = q + 1/q, as `√(∏_{e ∈ rad} ψ_e(x)) · num(x)/den(x)`. It needs Nemo, and may be expensive at large
 labels. [`phi_form`](@ref) carries the sum out in q and factors it, at 30 to 50 times the cost.
 """
 function x_form(f::QForm)
-    f.k === nothing || throw(ArgumentError("`x_form` expands a generic form: use `Symbolic()`"))
     f.weight == (0, 0) || throw(ArgumentError("`x_form` is not available for forms with powers of q"))
+    f.k === nothing || return level_x_value(f)
     return generic_value(something(f.rule, EMPTY_FACTORIAL_SUM))
 end
 x_form(s::FactorialSum) = generic_value(_validate_rule(s))

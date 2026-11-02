@@ -602,7 +602,7 @@ end
     @test !iszero(q6j(Symbolic(), z...)) && string(q6j(Symbolic(), z...)) == "([7] − [2]²)/([3][4][5])"
     # the expansions read a formula, and refuse what they cannot expand
     @test x_form(q6j(Symbolic(), js...)) isa XValue && string(phi_form(q6j(Symbolic(), js...))) == string(phi_form(QR.q6j_dcr(2, 2, 2, 2, 2, 2)))
-    @test_throws ArgumentError x_form(q6j(Exact(10), js...))
+    @test x_form(q6j(Exact(10), js...)) isa LevelXValue
     @test_throws ArgumentError x_form(qcg(Symbolic(), 1//2, 1//2, 1//2, -1//2, 1))
     @test_throws ArgumentError q6j(Symbolic(), js...; k = 3)
     @test_throws ArgumentError qcg(Symbolic(), 1//2, 1//2, 1//2, -1//2, 1; k = 3)

@@ -62,7 +62,7 @@ export qint, qfact, qbinomial, qseries, qeval
 export Level, Exact, At, Classical, Symbolic
 
 # exact values in x = q + 1/q: generic q, and identities proved for every level at once
-export prove_identity, x_form, XValue, phi_form
+export prove_identity, x_form, XValue, LevelXValue, phi_form
 export RadExpr, NoRadical, radical, numeric_value
 export QForm
 

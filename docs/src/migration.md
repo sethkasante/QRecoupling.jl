@@ -11,7 +11,7 @@
 | `q6j(Symbolic(), js...)` was a `SymbolicValue` | A form, the formula at every q, with no value of its own. `f(q)` evaluates it, `f(1)` gives the exact value at q = 1, and `Float64(f)` and arithmetic raise an error. `x_form` and `phi_form` accept it |
 | `q6j(Exact(k), js...)` was an `ExactX`, and needed Nemo | A form at the level, with no backend. `==`, `iszero` and arithmetic are exact |
 | `q3j` and `qcg` had no `Exact(k)` or `Symbolic()` | Both write them with their powers of q |
-| `v.x_value`, `v.rad` | `QRecoupling.xpolynomial(v)`, `QRecoupling.radicand(v)`, `radical(v)`, with Nemo |
+| `v.x_value`, `v.rad` | `x_form(v)` to print it, `QRecoupling.xpolynomial(v)`, `QRecoupling.radicand(v)`, `radical(v)`, with Nemo |
 | `ExactXSum(k)` to accumulate a sum | `sum`, or start from `zero(v)`. `ExactX` and `ExactXSum` are no longer exported; `QRecoupling.exact_x` still returns them, with Nemo |
 | `isempty(residual)` | `iszero(residual)`, or `==` |
 

@@ -113,7 +113,13 @@ Here “radical” means **nested square roots**, not arbitrary nth roots. The d
 
 ## Polynomials in x
 
-With Nemo loaded, `QRecoupling.xpolynomial(v)` and `QRecoupling.radicand(v)` give a level value as `P(x)√R(x)` with `x = 2cos(π/(k+2))`, and `x_form` expands a generic expression in `x = q + q⁻¹`. Both carry out the sum, which grows quickly with the spins and is not needed to read a value or to decide one.
+With Nemo loaded, `x_form` writes a level value as `P(x)√R(x)` with `x = 2cos(π/(k+2))`, over one integer denominator. `QRecoupling.xpolynomial` and `QRecoupling.radicand` give the coefficients as vectors, lowest degree first. The polynomials are reduced below the degree of the number field, so they hold only at that level, and a long one prints as a summary. Expanding costs more as the level grows.
+
+```@example exact_forms
+x_form(q6j(Exact(10), 1, 1, 1, 1, 1, 1))
+```
+
+On a generic form, `x_form` expands the expression in `x = q + q⁻¹`. Both carry out the sum, which grows quickly with the spins and is not needed to read a value or to decide one.
 
 ```@example exact_forms
 s = q6j(Symbolic(), 1, 1, 1, 1, 1, 1)
@@ -130,6 +136,7 @@ Generic square roots specify an algebraic expression. To evaluate with the packa
 QForm
 x_form
 XValue
+LevelXValue
 QRecoupling.ExactX
 QRecoupling.ExactXSum
 radical

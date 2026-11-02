@@ -17,7 +17,9 @@ import QRecoupling: _qfact_exactx, psi_exponents, _halve_exponents, At,
     QForm,
     RadExpr,
     Symbolic,
+    LevelXValue,
     XValue,
+    level_x_value,
     _arg,
     _collapse,
     _factor_step,
@@ -79,5 +81,14 @@ radical_form(f::QForm; kwargs...) = radical_form(_expanded(f); kwargs...)
 has_radical_form(f::QForm) = has_radical_form(_expanded(f))
 xpolynomial(f::QForm) = xpolynomial(_expanded(f))
 radicand(f::QForm) = radicand(_expanded(f))
+
+level_x_value(f::QForm) = LevelXValue(_expanded(f))
+xpolynomial(v::LevelXValue) = xpolynomial(v.value)
+radicand(v::LevelXValue) = radicand(v.value)
+numeric_value(v::LevelXValue; kwargs...) = numeric_value(v.value; kwargs...)
+Base.float(v::LevelXValue) = float(v.value)
+Base.iszero(v::LevelXValue) = iszero(v.value.p)
+Base.:(==)(a::LevelXValue, b::LevelXValue) = a.value == b.value
+Base.hash(v::LevelXValue, h::UInt) = hash(v.value, hash(:LevelXValue, h))
 
 end

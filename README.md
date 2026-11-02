@@ -34,6 +34,7 @@ f(0.8), f(1)                    # (0.1704…, 1//6)
 
 using Nemo                      # the optional backend
 radical(q6j(Exact(10), js...))  # (2√3 − 3)/3
+x_form(q6j(Exact(10), js...))   # (2x² − 7)/3  at x = 2cos(π/12)
 x_form(q6j(Symbolic(), js...))  # (x² − 3) / (x⁴ − 3x² + 2)
 ```
 

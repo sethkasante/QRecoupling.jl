@@ -138,6 +138,37 @@ const ONES = (1, 1, 1, 1, 1, 1)
         @test all(==(want), got)
         @test length(QRecoupling._ratio_slots()) >= Threads.nthreads()
     end
+    @testset "x_form at a level" begin
+        v = x_form(q6j(Exact(10), 1, 1, 1, 1, 1, 1))
+        @test v isa LevelXValue && string(v) == "LevelXValue(k = 10, (2x² − 7)/3)"
+        @test occursin("(2x² − 7)/3", sprint(show, MIME"text/plain"(), v)) && occursin("2cos(π/12)", sprint(show, MIME"text/plain"(), v))
+        @test string(x_form(q6j(Exact(3), 1, 1, 1, 1, 1, 1))) == "LevelXValue(k = 3, x − 2)"
+        @test v == x_form(q6j(Exact(10), 1, 1, 1, 1, 1, 1)) && hash(v) == hash(x_form(q6j(Exact(10), 1, 1, 1, 1, 1, 1)))
+        @test iszero(x_form(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2)))
+        @test string(x_form(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2))) == "LevelXValue(k = 10, 0)"
+        @test_throws ArgumentError x_form(q3j(Exact(5), 1, 1, 1, 1, -1, 0))
+        # the printed polynomials are the value: read them back at x = 2cos(π/h), with and without a root
+        rooted = 0
+        for (f, l) in ((q6j, (1, 1, 1, 1, 1, 1)), (q6j, (2, 2, 2, 2, 2, 2)), (q6j, (3//2, 3//2, 1, 1, 1, 1)), (fsymbol, (1, 1, 1, 1, 1, 1)),
+                       (fsymbol, (1, 1, 1, 1, 1, 2)), (gsymbol, (1, 1, 1, 1, 1, 1)), (fsymbol, (3//2, 3//2, 1, 3//2, 3//2, 2))), k in 4:3:40
+            form = f(Exact(k), l...)
+            iszero(form) && continue
+            x = x_form(form)
+            setprecision(BigFloat, 256) do
+                x0 = 2cospi(inv(big(k + 2)))
+                P, R = QRecoupling.xpolynomial(x), QRecoupling.radicand(x)
+                rooted += length(R) > 1
+                @test isapprox(evalpoly(x0, P) * sqrt(evalpoly(x0, R)), numeric_value(form; bits = 256); rtol = big(2.0)^-200)
+            end
+            @test occursin("k = $k", string(x)) && float(x) ≈ float(form)
+        end
+        @test rooted > 0
+    end
+    @testset "the message when the Nemo backend is missing" begin
+        @test occursin("Install Nemo", QRecoupling._algebra_hint(:x_form, false, true))
+        @test occursin("`include`", QRecoupling._algebra_hint(:x_form, true, false))
+        @test occursin("Restart Julia", QRecoupling._algebra_hint(:x_form, true, true))
+    end
     include("qcg_tests.jl")
     include("regge_tests.jl")
     include("release_tests.jl")
