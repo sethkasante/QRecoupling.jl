@@ -5,7 +5,7 @@
 For one coefficient, use a scalar symbol call. For many coefficients at one target, use a batch. For a whole fusion transformation, use `fmatrix`: its recurrence shares work across entries. Request exact or generic symbolic algebra when that algebra is needed; it is not a prerequisite for numerical evaluation.
 
 ```@example perf
-using QRecoupling, Nemo
+using QRecoupling
 work = EvaluationWorkspace()
 v = q6j(10,10,10,10,10,10; k=50, workspace=work)
 again = q6j(10,10,10,10,10,10; k=50, workspace=work)
@@ -17,6 +17,24 @@ q6j(labels; k=30, threads=1)
 One workspace can be reused sequentially. Do not share it across concurrent tasks. For repeated `qcg` or `q3j` calls, it also retains the CG recurrence coefficients for the current `(j1,j2,m1+m2)` sector and reuses scratch arrays. Changing the target or sector refreshes the coefficients automatically. For an entire row or sector, prefer `qcg_row` or `qcg_matrix` so that work is shared across entries. Batches own worker scratch and reuse tables. On Julia before 1.12, batches run serially because BigFloat precision scopes are shared. Exact batches also remain serial. Avoid clearing caches while evaluations are running.
 
 Warm calls may avoid particular buffer allocations; this is **not** a package-wide zero-allocation guarantee. Table construction, BigFloat fallbacks, exact arithmetic, returned arrays, and symbolic expansion all allocate. Report both cold and warmed timings when benchmarking, and include labels, target, precision, Julia version, and thread count.
+
+## Sweeping levels or deformation parameters
+
+Repeated calls at one target reuse tables. A sweep that changes `k` or `q` at every point must build new numerical data, even when it reuses a workspace. Classical spin sweeps can reuse the same growing factorial tables, so they are a different workload.
+
+Large Float64 level tables now use reflection and addition formulas with a small set of wide-precision seeds, rather than a wide number for every entry. Positive-real-q recurrence tables use the same approach within their exponent range. Small tables and inputs outside that range retain wide-precision construction. This reduces setup cost without removing compensated passes or higher-precision fallbacks.
+
+```@example perf
+function scaled_sweep(n)
+    work = EvaluationWorkspace()
+    [i^1.5 * q6j(Level(10i), (i .* (3,3,3,2,2,2))...; workspace=work)
+     for i in 1:n]
+end
+samples = scaled_sweep(20)
+@assert all(isfinite, samples) # hide
+```
+
+For real q, replace `Level(10i)` with `At(exp(-pi/(10i)))`. Compute the samples before plotting so that evaluation time is separate from plotting and editor communication. A workspace reuses scratch; it does not make tables for different targets interchangeable. Cache limits bound retention within individual caches, not the total process memory.
 
 ## Precision and supplied inputs
 
@@ -42,8 +60,8 @@ When generic-q evaluation needs an exact zero decision, it first evaluates the s
 ## Current limits to account for
 
 - **F-matrix precision:** Float64/ComplexF64 matrices use the shared column recurrence. BigFloat inputs or `T=BigFloat`/`T=Complex{BigFloat}` use scalar `fsymbol` evaluations to preserve the requested precision. This higher-precision path costs more per entry.
-- **Exact values:** an `Exact(k)` or `Symbolic()` form costs a fraction of a microsecond until it is printed, which writes it once in microseconds to a fraction of a millisecond. `==` and `iszero` read the rule, and return in microseconds when a value differs. Proving that different forms are equal costs more, about a second for a 41-term sum at every q; see [Identity checks](tutorials/identities.md). Above h = 1100 a form reads folded, without the relations among the q-integers, and its value is unaffected. Numerical conversion of a sum from level arithmetic does not yet adapt precision to cancellation between its terms.
-- **Tiny values at real q:** away from |q| = 1 values shrink quickly with the spins, and one below `floatmin(Float64)` rounds to `0.0`, which is not an exact zero. At q = 0.8 that happens for about 8% of random labels with spins up to 100, and about half with spins up to 300. `T = BigFloat` gives the value. The same goes for `tetrahedron` at very large spins at a level. A zero of a 6j symbol at a level is decided exactly by `iszero` on `Exact(k)`.
+- **Exact values:** construction retains a compact rule. First display materializes its quantum-integer presentation, which can cost substantially more than construction even when the printed output is truncated. `==` and `iszero` can reject candidates using modular residues; proving equality or zero may require more work. Above h = 1100, display omits distribution-relation reduction while preserving the value. Arithmetic on unweighted level forms uses the native exact engine; weighted `qcg` and `q3j` forms do not yet support it. Numerical conversion of sums from level arithmetic adapts precision to cancellation. See [Exact forms](tutorials/exact_forms.md) and [Identity checks](tutorials/identities.md).
+- **Tiny values at real q:** away from |q| = 1, coefficients can shrink rapidly with the spins. Subnormal values can still be represented below `floatmin(Float64)`; sufficiently small nonzero values round to `0.0`. Use `T = BigFloat` when the floating-point exponent range is insufficient. This can also affect `tetrahedron` at large spins. A rounded numerical zero is not an exact-zero certificate; use the exact form's `iszero` test.
 - **Zero queries:** `iszero_at` uses structural proofs and modular filters, then confirms unresolved candidates exactly. Exact confirmation can cost more at high degree and runs serially after threaded screening. Workers use independently writable Boolean storage. The `:cancels` entries of `level_spectrum` are screening results unless you pass `prove = true`.
 - **Custom series at singular targets:** cancellation of poles between separate summands is not generally regularized. Keep denominator factorials away from roots when possible.
 - **Caches:** modular sine tables distinguish numeric type and precision. Broader concurrent cache-clearing workflows are not supported; clear caches between evaluations.

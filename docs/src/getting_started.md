@@ -9,7 +9,7 @@ The symmetric q-integer is `[n] = (qⁿ − q⁻ⁿ)/(q − q⁻¹)` for positiv
 The product helper `qint(0)` uses the package's convention **1**, not the usual algebraic q-integer zero. `qfact(0)` is also 1. Take this convention into account in custom formulas.
 
 ```@example start
-using QRecoupling, Nemo
+using QRecoupling
 j = 1//2
 v = q3j(j, j, 0, j, -j, 0)
 @assert isapprox(abs(v), 1/sqrt(2)) # hide
@@ -43,6 +43,7 @@ Supply either `k` or `q`. Do not combine an explicit target with competing keywo
 
 ```@example start
 s = q6j(Symbolic(), js...)              # the formula at every q
+using Nemo                             # optional backend for expansion
 g = x_form(s)                           # explicit rational x-form with ψ radicals
 @assert isapprox(s(0.8), real_q) # hide
 (s, s(0.8), s(1), g)

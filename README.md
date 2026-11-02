@@ -8,7 +8,7 @@
 
 **Quantum recoupling, from fast numerical coefficients to readable exact formulas.**
 
-Evaluate classical and quantum Clebsch–Gordan coefficients, 3j/6j symbols, fusion and braiding data, and finite q-factorial series in Julia. Use the same labels at `q = 1`, at a root-of-unity, or at a real or complex q. Build exact level values and generic formulas in `x = q + q⁻¹`.
+Evaluate classical and quantum Clebsch–Gordan coefficients, 3j/6j symbols, fusion and braiding data, and finite q-factorial series in Julia. Use the same labels at `q = 1`, at a root-of-unity, or at a real or complex q. Retain exact level values and generic formulas in quantum integers, with optional polynomial and radical views.
 
 `QRecoupling` provides local building blocks for angular momentum, spin networks, quantum topology, and fusion-based tensor networks. It does not contract full networks or assemble state sums automatically.
 
@@ -39,24 +39,26 @@ x_form(q6j(Symbolic(), js...))  # (x² − 3) / (x⁴ − 3x² + 2)
 
 The spin labels are physical spins: use `1//2` for a half-integer (also accepts `0.5`). The same target interface applies to Clebsch–Gordan coefficients, 3j, F/G symbols, dimensions, and q-integer/factorial/binomial products.
 
-`qcg` and `q3j` carry powers of q, which `Symbolic()` and `Exact(k)` print: `qcg(Symbolic(), 1//2, 1//2, 1//2, -1//2, 1)` is `q^(−1/2) √(1/[2])`. They have no `Symbolic()` form.
+`qcg` and `q3j` carry powers of q, which `Symbolic()` and `Exact(k)` print: `qcg(Symbolic(), 1//2, 1//2, 1//2, -1//2, 1)` is `q^(−1/2) √(1/[2])`. Their zero and equality tests are exact; arithmetic on these weighted level forms is not yet supported.
 
 ## What makes it useful?
 
 - **Direct numerical kernels.** Factorial rules supply scaled ratios and adaptive precision without constructing or expanding a symbolic expression first.
 - **Related coefficients share work.** Batches reuse tables; F matrices share recurrence coefficients across columns. Reusable workspaces reduce repeated scratch allocation.
-- **Exact algebra in a readable basis.** Nemo-backed level values use the minimal polynomial of `2cos(π/(k+2))`; generic expressions use x with ψ factors under radicals.
+- **Exact decisions without expansion.** Compact formulas support exact zero and equality tests without Nemo. Unweighted level forms also support exact arithmetic; polynomial expansion and nested radicals use the optional backend.
 - **Explicit control of symbolic cost.** Large expressions stay deferred. Expansion and radical extraction are requests, not hidden requirements for computing a number.
 
 ```julia
 using LinearAlgebra
-F, e, f = fmatrix(1, 1, 1, 1; k=6)
+F, e, f = fmatrix(Level(6), 1, 1, 1, 1)
 @assert transpose(F) * F ≈ I
 
 labels = [(j,j,j,j,j,j) for j in 1:5]
 values = q6j(Level(20), labels)
 grid = q6j(Level(15:20), labels)  # labels × levels
 ```
+
+For parameter sweeps, each new level or q needs new tables. Large Float64 level and eligible positive-real-q recurrence tables use addition formulas with a small set of wide-precision seeds, reducing setup work. Reuse an `EvaluationWorkspace()` for scratch storage; see [Accuracy and performance](https://sethkasante.github.io/QRecoupling.jl/stable/performance/) for cold versus warm workloads.
 
 At generic complex q, F matrices are complex orthogonal, not generally unitary: use `transpose(F)`, not the adjoint, in the algebraic identity.
 
@@ -66,7 +68,7 @@ At generic complex q, F matrices are complex orthogonal, not generally unitary: 
 qcg(1//2, 1//2, 1//2, -1//2, 1, 0)            # 1/√2
 qcg((1//2, 1//2), (1//2, -1//2), (1, 0))      # the same, as (j, m) pairs
 qcg(At(0.8), 1//2, 1//2, 1//2, -1//2, 1, 0)   # quantum value at q = 0.8
-C, rows, cols = qcg_matrix(1, 1; q=0.8)       # whole coupling matrix, by recurrence
+C, rows, cols = qcg_matrix(At(0.8), 1, 1)       # whole coupling matrix, by recurrence
 @assert C * transpose(C) ≈ I
 ```
 

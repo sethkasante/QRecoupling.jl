@@ -30,8 +30,9 @@ A generic form, from `Symbolic()`, is a function of q and has no value of its ow
 takes, and `f(1)` gives its value at q = 1 exactly. `==` and `iszero` mean at every q, decided exactly, whether the other
 side is a form or a number. `float`, `numeric_value` and arithmetic need a value of q, and say so.
 
-A form at a level is one number, complex when it carries powers of q. `float` and `numeric_value` give it, and
-`==`, `iszero` and arithmetic are exact.
+A form at a level is one number, complex when it carries powers of q. `float` and `numeric_value` approximate it;
+`==` and `iszero` decide equality and vanishing exactly. Unweighted level forms support exact arithmetic.
+Arithmetic on forms carrying powers of q is not yet supported.
 
 A form holds its rule, which is short and is all that deciding and evaluating read. What it prints is written from the
 rule the first time it is shown, so a form costs no more than its rule until then.

@@ -15,7 +15,7 @@ Zero and equal mean different things on the two sides. For `Exact(k)` they mean 
 `Exact()` is a sign and a rational under a root, with its own arithmetic.
 
 ```@example exact_forms
-using QRecoupling, Nemo
+using QRecoupling
 r = q3j(Exact(), 1//2, 1//2, 0, 1//2, -1//2, 0)
 @assert r^2 == 1//2 && q6j(Exact(), 1, 1, 1, 1, 1, 1) == 1//6 # hide
 (q6j(Exact(), 1, 1, 1, 1, 1, 1), r, r^2)
@@ -89,6 +89,7 @@ qcg(Exact(9), 3//2, 1//2, 1, 0, 3//2, 1//2)
 With Nemo loaded, `radical` rewrites a level value in nested square roots.
 
 ```@example exact_forms
+using Nemo  # optional backend for nested radicals
 radical(v)
 ```
 

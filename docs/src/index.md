@@ -2,18 +2,16 @@
 
 **Quantum recoupling, from fast numerical coefficients to readable exact formulas.**
 
-QRecoupling evaluates classical and quantum Clebsch–Gordan coefficients, 3j and 6j symbols, fusion and braiding data, and finite sums of symmetric q-factorials. Use the same labels at the classical limit, at a root of unity, or at a real or complex deformation parameter. Request exact level values in `x = q + q⁻¹`, or retain a factorial rule for symbolic exploration.
+QRecoupling evaluates classical and quantum Clebsch–Gordan coefficients, 3j and 6j symbols, fusion and braiding data, and finite sums of symmetric q-factorials. Use the same labels at the classical limit, at a root of unity, or at a real or complex deformation parameter. Retain exact level values or generic formulas in quantum integers, and request polynomial or radical views when needed.
 
 The package supplies local coefficients and change-of-basis matrices for angular-momentum calculations, spin networks, Turaev–Viro models, and fusion-based tensor networks. It does not assemble a triangulation or contract a complete tensor network for you.
 
-Nemo is optional. Numerical calculations, classical exact values, and unexpanded expressions
-work without it. The exact level and polynomial examples below require `using Nemo`
-after installing Nemo in your environment.
+Nemo is optional. Numerical calculations, exact level values, zero and equality tests, and unweighted level arithmetic work without it. Install and load Nemo for nested radicals and expanded polynomials.
 
 ## Start with one symbol
 
 ```@example home
-using QRecoupling, Nemo
+using QRecoupling
 classical_value = q6j(1, 1, 1, 1, 1, 1)
 level = q6j(Level(10), 1, 1, 1, 1, 1, 1)
 exact = q6j(Exact(10), 1, 1, 1, 1, 1, 1)
@@ -22,9 +20,10 @@ exact = q6j(Exact(10), 1, 1, 1, 1, 1, 1)
 exact
 ```
 
-An exact value is written in quantum integers `[n]`, from the formula itself. `radical(exact)` gives `(2√3 − 3)/3`.
+An exact value is written in quantum integers `[n]`, from the formula itself. With Nemo loaded, `radical(exact)` gives `(2√3 − 3)/3`.
 
 ```@example home
+using Nemo  # optional polynomial backend
 symbolic = q6j(Symbolic(), 1, 1, 1, 1, 1, 1)
 x_form(symbolic)
 ```
@@ -41,16 +40,16 @@ x_form(symbolic)
 | Exact level value | `q6j(Exact(k), js...)` | Quantum integers, with zeros and equality proved |
 | Real or complex deformation | `q6j(At(q), js...)` | Adaptive numerical evaluation |
 | Formula at every q | `q6j(Symbolic(), js...)` | Quantum integers; `f(q)` evaluates it, and `x_form` expands it with Nemo |
-| Whole fusion transformation | `fmatrix(a,b,c,d; k=k)` | Matrix and its row/column labels |
+| Whole fusion transformation | `fmatrix(Level(k), a,b,c,d)` | Matrix and its row/column labels |
 | Finite factorial series | `FactorialSum(...)`, `qeval(...)` | The same evaluation targets |
 
-Quantum CG and 3j coefficients support all of these. Their formulas carry powers of q.
+Quantum CG and 3j coefficients support numerical, exact and symbolic targets. Their formulas carry powers of q; zero and equality tests are supported, but arithmetic on their weighted level forms is not yet available.
 
 ## Why use it?
 
 - **One mathematical rule, several evaluations.** Compact factorial rules feed direct numerical and exact calculations, avoiding large symbolic expansions on the numerical path.
 - **Shared work for related symbols.** Batches reuse tables; F matrices share recurrence coefficients across columns instead of evaluating every entry as an independent sum.
-- **Exact formulas you can inspect.** Generic expressions use x and ψ radical factors; level values reduce modulo the minimal polynomial of `2cos(π/(k+2))` using Nemo.
+- **Exact formulas you can inspect.** Level and generic forms retain their factorial rules and display quantum integers. Zero and equality decisions do not require polynomial expansion.
 - **Control over expensive work.** Reuse workspaces, choose numerical precision, and request symbolic expansion or radical extraction explicitly.
 
 See [Accuracy and performance](performance.md) for the numerical contracts and current limitations, including the distinction between approximate checks and exact proofs.
@@ -63,7 +62,7 @@ Julia 1.10 or later is supported. In Julia's package manager:
 pkg> add QRecoupling
 ```
 
-To update an existing installation to the latest release, use `pkg> up QRecoupling`, and check the installed version with `pkg> status QRecoupling`. This documentation describes the latest release; see [Migration](migration.md) for changes between versions.
+To update an existing installation to the latest release, use `pkg> up QRecoupling`, and check the installed version with `pkg> status QRecoupling`. The stable documentation follows the latest release; the development documentation follows `main`. See [Migration](migration.md) for changes between versions.
 
 - [Getting started](getting_started.md): labels, targets, and first calculations.
 - [Recoupling symbols](tqft.md): normalization, dimensions, and phases.

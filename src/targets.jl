@@ -37,8 +37,9 @@ Level(k; T::Type = Float64) = Level{T,typeof(k)}(k)
 
 One number, exactly. `Exact()` is the value at q = 1, the same as `Classical(exact = true)`: a sign and a rational under a
 root, with its own arithmetic. `Exact(k)` is the value at level `k` as a [`QForm`](@ref) in quantum integers, folded and
-simplified, with its zeros found and proved. It needs no backend: `iszero`, `==`, `float`, `*`, `+` and `^` are exact, and
-[`radical`](@ref), which needs Nemo, rewrites it in nested square roots where they exist.
+simplified for display. It needs no backend for exact `iszero` and `==` decisions or numerical conversion with `float`.
+Unweighted level forms support exact arithmetic; weighted `qcg` and `q3j` forms do not yet support it.
+[`radical`](@ref), which needs Nemo, rewrites supported values in nested square roots where they exist.
 
 Numbers come from [`Level`](@ref) and [`At`](@ref), and the formula at generic q from [`Symbolic`](@ref). Braiding phases
 stay a `QPhase`.
