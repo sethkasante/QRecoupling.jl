@@ -198,8 +198,9 @@ const ONES = (1, 1, 1, 1, 1, 1)
         # the removed names, and the renamed one
         @test !any(isdefined.(Ref(QRecoupling), (:DCR, :CyclotomicMonomial, :project_discrete, :phi_form, :splits_completely)))
         @test_throws MethodError qseries(z -> 1, 1:3)
-        @test_deprecated x_form(q6j(Symbolic(), 1, 1, 1, 1, 1, 1))
-        @test (@test_logs (:warn, r"xform") min_level = Base.CoreLogging.Warn match_mode = :any x_form(q6j(Symbolic(), 1, 1, 1, 1, 1, 1))) isa XValue
+        # under --depwarn=error the call throws, and @test_deprecated returns that test, not the value
+        old = @test_deprecated r"xform" x_form(q6j(Symbolic(), 1, 1, 1, 1, 1, 1))
+        Base.JLOptions().depwarn == 2 || @test old isa XValue
     end
     @testset "sums at q = 1 stay exact" begin
         C = QRecoupling.ClassicalResult; S = QRecoupling.ClassicalSum
