@@ -17,7 +17,7 @@ QRecouplingNemoExt = "Nemo"
 
 [compat]
 LRUCache = "1.1"
-Nemo = "0.54"
+Nemo = "0.54, 0.55, 0.56, 0.57"
 PrecompileTools = "1"
 Test = "1"
 julia = "1.10"

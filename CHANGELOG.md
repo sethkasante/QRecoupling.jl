@@ -1,6 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Nemo 0.55, 0.56 and 0.57 are allowed, as well as 0.54.
+
 ## v0.6.0
+
+Version 0.5.2 was never registered, and its changes are listed here.
 
 ### Breaking
 
@@ -20,6 +26,8 @@
 - With Nemo, `xform` on an `Exact(k)` form prints a polynomial in x = 2cos(π/(k+2)), such as `(2x² − 7)/3`.
 - `fmatrix`, `bmatrix`, `qcg_matrix`, `qcg_row` and `fmatrix_labels` take `Level(k)`, `At(q)` and `Classical()`, and `smatrix` and `tmatrix` take `Level(k)`.
 - Numerical calls infer their result type at a level and at q = 1.
+- `numeric_value`, `float` and `big` accept classical exact values.
+- `benchmark/minimal.jl` is a short timed and checked benchmark. The article describing the package is now the preferred citation.
 
 ### Faster
 
@@ -27,6 +35,7 @@
 - Sweeps over levels and real q no longer use a `BigFloat` per table entry, and real q falls back to arbitrary precision far less often. `q6j(Level(10i), …)` over i ≤ 2500 went from 41 s to 2.5 s, and `q6j(At(exp(-π/10i)), …)` from 72 s to 5 s. Table entries are also more accurate at large levels.
 - `Exact(k)` takes about 0.15 µs at any size, because a form writes what it prints when first shown. `float` of a form takes about 0.3 µs on small forms, where it took 18 µs, with the same correctly rounded value on every input tested.
 - Different level forms compare in about 5 µs at spins 100, k = 401, where it took 270 ms.
+- Exact zero decisions no longer use Nemo. Long sums at a level, sums with several segments and weighted sums are decided in big integers, up to about 100 times faster than through the exact field.
 
 ### Fixed
 
@@ -35,13 +44,8 @@
 - `qdim(j; k)` above k/2 gives zero, where it returned [2j+1]. `T = Float32` is respected at real and complex q.
 - `==` between a form and a float is exact, `Exact` rejects invalid levels when it is built, and `twist(Exact(), j)` is 1.
 - `qint`, `qfact`, `qbinomial`, `qdim` and `theta_value` at q = ±i now always raise an error naming `Level(0)`, unless the product is identically 0 or 1. They used to answer for some labels only.
-
-## v0.5.2
-
-- Exact zero decisions in numerical evaluation and zero queries no longer use Nemo. Long sums at a level, sums with several segments and weighted sums are decided in big integers, up to about 100 times faster than through the exact field.
-- `numeric_value`, `float` and `big` accept classical exact values.
+- Exact values at q = 1 with large labels threw `InexactError` on Windows, where GMP takes 32-bit words.
 - Fixed loading of GMP on Julia 1.14 under Windows (thanks to Kristoffer Carlsson). CI also runs on Windows and macOS.
-- Added `benchmark/minimal.jl`, a short timed and checked benchmark. The article describing the package is now the preferred citation.
 
 ## v0.5.1
 
