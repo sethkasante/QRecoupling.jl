@@ -189,7 +189,8 @@ function _weighted_level_pass_dw(s::FactorialSum, w::Int, e2::Int, k::Int)
     κ = mass / abs(accm)
     n = s.zhi - s.zlo + 1
     # each term: a product of double-word table entries and one double-word phase; each addition 3u².
-    return v, (32 + 2n) * κ * eps(Float64)^2 + 16 * eps(Float64), κ
+    # a term is its table factorials, so their errors reach κ too (`_read_errors`, in u² = eps²/4).
+    return v, (32 + 2n + _read_errors(tab)[2] * _first_term_cost(s) / 4) * κ * eps(Float64)^2 + 16 * eps(Float64), κ
 end
 
 """
