@@ -253,6 +253,8 @@ function _horner_sum(s::FactorialSum)
                 end
             end
         end
+        # GMP takes a C long, 32 bits on Windows.
+        typemin(Clong) <= a <= typemax(Clong) && b <= typemax(Clong) || throw(OverflowError("Horner ratio exceeds a C long"))
         MPZ.mul_si!(T1, Q, b)
         MPZ.mul_si!(T2, P, a)
         MPZ.add!(P, T1, T2)

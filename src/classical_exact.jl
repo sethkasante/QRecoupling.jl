@@ -63,7 +63,8 @@ function _classical_factorial_ratio(pairs)
     num = big(1); den = big(1)
     isempty(pairs) && return num,den
     N = last(pairs).first
-    wn = UInt64(1); wd = UInt64(1)
+    # GMP's word is a C unsigned long, 32 bits on Windows.
+    wn = Culong(1); wd = Culong(1)
     for p in _classical_primes(N)
         p > N && break
         e = 0
@@ -71,7 +72,7 @@ function _classical_factorial_ratio(pairs)
             e = Base.checked_add(e,Base.checked_mul(c,_factorial_valuation(n,p)))
         end
         iszero(e) && continue
-        pp = UInt64(p)
+        pp = Culong(p)
         for _ in 1:abs(e)
             if e > 0
                 w, over = Base.mul_with_overflow(wn, pp)
