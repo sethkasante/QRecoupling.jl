@@ -2,32 +2,39 @@
 
 ## v0.6.0
 
-- **Breaking:** the old cyclotomic layer is gone: `CyclotomicMonomial`, `DCR`, the `project_*` functions, the callback form of `qseries`, `phi_form` and `splits_completely`. Everything now runs from factorial rules. `qseries(factors, range)` is unchanged.
+### Breaking
+
+- `Exact(k)` and `Symbolic()` return a `QForm`, the value written in quantum integers, and need no backend. `Exact()` stays the exact value at q = 1. `SymbolicValue` is gone, and `ExactX` and `ExactXSum` are no longer exported.
+- Nemo is optional, needed only for `radical`, `xform` and `prove_identity`.
+- The old cyclotomic layer is gone: `CyclotomicMonomial`, `DCR`, the `project_*` functions, the callback form of `qseries`, `phi_form` and `splits_completely`. `qseries(factors, range)` is unchanged.
 - `x_form` is now `xform`. The old name still works, with a deprecation warning.
-- Fixed: `Exact(k)` printed and multiplied the wrong sign for a product whose labels pass the level, such as `qint(Exact(3), 7)`, which is −[2] and printed `[2]`. Symbols with admissible labels never reach this. `float` was already right.
-- Custom series whose factorials pass the level now read exact zeros as 0, where rounding noise was possible, and `T = Float32` values of `qint`, `qfact`, `qbinomial`, `qdim` and `theta_value` at a level are rounded from `Float64` accuracy. Those functions at q = ±i now always raise an error naming `Level(0)`, unless the product is identically 0 or 1.
-- With Nemo, `x_form` on an `Exact(k)` form prints it as a polynomial in x = 2cos(π/(k+2)), such as `(2x² − 7)/3`, where it threw an error. It returns a `LevelXValue`.
-- `float` of a `QForm` at a level takes 0.3–0.5 µs where it took 18–30 µs, and gives the same correctly rounded value on every input tested, because it comes from the compensated pass when that pass can certify it. Forms with powers of q and sums that cancel heavily keep the wide route.
-- A 6j symbol evaluated along its column no longer allocates its scratch on each call, and real q skips a double-word pass that could only fail.
-- Level and real-q tables no longer use a `BigFloat` per entry, which makes a sweep over levels or q values much faster: `q6j(Level(10i), …)` over i ≤ 2500 went from 41 s to 2.5 s, and `q6j(At(exp(-π/10i)), …)` from 72 s to 14 s. The entries are also more accurate at large levels, within about 5 u² at k = 10⁵ where they were off by about 10¹⁰ u².
-- **Breaking:** `Exact(k)` and `Symbolic()` return a `QForm`, the value written in quantum integers from its formula, and `SymbolicValue` is gone. `Exact()` stays the exact value at q = 1. `Exact` is always one number, so `Exact(k)` needs no backend and has exact `==`, `iszero` and arithmetic at its level. `Symbolic()` is a function of q: `f(q)` evaluates it at any q, `f(1)` gives the exact value at q = 1, `float` and arithmetic raise an error, and `==` means equal at every q, also against a number. `Symbolic()` now covers `qcg` and `q3j`, and `x_form` and `phi_form` accept forms.
-- `==` between `Symbolic()` values decides equality at every q, and a sum that vanishes at every q is shown as 0. Nothing is expanded: an integer polynomial cannot vanish at an integer above the sum of its coefficients, so one such point is read through residues at word primes.
-- `==` at a level expands nothing and covers forms with powers of q. It compares squares at places modulo word primes, from the rule's factorials: different values take 5 µs at spins 100, k = 401, where they took 270 ms, and a proof of equality takes 6.5 ms. The number of places comes from a bound on the norm, which cut them 7-fold at that size and also applies to zero tests. Sign comes from the certified number.
-- A `QForm` holds its rule and writes what it prints the first time it is shown. `Exact(k)` takes 0.15 µs at any size, where it took up to 490 µs at spins 100, k = 401, and printed forms are unchanged. Comparing different generic forms takes 85 µs at spins 100, where it took 24 ms.
-- A first call no longer compiles for seconds. `q6j(Level(10), …)` took 4.7 s and takes 1 ms, through a precompile workload using PrecompileTools, at the cost of about 0.05 s more at `using` and 30 s more when the package is installed.
-- Fixed: equal `QForm`, `LevelValue`, `ExactX` and `SymbolicValue` values had different hashes, so `unique` and `Dict` kept duplicates, and hashing a `ClassicalResult` threw. `isequal` between a form and a number is false, since they have no hash in common.
-- `==` between a form and a float is exact, where it was always false. `Exact` rejects invalid levels when it is built. `twist(Exact(), j)` is 1 at q = 1, where it was a phase.
-- Fixed: `qdim(j; k)` above k/2 gives zero, as `Exact(k)` and every symbol do, where it returned [2j+1]. `T = Float32` is respected at real and complex q, where it was silently ignored.
-- Numerical calls infer their result: a level gives `Float64`, or `ComplexF64` for `qcg` and `q3j`, and q = 1 gives `Float64`, with no exact type in the union. At a real q the result can still be `Float64` or `ComplexF64`, since negative q is complex.
+- A sum of unlike roots at q = 1 is now an exact `ClassicalSum`, where it was a `BigFloat`.
+- Removed `eager`, one-argument `xvalue` and the canonical exact paths. See [Migration](docs/src/migration.md).
+
+### New
+
+- `==` and `iszero` on forms are exact and expand nothing, at a level and at every q, and they cover forms with powers of q.
+- Exact arithmetic at a level covers every symbol without powers of q, and needs no backend.
+- Forms cover `qcg` and `q3j`, printed with their powers of q.
+- `ClassicalSum` keeps sums at q = 1 exact: `1//2 + √15/6`, with exact `+`, `-`, `*`, `/`, `==` and `iszero`.
+- With Nemo, `xform` on an `Exact(k)` form prints a polynomial in x = 2cos(π/(k+2)), such as `(2x² − 7)/3`.
 - `fmatrix`, `bmatrix`, `qcg_matrix`, `qcg_row` and `fmatrix_labels` take `Level(k)`, `At(q)` and `Classical()`, and `smatrix` and `tmatrix` take `Level(k)`.
-- Nemo is optional, and needed only for nested radicals and expanded polynomials.
-- `ExactX` and `ExactXSum` are no longer exported, since `Exact(k)` no longer returns them. They remain as `QRecoupling.ExactX` and `QRecoupling.ExactXSum`, the types of `QRecoupling.exact_x`.
-- Quantum-integer displays for exact values, including native level zero checks. Polynomial views remain explicit.
-- Forms cover `qcg` and `q3j`: powers of q are printed in front and on each term, reduced by q^h = −1 at a level, where these values are complex.
-- The relations at a level are built from their distinct generators and kept reduced, with checked arithmetic. They only serve printing, so no table is built above h = 1100, where they almost never shorten a form and cost seconds. The first print at k = 5000 takes milliseconds, where it took 4.3 s.
-- Square classes use the generators directly, which keeps them complete at every level with small entries.
-- Certified native bounds, bad-prime rejection, stable `qform` evaluation, and quadratic-character nonzero certificates. Faster modular table setup and bounded cache retention.
-- **Breaking:** removed the deprecated canonical/DCR exact paths, `eager`, and one-argument `xvalue`. Polynomial result types now parameterize their payload. See [Migration](docs/src/migration.md).
+- Numerical calls infer their result type at a level and at q = 1.
+
+### Faster
+
+- A first call takes about 1 ms, where it compiled for seconds, at the cost of about 30 s more when the package is installed.
+- Sweeps over levels and real q no longer use a `BigFloat` per table entry, and real q falls back to arbitrary precision far less often. `q6j(Level(10i), …)` over i ≤ 2500 went from 41 s to 2.5 s, and `q6j(At(exp(-π/10i)), …)` from 72 s to 5 s. Table entries are also more accurate at large levels.
+- `Exact(k)` takes about 0.15 µs at any size, because a form writes what it prints when first shown. `float` of a form takes about 0.3 µs on small forms, where it took 18 µs, with the same correctly rounded value on every input tested.
+- Different level forms compare in about 5 µs at spins 100, k = 401, where it took 270 ms.
+
+### Fixed
+
+- `Exact(k)` printed the wrong sign for labels past the level: `qint(Exact(3), 7)` is −[2] and printed `[2]`. Symbols with admissible labels never reach this.
+- Equal forms had different hashes, so `unique` and `Dict` kept duplicates, and hashing a `ClassicalResult` threw.
+- `qdim(j; k)` above k/2 gives zero, where it returned [2j+1]. `T = Float32` is respected at real and complex q.
+- `==` between a form and a float is exact, `Exact` rejects invalid levels when it is built, and `twist(Exact(), j)` is 1.
+- `qint`, `qfact`, `qbinomial`, `qdim` and `theta_value` at q = ±i now always raise an error naming `Level(0)`, unless the product is identically 0 or 1. They used to answer for some labels only.
 
 ## v0.5.2
 

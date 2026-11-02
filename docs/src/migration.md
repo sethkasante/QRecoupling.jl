@@ -43,6 +43,8 @@ Nemo is no longer a required dependency. Install it with `import Pkg; Pkg.add("N
 
 The three-argument `QRecoupling.xvalue(rad, num, den)` is unchanged.
 
+Adding `Exact()` values with unlike roots gives an exact `ClassicalSum`, such as `1//2 + √15/6`, where it gave a `BigFloat`. Use `float` or `numeric_value` for a number.
+
 Two numerical behaviours changed with the removal. `qint`, `qfact`, `qbinomial`, `qdim` and `theta_value` at q = ±i, which is the root of unity of level 0, now raise an error that names `Level(0)` unless the product is identically 0 or 1. They used to answer for some labels and raise for others. Values of these functions and of custom series at a level come from the same rule evaluator as the symbols, so a few last digits differ, and `T = Float32` is now rounded from `Float64` accuracy.
 
 ## To v0.5

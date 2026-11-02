@@ -1000,7 +1000,7 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
         # promise RTOL_PLAIN/8 (a stricter target declined the whole unit circle for no promised gain).
         if labels !== nothing && !weighted
             slot,work=_borrow_column(workspace)
-            vr = sixj_entry(labels,qq,work;rtol=RTOL_PLAIN/8)
+            vr = sixj_entry(labels,qq,work;rtol=qq isa Real ? REALQ_ENTRY_RTOL : RTOL_PLAIN/8)
             _return_column(slot)
             vr === nothing || return T(vr)
         end

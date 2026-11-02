@@ -36,7 +36,7 @@ samples = scaled_sweep(20)
 
 For real q, replace `Level(10i)` with `At(exp(-pi/(10i)))`. Compute the samples before plotting so that evaluation time is separate from plotting and editor communication. A workspace reuses scratch; it does not make tables for different targets interchangeable. Cache limits bound retention within individual caches, not the total process memory.
 
-On an Apple M2 Pro, this sweep through `n = 2500` takes about 2.6 s at a level and about 12 s at real q. Most of the real-q time comes from a few percent of the points: a value near a node of its recurrence column cannot be certified from the recurrence, so it falls back to arbitrary precision, at up to about 500 ms per call at these spins. Sweeps over complex q still build a wide-precision table at every point.
+On an Apple M2 Pro, this sweep through `n = 2500` takes about 2.5 s at a level and about 5 s at real q. A real-q value very close to a node of its recurrence column cannot be certified from the recurrence, so it still falls back to arbitrary precision, at up to about 500 ms per call at these spins. Sweeps over complex q still build a wide-precision table at every point.
 
 ## Precision and supplied inputs
 

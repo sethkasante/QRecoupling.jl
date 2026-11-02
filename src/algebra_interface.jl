@@ -88,6 +88,10 @@ function numeric_value(v::ClassicalResult; bits::Integer=precision(BigFloat))
     result=setprecision(() -> v.sign * sqrt(BigFloat(v.sq_val)), BigFloat, target+32)
     return setprecision(()->BigFloat(result),BigFloat,target)
 end
+function numeric_value(v::ClassicalSum; bits::Integer=precision(BigFloat))
+    bits > 0 || throw(ArgumentError("bits must be positive"))
+    return _sum_value(v, Int(bits))
+end
 
 
 """

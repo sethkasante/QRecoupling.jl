@@ -21,6 +21,14 @@ r = q3j(Exact(), 1//2, 1//2, 0, 1//2, -1//2, 0)
 (q6j(Exact(), 1, 1, 1, 1, 1, 1), r, r^2)
 ```
 
+Adding values with unlike roots stays exact, as a sum of square roots with rational coefficients. Each sum has one such form, so `==` and `iszero` are proofs, which is what an identity or a contraction over products of symbols needs. `/`, `inv` and integer powers stay exact too, and `float` gives a number.
+
+```@example exact_forms
+s = fsymbol(Exact(), 1, 1, 1, 1, 1, 2) + fsymbol(Exact(), 1, 1, 1, 1, 1, 1)
+@assert s * inv(s) == 1 # hide
+(s, s^2, s * inv(s), float(s))
+```
+
 ## The formula at every q
 
 `Symbolic()` writes the formula in quantum integers `[n]` and never expands it. It holds no number. Evaluate it with `c(q)` at any q that [`At`](@ref) takes. An exact 1 gives the exact value at q = 1, while `c(1.0)` gives a float.
@@ -140,6 +148,7 @@ XValue
 LevelXValue
 QRecoupling.ExactX
 QRecoupling.ExactXSum
+QRecoupling.ClassicalSum
 radical
 NoRadical
 numeric_value

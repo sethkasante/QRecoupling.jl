@@ -80,8 +80,8 @@ function Base.:+(a::ClassicalResult, b::ClassicalResult)
         end
     end
     
-    # fallback to BigFloat 
-    return BigFloat(a) + BigFloat(b)
+    # unlike roots stay exact as a sum of them
+    return _classical_value(_add_terms(_root_terms(a), _root_terms(b)))
 end
 
 Base.:-(a::ClassicalResult, b::ClassicalResult) = a + (-b)
@@ -166,5 +166,209 @@ function Base.show(io::IO, res::ClassicalResult)
         print(io, res.sign < 0 ? "-" : "", Rational(s_num, s_den))
     else
         print(io, res.sign < 0 ? "-" : "", "√(", res.sq_val, ")")
+    end
+end
+
+# ---- sums of unlike roots ----
+
+"""
+    ClassicalSum
+
+An exact sum of unlike square roots at q = 1, Σ c_r √r with each r a square-free integer and each c_r rational, such as
+`1//2 + √15/6`. It is what adding two `ClassicalResult`s gives when their roots differ, and it holds at least two roots: a
+sum that collapses to one root, or to zero, is a `ClassicalResult` again.
+
+Square roots of distinct square-free integers are linearly independent over ℚ, so this form is unique. `iszero` and `==`
+compare coefficients and are proofs. `+`, `-`, `*`, `/`, `inv` and integer powers stay exact, and `float` gives a number.
+"""
+struct ClassicalSum <: Real
+    terms::Dict{BigInt,Rational{BigInt}}
+    ClassicalSum(terms::Dict{BigInt,Rational{BigInt}}) = new(terms)
+end
+
+const _SMALL_PRIMES = let sieve = trues(1 << 16)
+    sieve[1] = false
+    for i in 2:isqrt(length(sieve))
+        sieve[i] && (sieve[i*i:i:end] .= false)
+    end
+    findall(sieve)
+end
+
+"""
+`n = o²·r` with `r` square-free, by trial division. A value at q = 1 is built from factorials, so its primes are at most its
+largest factorial argument, and what is left after these primes is a single prime unless an argument passes 2¹⁶.
+"""
+function _square_free(n::BigInt)
+    o = big(1); r = big(1); m = n
+    for p in _SMALL_PRIMES
+        p * p > m && break
+        e = 0
+        while iszero(m % p)
+            m ÷= p; e += 1
+        end
+        iszero(e) && continue
+        o *= big(p)^(e ÷ 2)
+        isodd(e) && (r *= p)
+    end
+    if m > 1
+        s = isqrt(m)
+        s * s == m ? (o *= s) : (r *= m)
+    end
+    return o, r
+end
+
+"σ√(n/d) as `r => c`: with n and d coprime their square-free parts are too, so √(n/d) = (o_n/(o_d r_d)) √(r_n r_d)."
+function _root_terms(a::ClassicalResult)
+    iszero(a) && return Dict{BigInt,Rational{BigInt}}()
+    on, rn = _square_free(numerator(a.sq_val))
+    od, rd = _square_free(denominator(a.sq_val))
+    return Dict(rn * rd => a.sign * (on // (od * rd)))
+end
+_root_terms(a::ClassicalSum) = a.terms
+_root_terms(c::Union{Integer,Rational}) =
+    iszero(c) ? Dict{BigInt,Rational{BigInt}}() : Dict(big(1) => Rational{BigInt}(c))
+
+"The simplest type for these terms: a `ClassicalResult` for at most one root."
+function _classical_value(t::Dict{BigInt,Rational{BigInt}})
+    length(t) >= 2 && return ClassicalSum(t)
+    isempty(t) && return zero(ClassicalResult)
+    r, c = only(t)
+    return ClassicalResult(Int(sign(c)), c^2 * r)
+end
+
+function _add_terms(a::Dict{BigInt,Rational{BigInt}}, b::Dict{BigInt,Rational{BigInt}})
+    t = copy(a)
+    for (r, c) in b
+        v = get(t, r, 0 // big(1)) + c
+        iszero(v) ? delete!(t, r) : (t[r] = v)
+    end
+    return t
+end
+
+function _multiply_terms(a::Dict{BigInt,Rational{BigInt}}, b::Dict{BigInt,Rational{BigInt}})
+    t = Dict{BigInt,Rational{BigInt}}()
+    for (r, c) in a, (s, e) in b
+        g = gcd(r, s)                                        # √r √s = g √(rs/g²), and rs/g² is square-free
+        k = (r ÷ g) * (s ÷ g)
+        v = get(t, k, 0 // big(1)) + c * e * g
+        iszero(v) ? delete!(t, k) : (t[k] = v)
+    end
+    return t
+end
+
+const _ClassicalExact = Union{ClassicalResult,ClassicalSum}
+
+Base.:+(a::ClassicalSum, b::ClassicalSum) = _classical_value(_add_terms(a.terms, b.terms))
+Base.:+(a::ClassicalSum, b::ClassicalResult) = _classical_value(_add_terms(a.terms, _root_terms(b)))
+Base.:+(a::ClassicalResult, b::ClassicalSum) = b + a
+Base.:+(a::ClassicalSum, c::Union{Integer,Rational}) = _classical_value(_add_terms(a.terms, _root_terms(c)))
+Base.:+(c::Union{Integer,Rational}, a::ClassicalSum) = a + c
+Base.:-(a::ClassicalSum) = ClassicalSum(Dict(r => -c for (r, c) in a.terms))
+Base.:-(a::ClassicalSum, b::ClassicalSum) = a + (-b)
+Base.:-(a::ClassicalSum, b::ClassicalResult) = a + (-b)
+Base.:-(a::ClassicalResult, b::ClassicalSum) = a + (-b)
+Base.:-(a::ClassicalSum, c::Union{Integer,Rational}) = a + (-c)
+Base.:-(c::Union{Integer,Rational}, a::ClassicalSum) = c + (-a)
+
+Base.:*(a::ClassicalSum, b::ClassicalSum) = _classical_value(_multiply_terms(a.terms, b.terms))
+Base.:*(a::ClassicalSum, b::ClassicalResult) = _classical_value(_multiply_terms(a.terms, _root_terms(b)))
+Base.:*(a::ClassicalResult, b::ClassicalSum) = b * a
+Base.:*(c::Union{Int,BigInt,Rational}, a::ClassicalSum) = _classical_value(_multiply_terms(a.terms, _root_terms(c)))
+Base.:*(a::ClassicalSum, c::Union{Int,BigInt,Rational}) = c * a
+
+"""
+1/a by conjugates. Flipping the sign of √p for one prime p is a field automorphism, so a·σ(a) is nonzero, and it has no p in
+its roots: each step removes a prime, until one root is left to invert.
+"""
+function Base.inv(a::ClassicalSum)
+    r = maximum(keys(a.terms))
+    i = findfirst(p -> iszero(r % p), _SMALL_PRIMES)
+    p = i === nothing ? r : big(_SMALL_PRIMES[i])
+    conjugate = ClassicalSum(Dict(s => iszero(s % p) ? -c : c for (s, c) in a.terms))
+    return conjugate * inv(a * conjugate)
+end
+Base.:/(a::_ClassicalExact, b::ClassicalSum) = a * inv(b)
+Base.:/(c::Union{Integer,Rational}, b::ClassicalSum) = c * inv(b)
+Base.:/(a::ClassicalSum, b::ClassicalResult) = a * inv(b)
+function Base.:/(a::ClassicalSum, c::Union{Int,BigInt,Rational})
+    iszero(c) && throw(DivideError())
+    return a * (1 // big(c))
+end
+function Base.:^(a::ClassicalSum, p::Integer)
+    p < 0 && return inv(a)^(-p)
+    v = one(ClassicalResult); b = a; n = p
+    while n > 0
+        isodd(n) && (v = v * b)
+        n >>= 1
+        n > 0 && (b = b * b)
+    end
+    return v
+end
+
+Base.zero(::Type{ClassicalSum}) = zero(ClassicalResult)
+Base.zero(::ClassicalSum) = zero(ClassicalResult)
+Base.one(::Type{ClassicalSum}) = one(ClassicalResult)
+Base.one(::ClassicalSum) = one(ClassicalResult)
+Base.iszero(::ClassicalSum) = false                          # it holds at least two independent roots
+Base.isone(::ClassicalSum) = false
+
+Base.:(==)(a::ClassicalSum, b::ClassicalSum) = a.terms == b.terms
+Base.:(==)(::ClassicalSum, ::ClassicalResult) = false
+Base.:(==)(::ClassicalResult, ::ClassicalSum) = false
+Base.:(==)(::ClassicalSum, ::Union{Integer,Rational}) = false
+Base.:(==)(::Union{Integer,Rational}, ::ClassicalSum) = false
+Base.:(==)(a::ClassicalSum, b::AbstractFloat) = Float64(a) == b
+Base.:(==)(b::AbstractFloat, a::ClassicalSum) = Float64(a) == b
+Base.hash(a::ClassicalSum, h::UInt) = hash((:ClassicalSum, sort!(collect(a.terms); by = first)), h)
+
+"The sum at this many bits or more: enough that its terms' cancellation leaves the digits asked for. It is never zero."
+function _sum_value(a::ClassicalSum, bits::Int)
+    work = bits + 32
+    while true
+        v, mass = setprecision(BigFloat, work) do
+            total = big(0.0); size = big(0.0)
+            for (r, c) in a.terms
+                t = BigFloat(numerator(c)) / BigFloat(denominator(c)) * sqrt(BigFloat(r))
+                total += t; size += abs(t)
+            end
+            total, size
+        end
+        if !iszero(v) && exponent(mass) - exponent(v) + bits + 8 <= work
+            return setprecision(() -> BigFloat(v), BigFloat, bits)
+        end
+        work *= 2
+    end
+end
+
+Base.Float64(a::ClassicalSum) = Float64(_sum_value(a, 64))
+Base.BigFloat(a::ClassicalSum) = _sum_value(a, precision(BigFloat))
+Base.AbstractFloat(a::ClassicalSum) = Float64(a)
+Base.float(::Type{ClassicalSum}) = Float64
+Base.big(a::ClassicalSum) = BigFloat(a)
+Base.sign(a::ClassicalSum) = Int(sign(_sum_value(a, 64)))
+Base.abs(a::ClassicalSum) = sign(a) < 0 ? -a : a
+
+for op in (:+, :-, :*, :/)
+    @eval begin
+        Base.$op(a::ClassicalSum, b::AbstractFloat) = $op(BigFloat(a), BigFloat(b))
+        Base.$op(a::AbstractFloat, b::ClassicalSum) = $op(BigFloat(a), BigFloat(b))
+    end
+end
+Base.isapprox(a::ClassicalSum, b::ClassicalSum; kwargs...) = isapprox(Float64(a), Float64(b); kwargs...)
+Base.isapprox(a::ClassicalSum, b::ClassicalResult; kwargs...) = isapprox(Float64(a), Float64(b); kwargs...)
+Base.isapprox(a::ClassicalResult, b::ClassicalSum; kwargs...) = isapprox(Float64(a), Float64(b); kwargs...)
+Base.isapprox(a::ClassicalSum, b::Real; kwargs...) = isapprox(Float64(a), Float64(b); kwargs...)
+Base.isapprox(a::Real, b::ClassicalSum; kwargs...) = isapprox(Float64(a), Float64(b); kwargs...)
+
+function Base.show(io::IO, a::ClassicalSum)
+    for (i, (r, c)) in enumerate(sort!(collect(a.terms); by = first))
+        i > 1 && print(io, c < 0 ? " - " : " + ")
+        i == 1 && c < 0 && print(io, "-")
+        n, d = abs(numerator(c)), denominator(c)
+        if isone(r)
+            print(io, n // d)
+        else
+            print(io, isone(n) ? "" : string(n), "√", r, isone(d) ? "" : "/" * string(d))
+        end
     end
 end

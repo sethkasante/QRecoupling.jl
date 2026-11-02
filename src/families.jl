@@ -281,10 +281,16 @@ column_accuracy(Q::Union{RealQ,ComplexQ}) = max(eps(Float64), eps(Float64) * Q.c
 Accuracy floor a near-edge run inherits from its table, beyond the run's own double-word error: the
 conditioning of the coefficients, roots and seeds near a root of unity. `2·u·cancel` tracks the measured
 error within the factor 2 (a heuristic, tuned so the tier stays inside its `rtol` and declines otherwise).
-Exact tables (levels, q = 1) add nothing.
+Tables accurate to a few u², at a level, at q = 1 and at real q, add nothing.
 """
-@inline _table_floor(Q::Union{RealQ,ComplexQ}) = 2 * eps(Float64) * Q.cancel
+@inline _table_floor(Q::ComplexQ) = 2 * eps(Float64) * Q.cancel
 @inline _table_floor(::Any) = 0.0
+
+"""
+What a real-q entry must promise to be kept, final rounding included: it stays within a few units of the true value, as
+good as the sums it replaces, so nothing is lost by not reaching for arbitrary precision.
+"""
+const REALQ_ENTRY_RTOL = 2.0^-50
 
 """
 Cancellation a `ComplexQ` table tolerates in `[n+1] = x[n] − [n−1]`. A cancellation `C` costs the column's

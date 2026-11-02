@@ -195,6 +195,43 @@ const ONES = (1, 1, 1, 1, 1, 1)
         @test_deprecated x_form(q6j(Symbolic(), 1, 1, 1, 1, 1, 1))
         @test (@test_logs (:warn, r"xform") min_level = Base.CoreLogging.Warn match_mode = :any x_form(q6j(Symbolic(), 1, 1, 1, 1, 1, 1))) isa XValue
     end
+    @testset "sums at q = 1 stay exact" begin
+        C = QRecoupling.ClassicalResult; S = QRecoupling.ClassicalSum
+        r2, r3, r5 = C(1, 2 // big(1)), C(1, 3 // big(1)), C(1, 5 // big(1))
+        x = fsymbol(Exact(), 1, 1, 1, 1, 1, 2) + fsymbol(Exact(), 1, 1, 1, 1, 1, 1)
+        @test x isa S && string(x) == "1//2 + √15/6" && float(x) === Float64(1 // big(2) + sqrt(big(15)) / 6)
+        # one root or none is a ClassicalResult again, and the form is unique
+        @test r2 + C(1, 8 // big(1)) == 3 * r2 && (r2 + C(1, 8 // big(1))) isa C
+        @test (r2 + r3) - r3 == r2 && ((r2 + r3) - r3) isa C && iszero(r2 + r3 - r2 - r3) && (r2 + r3 - r2 - r3) isa C
+        @test r2 + r3 == r3 + r2 && hash(r2 + r3) == hash(r3 + r2) && length(unique([r2 + r3, r3 + r2])) == 1
+        @test r2 + r3 != r2 && r2 + r3 != 1 && !iszero(r2 + r3) && !isone(r2 + r3)
+        # the field operations
+        @test string((r2 + r3)^2) == "5//1 + 2√6" && (r2 + r3) * (r2 - r3) == -1
+        @test string(x + 1) == "3//2 + √15/6" && string(-x) == "-1//2 - √15/6" && 2 * x == x + x && x / 2 * 2 == x
+        @test string(inv(x)) == "-3//1 + √15" && x * inv(x) == 1 && x / x == 1 && x^-2 * x^2 == 1 && 1 / x == inv(x)
+        y = r2 + r3 + r5
+        @test y * inv(y) == 1 && y^3 / y^3 == 1 && (y + 1) / (y + 1) == 1
+        # numbers, with the digits a sum that cancels would lose
+        @test numeric_value(r2 - r3; bits = 200) ≈ sqrt(big(2)) - sqrt(big(3)) && precision(numeric_value(r2 - r3; bits = 200)) == 200
+        @test sign(r2 - r3) == -1 && abs(r2 - r3) == r3 - r2 && Float64(r2 - r3) ≈ sqrt(2) - sqrt(3) && (r2 + r3) ≈ sqrt(2) + sqrt(3)
+        @test Float64(C(1, big(10)^40 // 1 + 1 // 1) - C(1, big(10)^40 // 1)) == 5.0e-21
+        @test (r2 + r3) + 0.5 isa BigFloat && (r2 + r3) * 2.0 ≈ 2 * (sqrt(2) + sqrt(3))
+        @test sum([r2, r3, r5, -r2, -r3]) == r5
+        @test_throws ArgumentError (r2 + r3) * q6j(Exact(10), 1, 1, 1, 1, 1, 1)
+        # identities over products of symbols, proved rather than approximated
+        j6(l...) = q6j(Exact(), l...)
+        for (a, b, c, d, j, jp) in ((1, 1, 1, 1, 1, 1), (1, 1, 1, 1, 1, 2), (2, 2, 2, 2, 1, 3), (3//2, 5//2, 2, 2, 3//2, 5//2), (5, 5, 5, 5, 5, 5))
+            total = sum(C(1, (2x + 1)^2 * (2j + 1)^2 // big(1)) * j6(a, b, x, c, d, j) * j6(c, d, x, a, b, jp)
+                        for x in max(abs(a - b), abs(c - d)):min(a + b, c + d))
+            @test total == (j == jp ? 1 : 0)
+        end
+        # Biedenharn–Elliott, whose terms carry unlike roots in the F normalisation
+        be(a, b, c, d, e, f, g, h, k) = sum((isodd(Int(a + b + c + d + e + f + g + h + k + x)) ? -1 : 1) * Int(2x + 1) *
+                                            (j6(a, b, x, c, d, g) * j6(c, d, x, e, f, h) * j6(e, f, x, b, a, k))
+                                            for x in max(abs(a - b), abs(c - d), abs(e - f)):min(a + b, c + d, e + f))
+        @test be(1, 1, 1, 1, 1, 1, 1, 1, 1) == j6(1, 1, 1, 1, 1, 1) * j6(1, 1, 1, 1, 1, 1)
+        @test be(2, 1, 2, 1, 2, 1, 2, 2, 2) == j6(2, 2, 2, 2, 2, 1) * j6(2, 2, 2, 1, 1, 2)
+    end
     @testset "a batch along one column agrees with scalar calls" begin
         column = [(30, 31, e, 32, 33, 20) for e in 2:60]
         for f in (q6j, fsymbol, gsymbol), target in (Level(400), Classical())

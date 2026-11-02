@@ -95,7 +95,7 @@ for op in (:+, :-, :*, :/)
         Base.$op(c::Union{Integer,Rational}, f::QForm) = $op(c, _form_value(f))
         Base.$op(f::QForm, v::Union{LevelValue,LevelValueSum}) = $op(_form_value(f), v)
         Base.$op(v::Union{LevelValue,LevelValueSum}, f::QForm) = $op(v, _form_value(f))
-        Base.$op(::QForm, ::ClassicalResult) = throw(ArgumentError(_NO_MIXED_ARITHMETIC))
-        Base.$op(::ClassicalResult, ::QForm) = throw(ArgumentError(_NO_MIXED_ARITHMETIC))
+        Base.$op(::QForm, ::_ClassicalExact) = throw(ArgumentError(_NO_MIXED_ARITHMETIC))
+        Base.$op(::_ClassicalExact, ::QForm) = throw(ArgumentError(_NO_MIXED_ARITHMETIC))
     end
 end
