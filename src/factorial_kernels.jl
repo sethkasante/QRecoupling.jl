@@ -36,6 +36,7 @@ end
 
 "Factorials multiplied into a segment's first term: the roundings it carries."
 @inline _first_term_cost(s::FactorialSum) = sum(f -> abs(Int(f.c)), s.fac; init = 0)
+@inline _prefactor_cost(s::FactorialSum) = sum(p -> abs(Int(p.second)), s.pre; init = 0)
 
 "A segment's first term ∏[arg(f,z0)]!^c in split form, single word."
 @inline function _first_term(s::FactorialSum, z0::Int, tab::QIntTables{T}) where {T}
@@ -276,9 +277,11 @@ function _sum_compensated(s::FactorialSum, segs, k::Int, tab::QIntTables{T},
         # error of the correction's own evaluation (γ on the captured terms), plus the dropped second-order
         # parts of the ratios (≤ 2K u² per step on every term), in units of 2^(sc+e0)
         Kr = intr ? 1 : _ratio_cost(s)                                # low-part error per ratio: one rounding, or K
-        Braw = abs(mh) * (_gamma(T, (2Kr + 4) * max(nseg, 1)) * EA + 2 * Kr * max(nseg, 1) * u^2 * A)
+        qread, fread = _read_errors(tab)
+        Braw = abs(mh) * (_gamma(T, (2Kr + 4) * max(nseg, 1)) * EA + (intr ? 2 : 2 + qread) * Kr * max(nseg, 1) * u^2 * A)
         Am = ldexp(abs(mh) * A, sc + e0 - ve)
-        Bm = ldexp(Braw, sc + e0 - ve)
+        # the factorials of the prefactor and the first term scale this segment as a whole
+        Bm = ldexp(Braw, sc + e0 - ve) + abs(vh) * fread * (_first_term_cost(s) + _prefactor_cost(s)) * u^2
         if !started
             ah_, al_, ae, Aacc, Bacc, started = vh, vl, ve, Am, Bm, true
         else

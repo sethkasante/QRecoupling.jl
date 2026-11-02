@@ -493,11 +493,11 @@ reflection_zero(s::FactorialSum, k::Int) = (st_segs = classify_at_level(s, k);
 # ---- numbers at q = e^{iπ/h} ----
 
 struct QIntTables{T}
-    q::Vector{T}      # [n], n = 1..N, correctly rounded from a wide value
-    qi::Vector{T}     # 1/[n], correctly rounded
-    ql::Vector{T}     # low parts: [n] = q + ql and 1/[n] = qi + qil to about u²
+    q::Vector{T}      # [n], n = 1..N, rounded from a wider value
+    qi::Vector{T}     # 1/[n], rounded the same way
+    ql::Vector{T}     # low parts: [n] = q + ql and 1/[n] = qi + qil to a few u² (`_read_errors`)
     qil::Vector{T}
-    fm::Vector{T}     # [n]! = (fm + fml) · 2^fe, fm ∈ [1/2, 1) correctly rounded
+    fm::Vector{T}     # [n]! = (fm + fml) · 2^fe, fm ∈ [1/2, 1] rounded from a wider value
     fe::Vector{Int}
     fml::Vector{T}
     gm::Vector{T}     # 1/[n]! = (gm + gml) · 2^ge, rounded the same way, so inverses are multiplies
@@ -556,7 +556,8 @@ function _qint_tables_from(::Type{T}, qgen::F; classical::Bool = false) where {T
 end
 
 "[1], …, [N] at q = e^{iπ/h} in the current BigFloat precision, by the Chebyshev recurrence
-[n+1] = 2cos(π/h)[n] - [n-1] (errors grow linearly, absorbed by the 64 guard bits)."
+[n+1] = 2cos(π/h)[n] - [n-1]. Its relative error grows like n³ units of that precision, which the 64 guard bits absorb
+for the tables built here: `Float64` tables above `WIDE_TABLE_BELOW` entries do not use it (`double_word.jl`)."
 function _qints_wide(h::Int, N::Int)
     x = Vector{BigFloat}(undef, N)
     N >= 1 && (x[1] = one(BigFloat))

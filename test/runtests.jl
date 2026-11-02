@@ -66,6 +66,50 @@ const ONES = (1, 1, 1, 1, 1, 1)
         @test_throws ArgumentError fmatrix(1,1,1,1; k=3.0)
     end
 
+    @testset "tables without a wide number per entry" begin
+        QR = QRecoupling
+        u2 = 2.0^-106
+        for k in (62, 63, 64, 100, 1000, 5000)
+            tab = QR.QIntTables(Float64, k)
+            h = k + 2; N = k + 1
+            setprecision(BigFloat, 400) do
+                S = sin(big(pi) / h); f = big(1.0)
+                qerr = ferr = big(0.0)
+                for n in 1:N
+                    v = sin(n * big(pi) / h) / S
+                    f *= v
+                    qerr = max(qerr, abs((big(tab.q[n]) + tab.ql[n]) / v - 1), abs((big(tab.qi[n]) + tab.qil[n]) * v - 1))
+                    ferr = max(ferr, abs(ldexp(big(tab.fm[n+1]) + tab.fml[n+1], tab.fe[n+1]) / f - 1),
+                               abs(ldexp(big(tab.gm[n+1]) + tab.gml[n+1], tab.ge[n+1]) * f - 1))
+                    @test abs(tab.q[n] - Float64(v)) <= eps(tab.q[n])
+                end
+                qread, fread = QR._read_errors(tab)
+                @test qerr <= max(qread, 6) * u2
+                @test ferr <= max(fread, 16) * u2
+            end
+            N >= QR.WIDE_TABLE_BELOW && @test tab.q[N] == 1.0 && tab.ql[N] == 0.0      # [h − 1] = [1]
+            @test all(1 .<= tab.q) && all(0.5 .<= tab.fm .<= 1) && all(0.5 .<= tab.gm .<= 1)
+        end
+        # above the switch the words agree with the wide build, entry by entry
+        a, b = QR.QIntTables(Float64, 300), QR._qint_tables_from(Float64, () -> QR._qints_wide(302, 301))
+        @test a.q == b.q && a.qi == b.qi && ldexp.(a.fm, a.fe) == ldexp.(b.fm, b.fe) && ldexp.(a.gm, a.ge) == ldexp.(b.gm, b.ge)
+        for (q, N) in ((0.9, 200), (1.1, 200), (exp(-pi / 500), 2000), (1 - 1e-6, 500), (1.5, 1000))
+            T = QR.RealQ(q, N)
+            setprecision(BigFloat, 800) do
+                b = big(q); den = b - inv(b); e = big(0.0)
+                for n in 1:N
+                    v = (b^n - b^-n) / den
+                    e = max(e, abs((big(T.ints[n+1][1]) + T.ints[n+1][2]) / v - 1), abs((big(T.invs[n+1][1]) + T.invs[n+1][2]) * v - 1))
+                end
+                @test e <= 6 * u2
+            end
+            @test T.cancel <= 3
+        end
+        # where the words would leave the exponent range the table stays wide, and stays finite on its inverse side
+        T = QR.RealQ(3.0, 2000)
+        @test T.invs[2001][1] >= 0 && isinf(T.ints[2001][1]) && T.ints[101][1] > 1e40
+        @test q6j(At(3.0), 300, 300, 300, 300, 300, 300) ≈ q6j(At(1 / 3.0), 300, 300, 300, 300, 300, 300) rtol = 1e-12
+    end
     include("qcg_tests.jl")
     include("regge_tests.jl")
     include("release_tests.jl")

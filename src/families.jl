@@ -170,6 +170,8 @@ function RealQ(q::Real, N::Int)
     q > 0 || throw(DomainError(q, "RealQ needs a positive real q"))
     isapprox(q, 1) && throw(ArgumentError("q ≈ 1: use ClassicalQ for the classical column"))
     N >= 0 || throw(DomainError(N, "table length must be nonnegative"))
+    # Without a wide number per entry while the words and their products stay well inside the exponent range.
+    N >= WIDE_TABLE_BELOW && N * abs(log(Float64(q))) <= 500 && return _realq_by_addition(q, N)
     ints = Vector{DWord}(undef, N + 1)
     invs = Vector{DWord}(undef, N + 1)
     worst = 1.0
@@ -199,10 +201,29 @@ function RealQ(q::Real, N::Int)
     return RealQ(Float64(q), ints, invs, worst)
 end
 
+"[n] = sinh(nt)/sinh(t) with t = |log q|, the same for q and 1/q (`_qints_by_addition`)."
+function _realq_by_addition(q::Real, N::Int)
+    t, x = setprecision(BigFloat, 256) do
+        qb = BigFloat(q)
+        abs(log(qb)), Float64(qb + inv(qb))
+    end
+    v, vl, w, wl = _qints_by_addition(N, 1, m -> (sinh(m * t), cosh(m * t)))
+    ints = Vector{DWord}(undef, N + 1)
+    invs = Vector{DWord}(undef, N + 1)
+    ints[1] = (0.0, 0.0); invs[1] = (Inf, 0.0)
+    worst = 1.0; prev = 0.0
+    @inbounds for n in 1:N
+        ints[n+1] = (v[n], vl[n]); invs[n+1] = (w[n], wl[n])
+        a = x * v[n]
+        worst = max(worst, (a + prev) / (a - prev))     # the recurrence's cancellation, as in the wide build
+        prev = v[n]
+    end
+    return RealQ(Float64(q), ints, invs, worst)
+end
+
 """
 Tables for a column at real `q`, cached on `(q, N)`. A column, an F-matrix or a batch at one `q` builds the
-table once; without the cache the BigFloat build dominates and costs more than the loop it replaces
-(measured 26–297 µs against a 0.5–2.9 µs fill).
+table once.
 """
 # At most 64 tables, and at most about 256 MiB: a table counts once for every 4 MiB it holds, so a sweep
 # with large spins and a new `q` at every step cannot fill memory.
