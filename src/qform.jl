@@ -928,6 +928,8 @@ function xform(f::QForm)
 end
 xform(s::FactorialSum) = generic_value(_validate_rule(s))
 @deprecate x_form(f) xform(f)
+"`x_form` is the old name of [`xform`](@ref)."
+x_form
 
 qeval(::Symbolic, f::QForm) = f
 qeval(f::QForm; kwargs...) = f.k === nothing ? qeval(something(f.rule, EMPTY_FACTORIAL_SUM); kwargs...) :

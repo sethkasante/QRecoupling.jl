@@ -135,6 +135,7 @@ Generic square roots specify an algebraic expression. To evaluate with the packa
 ```@docs
 QForm
 xform
+x_form
 XValue
 LevelXValue
 QRecoupling.ExactX
