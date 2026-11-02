@@ -147,6 +147,12 @@ const ONES = (1, 1, 1, 1, 1, 1)
         @test iszero(xform(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2)))
         @test string(xform(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2))) == "LevelXValue(k = 10, 0)"
         @test_throws ArgumentError xform(q3j(Exact(5), 1, 1, 1, 1, -1, 0))
+        # arithmetic results and values at q = 1 say why, not that Nemo is missing
+        a = q6j(Exact(10), 1, 1, 1, 1, 1, 1); c = q6j(Exact(), 1, 1, 1, 1, 1, 1)
+        for f in (radical, xform, QRecoupling.xpolynomial, QRecoupling.radicand), v in (a * a, a + fsymbol(Exact(10), 1, 1, 1, 1, 1, 2), c, c + fsymbol(Exact(), 1, 1, 1, 1, 1, 2))
+            err = try; f(v); nothing; catch e; e; end
+            @test err isa ArgumentError && !occursin("Nemo", err.msg)
+        end
         # the printed polynomials are the value: read them back at x = 2cos(π/h), with and without a root
         rooted = 0
         for (f, l) in ((q6j, (1, 1, 1, 1, 1, 1)), (q6j, (2, 2, 2, 2, 2, 2)), (q6j, (3//2, 3//2, 1, 1, 1, 1)), (fsymbol, (1, 1, 1, 1, 1, 1)),

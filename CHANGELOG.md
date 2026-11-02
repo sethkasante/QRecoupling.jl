@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## v0.6.1
 
 - Nemo 0.55, 0.56 and 0.57 are allowed, as well as 0.54.
+- `radical`, `xform`, `xpolynomial` and `radicand` on the result of arithmetic, or on a value at q = 1, say why they cannot answer. They used to say that Nemo was missing, even with Nemo loaded.
+- CI runs on Node 24 actions.
 
 ## v0.6.0
 

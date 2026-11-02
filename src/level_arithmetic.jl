@@ -714,3 +714,15 @@ end
 Base.show(io::IO, v::LevelValue) = print(io, "LevelValue(k = ", v.k, ", ", _level_value_str(v), ")")
 Base.show(io::IO, s::LevelValueSum) =
     print(io, "LevelValueSum(k = ", s.k, ", ", join((_level_value_str(v) for v in values(s.terms)), " + "), ")")
+
+# ---- requests that need a symbol's rule ----
+
+# Radicals and polynomials in x are read from a symbol's rule, which the result of arithmetic does not keep, and a
+# value at q = 1 has no x. Without these the backend stubs would say that Nemo is missing.
+for f in (:radical, :radical_form, :has_radical_form, :xform, :xpolynomial, :radicand)
+    @eval $f(::Union{LevelValue,LevelValueSum}; kwargs...) = throw(ArgumentError(string("`", $(QuoteNode(f)),
+        "` takes a value from a symbol, such as `q6j(Exact(k), …)`, and not yet the result of arithmetic. ",
+        "`float` and `numeric_value` give its number")))
+    @eval $f(::_ClassicalExact; kwargs...) = throw(ArgumentError(string("`", $(QuoteNode(f)),
+        "` takes a value at a level, from `Exact(k)`. A value at q = 1 is already written in square roots")))
+end
