@@ -2,6 +2,8 @@
 
 ## v0.6.0
 
+- `float` of a `QForm` at a level takes 0.3–0.5 µs where it took 18–30 µs, and gives the same correctly rounded value on every input tested, because it comes from the compensated pass when that pass can certify it. Forms with powers of q and sums that cancel heavily keep the wide route.
+- A 6j symbol evaluated along its column no longer allocates its scratch on each call, and real q skips a double-word pass that could only fail.
 - Level and real-q tables no longer use a `BigFloat` per entry, which makes a sweep over levels or q values much faster: `q6j(Level(10i), …)` over i ≤ 2500 went from 41 s to 2.5 s, and `q6j(At(exp(-π/10i)), …)` from 72 s to 14 s. The entries are also more accurate at large levels, within about 5 u² at k = 10⁵ where they were off by about 10¹⁰ u².
 - **Breaking:** `Exact(k)` and `Symbolic()` return a `QForm`, the value written in quantum integers from its formula, and `SymbolicValue` is gone. `Exact()` stays the exact value at q = 1. `Exact` is always one number, so `Exact(k)` needs no backend and has exact `==`, `iszero` and arithmetic at its level. `Symbolic()` is a function of q: `f(q)` evaluates it at any q, `f(1)` gives the exact value at q = 1, `float` and arithmetic raise an error, and `==` means equal at every q, also against a number. `Symbolic()` now covers `qcg` and `q3j`, and `x_form` and `phi_form` accept forms.
 - `==` between `Symbolic()` values decides equality at every q, and a sum that vanishes at every q is shown as 0. Nothing is expanded: an integer polynomial cannot vanish at an integer above the sum of its coefficients, so one such point is read through residues at word primes.

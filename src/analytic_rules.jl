@@ -975,6 +975,7 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
         # and for complex q the phase term CPHASE·|P|·|log q| plus the roots and balanced factors (`nr`).
         # Accepting at RTOL_PLAIN gives the same contract as the level and classical kernels.
         mode=POLICY[]
+        kplain=R(NaN)
         if !(mode === :strict || mode === :strict_lazy || mode === :compensated_only)
             tabp=_analytic_table(qq,N,workspace)
             vp,kp,wrel,pw,nr,cut=_analytic_pass(s,tabp,w,e2)
@@ -993,6 +994,7 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
             if isfinite(relb) && relb <= RTOL_PLAIN && cut >= CUT_MARGIN
                 return T(_avalue(vp))
             end
+            tabp.accurate && (kplain=kp)
         end
         # A zero never certifies itself, so a pairwise-cancelling sum would otherwise pay for the double
         # word and then for arbitrary precision. The test is a proof and a few integer comparisons.
@@ -1001,14 +1003,20 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
         # Double-word tier: u² per operation, so this bound is met for every
         # well-conditioned q and the arbitrary-precision tiers below are reached
         # only near a singularity of the rule.
-        vd,kd,_,_,_,_=_analytic_pass(s,_analytic_table(_dwnum(qq),N,workspace),w,e2)
-        if isfinite(kd) && ops*eps(DWNum)*kd <= tol
-            return T(_aldexp(_narrow(vd.m),vd.e))
+        # The plain pass has measured the cancellation long before its digits run out (this bound needs κ ≲ 1e11 at
+        # large spins), so a sum far past it skips a pass that could only fail. Both passes read the same sum.
+        if !(ops*eps(DWNum)*kplain > 16*tol)
+            vd,kd,_,_,_,_=_analytic_pass(s,_analytic_table(_dwnum(qq),N,workspace),w,e2)
+            if isfinite(kd) && ops*eps(DWNum)*kd <= tol
+                return T(_aldexp(_narrow(vd.m),vd.e))
+            end
         end
         # Near-edge tier before arbitrary precision: O(distance) along the column, asked for this path's own
         # promise RTOL_PLAIN/8 (a stricter target declined the whole unit circle for no promised gain).
         if labels !== nothing && !weighted
-            vr = sixj_entry(labels,qq,_column_workspace(workspace);rtol=RTOL_PLAIN/8)
+            slot,work=_borrow_column(workspace)
+            vr = sixj_entry(labels,qq,work;rtol=RTOL_PLAIN/8)
+            _return_column(slot)
             vr === nothing || return T(vr)
         end
         # The same tier for a rule that brings its own: a coupling coefficient from its Casimir column
@@ -1017,7 +1025,6 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
             vr = near_edge()
             vr === nothing || return T(vr)
         end
-        v=AnalyticScaled(T(_narrow(vd.m)),vd.e)
     else
         v,kappa,_,_,_,_=_analytic_pass(s,_analytic_table(qq,N,workspace),w,e2)
         if isfinite(kappa) && ops*eps(one(real(qq)))*kappa <= tol

@@ -116,7 +116,7 @@ See the [migration guide](https://sethkasante.github.io/QRecoupling.jl/stable/mi
 **What the numbers mean:** Floating-point values, exact values, and zero tests are computed separately, each stated in the [accuracy guide](https://sethkasante.github.io/QRecoupling.jl/stable/performance/):
 
 - *Floating point:* factorial-rule sums with compensated arithmetic; precision is raised when cancellation would otherwise cost significant digits. Final conversion can underflow a nonzero value to zero.
-- *Exact:* a value is written in quantum integers from its formula and is never expanded to read it. Zeros and equality are decided from residues at word primes with a proved bound, never by a numerical tolerance.
+- *Exact:* a value is written in quantum integers from its formula and is never expanded to read it. Zeros and equality are decided from residues at word primes with a proved bound, never by a numerical tolerance. `float` of an exact form rounds from more digits than `Level(k)` keeps; `Level(k)` stays the direct route to a number.
 - *Zero tests:* `iszero_at` confirms unresolved modular candidates with exact arithmetic. The `:cancels` entries of `level_spectrum` are screening results unless you pass `prove = true`.
 
 The fast paths are Float64 and machine-size labels. High-degree exact sums and BigFloat F matrices are supported but cost more. Batches and level grids can run on several threads; do not clear caches while other threads are evaluating.

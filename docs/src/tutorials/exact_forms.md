@@ -68,7 +68,7 @@ a = q6j(Exact(12), 1, 1, 1, 1, 1, 1)
 
 A form holds its rule, which is all that `==`, `iszero` and `float` read, so it costs about 0.15 µs at any size. What it prints is written the first time it is shown, about 490 µs at spins 100, k = 401.
 
-Use `Level(k)` for numbers. It costs about 1 µs at that size, and is accurate to about 10⁻¹⁶ in the median. `numeric_value(v; bits)` gives more digits.
+Use `Level(k)` for numbers. It costs about 1 µs at that size, and is accurate to about 10⁻¹⁶ in the median. `float(v)` rounds from more digits than `Level(k)` keeps: it takes under a microsecond on a typical form, and about 260 µs at that size, where the sum cancels heavily. `numeric_value(v; bits)` gives more digits.
 
 ```@example exact_forms
 (Float64(v), numeric_value(v; bits = 128))

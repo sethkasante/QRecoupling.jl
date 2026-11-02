@@ -760,13 +760,29 @@ function numeric_value(f::QForm; bits::Integer = precision(BigFloat))
     end
     return setprecision(() -> _round_level(v), BigFloat, Int(bits))
 end
-function Base.float(f::QForm)
+"""
+The form as a machine number, rounded from more digits than `Level(k)` keeps. The compensated pass carries double words, so
+when its bound leaves almost nothing beyond the final rounding, that rounding is the value's (within 0.501 ulp). Otherwise,
+and for forms with powers of q, the value comes from `numeric_value`, which costs some 18 µs.
+"""
+function _level_float(f::QForm)
+    f.k === nothing && throw(ArgumentError(_NO_VALUE))
+    f.rule === nothing && return 0.0
+    if f.weight == (0, 0)
+        st, segs = classify_at_level(f.rule, f.k)
+        if st === :finite && _within_level_tables(f.rule, segs, f.k)
+            v, B = _sum_compensated(f.rule, segs, f.k, qint_tables(Float64, f.k))
+            _certifies(v, B, 1.002 * _unit(Float64)) && return v
+        end
+    end
     v = numeric_value(f; bits = 128)
     return v isa Complex ? ComplexF64(v) : Float64(v)
 end
-Base.Float64(f::QForm) = Float64(numeric_value(f; bits = 128))
-Base.Float32(f::QForm) = Float32(numeric_value(f; bits = 128))
-Base.ComplexF64(f::QForm) = ComplexF64(numeric_value(f; bits = 128))
+Base.float(f::QForm) = _level_float(f)
+Base.Float64(f::QForm) = Float64(_level_float(f))
+Base.Float32(f::QForm) = Float32(_level_float(f))
+Base.ComplexF64(f::QForm) = ComplexF64(_level_float(f))
+Base.convert(::Type{T}, f::QForm) where {T<:Union{Float32,Float64,ComplexF32,ComplexF64}} = T(_level_float(f))
 Base.convert(::Type{T}, f::QForm) where {T<:Union{AbstractFloat,Complex{<:AbstractFloat}}} = T(numeric_value(f; bits = 128))
 Base.BigFloat(f::QForm) = numeric_value(f)
 Base.big(f::QForm) = BigFloat(f)

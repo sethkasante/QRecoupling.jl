@@ -652,7 +652,9 @@ function level_escalate(s::FactorialSum, segs, k::Int, ::Type{T}; ztab::Union{No
     # The recurrence, when available, accepts entries using its own error estimate. `labels` are those of
     # the 6j symbol; an F or G symbol is that entry times its dimension factor.
     if T === Float64 && labels !== nothing       # the symbol as one entry of its column: O(distance), no κ
-        v = sixj_entry(labels, k, _column_workspace(workspace))
+        slot, work = _borrow_column(workspace)
+        v = sixj_entry(labels, k, work)
+        _return_column(slot)
         v === nothing || return T(v * _family_scale(family, LevelQ(qint_tables(Float64, k), k), labels))
     end
     # the modular screen is a pass over every term; a candidate is settled exactly

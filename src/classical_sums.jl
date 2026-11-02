@@ -316,7 +316,9 @@ function classical_value(s::FactorialSum, ::Type{T}; labels = nothing, family = 
     target = _target_digits(T)
     pess = _bound_pessimism(s, segs, classical_tables(Float64, N))
     if T === Float64 && labels !== nothing       # the symbol as one entry of its column: O(distance), no κ
-        vr = sixj_entry(labels, ClassicalQ(), _column_workspace(workspace))
+        slot, work = _borrow_column(workspace)
+        vr = sixj_entry(labels, ClassicalQ(), work)
+        _return_column(slot)
         # a returned value is certified far from zero; an F or G symbol is the 6j times its dimension factor
         vr === nothing || return T(vr * _family_scale(family, ClassicalQ(), labels))
     end

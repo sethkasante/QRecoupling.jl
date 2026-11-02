@@ -110,6 +110,34 @@ const ONES = (1, 1, 1, 1, 1, 1)
         @test T.invs[2001][1] >= 0 && isinf(T.ints[2001][1]) && T.ints[101][1] > 1e40
         @test q6j(At(3.0), 300, 300, 300, 300, 300, 300) ≈ q6j(At(1 / 3.0), 300, 300, 300, 300, 300, 300) rtol = 1e-12
     end
+    @testset "float of a form keeps the 128-bit rounding" begin
+        wide(f) = Float64(numeric_value(f; bits = 128))
+        for (k, ls) in ((10, ((1, 1, 1, 1, 1, 1), (2, 2, 2, 2, 2, 2), (1, 3 // 2, 5 // 2, 2, 2, 3 // 2))),
+                        (5, ((3 // 2, 3 // 2, 1, 3 // 2, 3 // 2, 1),)), (200, ((4, 4, 4, 4, 4, 4), (10, 12, 8, 6, 14, 10))),
+                        (1000, ((40, 40, 40, 40, 40, 40),)))
+            for l in ls
+                f = q6j(Exact(k), l...)
+                @test float(f) === Float64(f) === convert(Float64, f) === wide(f)
+            end
+        end
+        z = q6j(Exact(4), 3 // 2, 3 // 2, 1, 3 // 2, 3 // 2, 1)
+        @test iszero(z) == iszero(float(z))
+        @test float(q3j(Exact(5), 1, 1, 1, 1, -1, 0)) isa ComplexF64
+        @test_throws ArgumentError float(q6j(Symbolic(), 1, 1, 1, 1, 1, 1))
+    end
+    @testset "a column run allocates nothing once warm, on any thread" begin
+        l = (200, 210, 190, 205, 195, 215)       # labels whose sum cancels, so the value comes from the column
+        call(l) = (q6j(l...), q6j(Level(2001), l...))
+        allocations(l) = (call(l); call(l); (@allocated(q6j(l...)), @allocated(q6j(Level(2001), l...))))   # inside a function
+        @test allocations(l) == (0, 0)
+        want = call(l)
+        got = fill((0.0, 0.0), 200)
+        Threads.@threads for i in eachindex(got)
+            got[i] = call(l)
+        end
+        @test all(==(want), got)
+        @test length(QRecoupling._ratio_slots()) >= Threads.nthreads()
+    end
     include("qcg_tests.jl")
     include("regge_tests.jl")
     include("release_tests.jl")
