@@ -360,8 +360,11 @@ Base.isapprox(a::ClassicalResult, b::ClassicalSum; kwargs...) = isapprox(Float64
 Base.isapprox(a::ClassicalSum, b::Real; kwargs...) = isapprox(Float64(a), Float64(b); kwargs...)
 Base.isapprox(a::Real, b::ClassicalSum; kwargs...) = isapprox(Float64(a), Float64(b); kwargs...)
 
+# The REPL shows the first terms, as for a form. `print` and `string` give them all.
 function Base.show(io::IO, a::ClassicalSum)
-    for (i, (r, c)) in enumerate(sort!(collect(a.terms); by = first))
+    terms = sort!(collect(a.terms); by = first)
+    most = get(io, :limit, false) ? QFORM_SHOWN_TERMS : length(terms)
+    for (i, (r, c)) in enumerate(first(terms, most))
         i > 1 && print(io, c < 0 ? " - " : " + ")
         i == 1 && c < 0 && print(io, "-")
         n, d = abs(numerator(c)), denominator(c)
@@ -371,4 +374,5 @@ function Base.show(io::IO, a::ClassicalSum)
             print(io, isone(n) ? "" : string(n), "√", r, isone(d) ? "" : "/" * string(d))
         end
     end
+    most < length(terms) && print(io, " + … (", length(terms), " terms)")
 end

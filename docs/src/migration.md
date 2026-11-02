@@ -8,7 +8,7 @@
 
 | Before | Now |
 |---|---|
-| `q6j(Symbolic(), js...)` was a `SymbolicValue` | A form, the formula at every q, with no value of its own. `f(q)` evaluates it, `f(1)` gives the exact value at q = 1, and `Float64(f)` and arithmetic raise an error. `xform` and `phi_form` accept it |
+| `q6j(Symbolic(), js...)` was a `SymbolicValue` | A form, the formula at every q, with no value of its own. `f(q)` evaluates it, `f(1)` gives the exact value at q = 1, and `Float64(f)` and arithmetic raise an error. `xform` accepts it |
 | `q6j(Exact(k), js...)` was an `ExactX`, and needed Nemo | A form at the level, with no backend. `==`, `iszero` and arithmetic are exact |
 | `q3j` and `qcg` had no `Exact(k)` or `Symbolic()` | Both write them with their powers of q |
 | `v.x_value`, `v.rad` | `xform(v)` to print it, `QRecoupling.xpolynomial(v)`, `QRecoupling.radicand(v)`, `radical(v)`, with Nemo |
@@ -122,8 +122,7 @@ qint(Symbolic(),5)
 
 In v0.4 and v0.5, `Exact(k)` and `k=10, exact=true` returned an `ExactX`, a polynomial in x. From v0.6 they return a form; see above. Read coefficients with `QRecoupling.xpolynomial` and `QRecoupling.radicand`, request nested square roots with `radical(v)`, and convert numerically with `Float64`, `BigFloat`, or `numeric_value`. `radical` returns `RadExpr` or a reasoned `NoRadical` result.
 
-`Exact(k; form=:canonical)` retained the former cyclotomic representation until v0.6. `form=:deferred`, `ExactLevelWorkspace`, `canonicalize_exact`, and dedicated Biedenharn–Elliott verifier functions from development drafts are not current APIs. Write identities from the public exact arithmetic as in the [identity tutorial](tutorials/identities.md). Raw DCR/monomial projection remains a separate compatibility path; it is not automatically converted into an x-form by `qeval(Symbolic(), object)`.
-
+`Exact(k; form=:canonical)` retained the former cyclotomic representation until v0.6. `form=:deferred`, `ExactLevelWorkspace`, `canonicalize_exact`, and dedicated Biedenharn–Elliott verifier functions from development drafts are not current APIs. Write identities from the public exact arithmetic as in the [identity tutorial](tutorials/identities.md).
 ### Symbolic output is bounded and lazy
 
 Use `xform(value)` to expand a symbolic rule. The earlier `QRecoupling.xvalue(value)` spelling was removed in v0.6; `value.x_value` on an exact level result instead exposes its stored polynomials.

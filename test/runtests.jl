@@ -208,6 +208,10 @@ const ONES = (1, 1, 1, 1, 1, 1)
         # the field operations
         @test string((r2 + r3)^2) == "5//1 + 2√6" && (r2 + r3) * (r2 - r3) == -1
         @test string(x + 1) == "3//2 + √15/6" && string(-x) == "-1//2 - √15/6" && 2 * x == x + x && x / 2 * 2 == x
+        # the REPL shows the first terms, string gives them all
+        long = sum(C(1, p // big(1)) for p in (2, 3, 5, 7, 11, 13, 17, 19))
+        @test sprint(show, long; context = :limit => true) == "√2 + √3 + √5 + √7 + √11 + √13 + … (8 terms)" &&
+              string(long) == "√2 + √3 + √5 + √7 + √11 + √13 + √17 + √19"
         @test string(inv(x)) == "-3//1 + √15" && x * inv(x) == 1 && x / x == 1 && x^-2 * x^2 == 1 && 1 / x == inv(x)
         y = r2 + r3 + r5
         @test y * inv(y) == 1 && y^3 / y^3 == 1 && (y + 1) / (y + 1) == 1
