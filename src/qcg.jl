@@ -47,10 +47,6 @@ carries the phase) with the Clebsch-Gordan weights.
 q3j_rule(J1::Int, J2::Int, J3::Int, M1::Int, M2::Int, M3::Int) =
     (threej_sum(J1, J2, J3, M1, M2, M3), _cg_weights(J1, J2, J3, M1, M2))
 
-"q = e^{iπ/(k+2)} in the precision of `T`."
-_level_q(::Type{T}, k::Int) where {T} = cispi(one(real(float(T))) / (k + 2))
-
-
 """
     _level_half_phase_parts(k) -> (hi, lo)
 
@@ -88,9 +84,6 @@ end
 
 "The high parts of the cached half-step phases, rounded once to Float64."
 _level_half_phases(k::Int) = first(_level_half_phase_parts(k))
-
-"The low parts of the cached half-step phases, so phase = hi + lo to about u²."
-_level_half_phases_lo(k::Int) = last(_level_half_phase_parts(k))
 
 "e^{iπr/(2h)} in the precision of `R`, rounded once."
 _half_phase(::Type{Float64}, k::Int, r::Int) = @inbounds _level_half_phases(k)[mod(r, 4(k + 2)) + 1]

@@ -164,10 +164,13 @@ const ONES = (1, 1, 1, 1, 1, 1)
         end
         @test rooted > 0
     end
-    @testset "the message when the Nemo backend is missing" begin
-        @test occursin("Install Nemo", QRecoupling._algebra_hint(:x_form, false, true))
-        @test occursin("`include`", QRecoupling._algebra_hint(:x_form, true, false))
-        @test occursin("Restart Julia", QRecoupling._algebra_hint(:x_form, true, true))
+    @testset "a batch along one column agrees with scalar calls" begin
+        column = [(30, 31, e, 32, 33, 20) for e in 2:60]
+        for f in (q6j, fsymbol, gsymbol), target in (Level(400), Classical())
+            batch = f(target, column; threads = 1)
+            scalar = [f(target, l...) for l in column]
+            @test all(isapprox.(batch, scalar; rtol = 1e-12)) && iszero.(batch) == iszero.(scalar)
+        end
     end
     include("qcg_tests.jl")
     include("regge_tests.jl")

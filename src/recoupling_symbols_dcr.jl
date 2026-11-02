@@ -39,13 +39,6 @@ end
     add_qfact!(buf, (J1 + J2 + J3) ÷ 2 + 1, -1)
 end
 
-@inline function qtetrahedron!(buf, J1::Int, J2::Int, J3::Int, J4::Int, J5::Int, J6::Int)
-    qtriangle!(buf, J1, J2, J3)
-    qtriangle!(buf, J1, J5, J6)
-    qtriangle!(buf, J2, J4, J6)
-    qtriangle!(buf, J3, J4, J5)
-end
-
 # --- Recoupling Symbols (3j & 6j) ---
 
 # Symbol formulas live in factorial_rule.jl; these internal methods use doubled labels.

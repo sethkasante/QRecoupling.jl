@@ -472,18 +472,6 @@ end
 
 _analytic_table(q,N,::Nothing) = _analytic_table_cached(q,N)
 
-"""
-`Π Ψ_d^{e_d}` for one balanced monomial, from the table's balanced factors (a function, not a closure: the
-closure boxed a variable and allocated 35 times per prefactor).
-"""
-@inline function _balanced_mono(m, psi, q)
-    acc=_ascaled(oftype(q,m.sign))
-    for (d,e) in m.phi_exps
-        acc=_amul_power(acc,psi[d],e)
-    end
-    return acc
-end
-
 "Largest q-factorial argument in a rule's prefactor: how far up the table the prefactor actually reads."
 @inline function _pre_max(s::FactorialSum)
     m = 0
@@ -974,28 +962,25 @@ function analytic_value(s::FactorialSum,q::Number;workspace=nothing,labels=nothi
         # term generation c·u·Σ j|t_j|, compensated summation 2u·Σ|t_j|, prefactor and first-term roundings,
         # and for complex q the phase term CPHASE·|P|·|log q| plus the roots and balanced factors (`nr`).
         # Accepting at RTOL_PLAIN gives the same contract as the level and classical kernels.
-        mode=POLICY[]
         kplain=R(NaN)
-        if !(mode === :strict || mode === :strict_lazy || mode === :compensated_only)
-            tabp=_analytic_table(qq,N,workspace)
-            vp,kp,wrel,pw,nr,cut=_analytic_pass(s,tabp,w,e2)
-            # A weight adds one product per step, and q^w its own rounding.
-            cstep=2*sum(f->abs(Int(f.c)),s.fac;init=0)+2+(iszero(w) ? 0 : 2)
-            mpre=2*(sum(p->abs(Int(p.second)),s.pre;init=0)+sum(f->abs(Int(f.c)),s.fac;init=0))+2
-            phase=iszero(pw) ? zero(R) : R(CPHASE)*R(pw)*abs(log(qq))
-            # Table entries are only `pcond·u` accurate, so `pcond` multiplies the count of reads, separately
-            # for the prefactor (up to its largest argument) and the sum (up to N). Tables rounded from double
-            # words are charged nothing; the condition still drives the near-root warning.
-            pc=_prefactor_cond(tabp,N)
-            pc >= NEAR_ROOT_COND && _warn_near_root(qq,N)
-            pcond=tabp.accurate ? one(R) : R(pc)
-            pcpre=tabp.accurate ? one(R) : R(_prefactor_cond(tabp,_pre_max(s)))
-            relb=(cstep*wrel*pcond+2*kp+(mpre+2*nr)*pcpre+phase)*eps(R)
-            if isfinite(relb) && relb <= RTOL_PLAIN && cut >= CUT_MARGIN
-                return T(_avalue(vp))
-            end
-            tabp.accurate && (kplain=kp)
+        tabp=_analytic_table(qq,N,workspace)
+        vp,kp,wrel,pw,nr,cut=_analytic_pass(s,tabp,w,e2)
+        # A weight adds one product per step, and q^w its own rounding.
+        cstep=2*sum(f->abs(Int(f.c)),s.fac;init=0)+2+(iszero(w) ? 0 : 2)
+        mpre=2*(sum(p->abs(Int(p.second)),s.pre;init=0)+sum(f->abs(Int(f.c)),s.fac;init=0))+2
+        phase=iszero(pw) ? zero(R) : R(CPHASE)*R(pw)*abs(log(qq))
+        # Table entries are only `pcond·u` accurate, so `pcond` multiplies the count of reads, separately
+        # for the prefactor (up to its largest argument) and the sum (up to N). Tables rounded from double
+        # words are charged nothing; the condition still drives the near-root warning.
+        pc=_prefactor_cond(tabp,N)
+        pc >= NEAR_ROOT_COND && _warn_near_root(qq,N)
+        pcond=tabp.accurate ? one(R) : R(pc)
+        pcpre=tabp.accurate ? one(R) : R(_prefactor_cond(tabp,_pre_max(s)))
+        relb=(cstep*wrel*pcond+2*kp+(mpre+2*nr)*pcpre+phase)*eps(R)
+        if isfinite(relb) && relb <= RTOL_PLAIN && cut >= CUT_MARGIN
+            return T(_avalue(vp))
         end
+        tabp.accurate && (kplain=kp)
         # A zero never certifies itself, so a pairwise-cancelling sum would otherwise pay for the double
         # word and then for arbitrary precision. The test is a proof and a few integer comparisons.
         # The zero screens are statements about the unweighted rule; a weight moves terms apart.

@@ -250,15 +250,6 @@ end
 "x = 2cos(π/h) at the requested precision."
 _x0(h::Int, ::Type{T}) where {T} = 2 * cos(T(pi) / T(h))
 
-function _evalq(f, x0::T) where {T}
-    degree(f) < 0 && return zero(T)
-    acc = zero(T)
-    for i in degree(f):-1:0
-        acc = acc * x0 + T(Rational{BigInt}(coeff(f, i)))
-    end
-    return acc
-end
-
 """
 Horner with the running mass `Σ|cᵢ||x|ⁱ`, which bounds the relative error, `(2d+1)·u·mass/|value|`. Needed:
 near `x = 2` the polynomial cancels, more so at higher levels.

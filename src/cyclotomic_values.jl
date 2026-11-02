@@ -33,15 +33,6 @@ function arith_sieve(D::Int)
     return μ, φ
 end
 
-"Divisor lists for 1..D."
-function divisor_lists(D::Int)
-    divs = [Int[] for _ in 1:D]
-    for d in 1:D, n in d:d:D
-        push!(divs[n], d)
-    end
-    return divs
-end
-
 "Λ̃(m) = ℓ if m = ℓ^a for a prime ℓ and a ≥ 1, otherwise 1."
 function lambda_tilde(m::Int)
     m < 2 && return 1

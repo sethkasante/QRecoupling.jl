@@ -26,7 +26,7 @@ end
 
 # ---- scratch for calls that bring no workspace ----
 #
-# The `:lazy` policy stores each ratio's low part for the compensated fallback, and a column run needs three arrays as long
+# The plain pass stores each ratio's low part for the compensated fallback, and a column run needs three arrays as long
 # as the column. Calls without a workspace borrow these per thread, each guarded by an atomic flag: a task finding one
 # busy allocates, and one never returned (an exception) degrades that thread to allocating, never to sharing.
 

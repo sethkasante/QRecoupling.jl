@@ -218,25 +218,6 @@ function div!(buf::CycloBuffer, a::CyclotomicMonomial, b::CyclotomicMonomial)
 end
 
 # (M_a * M_b )/ M_c
-function mul_div!(buf::CycloBuffer, a::CyclotomicMonomial, b::CyclotomicMonomial, c::CyclotomicMonomial)
-    (a.sign == 0 || b.sign == 0) && (buf.sign = 0; return buf)
-    c.sign == 0 && throw(DivideError())
-
-    ensure_capacity!(buf, max(a.max_d, b.max_d, c.max_d))
-    reset!(buf, a.sign * b.sign * c.sign)
-    buf.q_pow = a.q_pow + b.q_pow - c.q_pow
-
-    @inbounds for (d, e) in a.phi_exps
-        update_exps!(buf, d, e)
-    end
-    @inbounds for (d, e) in b.phi_exps
-        update_exps!(buf, d, e)
-    end
-    @inbounds for (d, e) in c.phi_exps
-        update_exps!(buf, d, -e)
-    end
-    return buf
-end
 
 Base.:*(a::CyclotomicMonomial, b::CyclotomicMonomial) = snapshot(mul!(CycloBuffer(max(a.max_d, b.max_d)), a, b))
 Base.:/(a::CyclotomicMonomial, b::CyclotomicMonomial) = snapshot(div!(CycloBuffer(max(a.max_d, b.max_d)), a, b))

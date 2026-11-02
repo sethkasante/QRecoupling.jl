@@ -43,15 +43,7 @@ struct NoRadical
     approx::Union{Nothing,Float64}
 end
 
-const _NEMO = Base.PkgId(Base.UUID("2edaba10-b0f1-5616-af89-8c11ac63239a"), "Nemo")
-
-"Why the backend is missing, which differs once Nemo itself has been loaded: then only the extension can be absent."
-function _algebra_hint(name, nemo_loaded::Bool, top_level::Bool)
-    nemo_loaded || return "$name requires the optional Nemo backend. Install Nemo and load it with `using Nemo`. Numerical values, `Exact()` and `Exact(k)` do not require it."
-    top_level || return "$name requires the Nemo extension, and Nemo is loaded, but a QRecoupling made by `include` cannot have package extensions. Restart Julia and load it with `using QRecoupling, Nemo`."
-    return "$name requires the Nemo extension, and Nemo is loaded, but the extension is not. Restart Julia and load both with `using QRecoupling, Nemo`. If it persists, check `Base.get_extension(QRecoupling, :QRecouplingNemoExt)` and that Nemo meets the version in QRecoupling's compat."
-end
-_missing_algebra(name) = throw(ArgumentError(_algebra_hint(name, Base.root_module_exists(_NEMO), parentmodule(@__MODULE__) === @__MODULE__)))
+_missing_algebra(name) = throw(ArgumentError("$name requires the optional Nemo backend. Install Nemo and load it with `using Nemo`. Numerical values, `Exact()` and `Exact(k)` do not require it."))
 _qfact_exactx(args...; kwargs...) = _missing_algebra(:Exact)
 exact_x(args...; kwargs...) = _missing_algebra(:exact_x)
 generic_value(args...; kwargs...) = _missing_algebra(:x_form)

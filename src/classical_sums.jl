@@ -203,12 +203,6 @@ function _generic_zero_candidate(s::FactorialSum, tabs = nothing)
     return _sum_vanishes_mod(s, tabs)
 end
 
-"Is the sum the zero function of q? Nonzero residues prove it is not; see the section comment above."
-function is_generic_zero(s::FactorialSum, tabs = nothing)
-    _generic_zero_candidate(s, tabs) || return false
-    return is_empty_sum(s) || pairwise_zero(s) || iszero(generic_value(s))
-end
-
 # ---- exact evaluation by Horner nesting (replaces BigFloat escalation for Float64 results) ----
 
 using Base.GMP: MPZ

@@ -392,15 +392,9 @@ function _certified_value(s::FactorialSum, segs, k::Int, tab::QIntTables{T}, wor
         kept = _surviving_digits(v, B, _bound_pessimism(s, segs, tab))
         return v, (kept >= _target_digits(T) ? :done : :escalate)
     end
-    mode = POLICY[]
-    if mode === :compensated_only
-        vc, Bc = _sum_compensated(s, segs, k, tab)
-        return vc, (_certifies(vc, Bc, RTOL_CERTIFIED) ? :done : :escalate)
-    end
-    rtol = mode === :strict || mode === :strict_lazy ? RTOL_CERTIFIED : RTOL_PLAIN
     nsteps = sum(seg -> length(seg) - 1, segs; init = 0)
     # A one-step sum recomputes its ratio on fallback: cheaper than allocating a buffer on every call.
-    lazy = (mode === :lazy || mode === :strict_lazy) && nsteps >= LAZY_MIN_STEPS
+    lazy = nsteps >= LAZY_MIN_STEPS
     slot = nothing
     if !lazy
         buf = nothing
@@ -410,7 +404,7 @@ function _certified_value(s::FactorialSum, segs, k::Int, tab::QIntTables{T}, wor
         buf = _ratio_buffer(workspace, T, 2 * nsteps)
     end
     v, B = _sum_at_level(s, segs, k, tab, buf)
-    if _certifies(v, B, rtol)
+    if _certifies(v, B, RTOL_PLAIN)
         _return_ratio_buffer(slot)
         return v, :done
     end
@@ -586,12 +580,8 @@ function _level_exact_zero(s::FactorialSum, segs, k::Int)
     return z === nothing ? _level_ring_zero(s, segs, k) : z
 end
 
-"The short pass under the current policy; tables of other types have none."
-@inline function _small_try(s::FactorialSum, z0::Int, z1::Int, tab::QIntTables{Float64})
-    mode = POLICY[]
-    mode === :compensated_only && return (0.0, SMALL_OUTSIDE)      # that policy has no plain pass to reproduce
-    return _small_pass(s, z0, z1, tab, mode === :strict || mode === :strict_lazy ? RTOL_CERTIFIED : RTOL_PLAIN)
-end
+"The short pass; tables of other types have none."
+@inline _small_try(s::FactorialSum, z0::Int, z1::Int, tab::QIntTables{Float64}) = _small_pass(s, z0, z1, tab, RTOL_PLAIN)
 @inline _small_try(s::FactorialSum, z0::Int, z1::Int, tab::QIntTables{T}) where {T} = (zero(T), SMALL_OUTSIDE)
 
 """
@@ -615,20 +605,7 @@ function _small_exact_zero(s::FactorialSum)
 end
 
 """
-Evaluation policy for `Float64` level and classical values:
-
-- `:lazy` (default): plain pass kept at a certified 2⁻⁴⁰; it stores each ratio's low part, so the
-  compensated fallback reuses them (15–28% cheaper fallback, no cost on easy symbols).
-- `:strict_lazy`: every value certified to 2⁻⁴⁴; +0–48% on cancellation-heavy single symbols.
-- `:compensated_only`: always the compensated pass; ≤ 1e-16 everywhere, +10–18% on easy symbols.
-- `:default`, `:strict`: the same thresholds without ratio reuse (kept for comparison).
-
-A configuration knob, not per-call state: set it before computing, not concurrently.
-"""
-const POLICY = Ref(:lazy)
-
-"""
-Below this many ratio steps the lazy policy keeps no ratio buffer (the values are identical either way).
+Below this many ratio steps the plain pass keeps no ratio buffer (the values are identical either way).
 Allocating one costs ~9 ns and recomputing a step's ratio ~10–20 ns, so only a one-step sum skips it.
 """
 const LAZY_MIN_STEPS = 2

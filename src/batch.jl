@@ -164,17 +164,6 @@ function _run_workspace(f::F, idx, n::Int, threads) where {F}
     return nothing
 end
 
-"Run `f(i)` for i in `idx` (or 1:n), spread over threads."
-function _run_over(f::F, idx, n::Int, threads) where {F}
-    idx === nothing && return _run(rng -> foreach(f, rng), n, threads)
-    _run(length(idx), threads) do rng
-        for j in rng
-            f(idx[j])
-        end
-    end
-    return nothing
-end
-
 # ---- families: runs of labels along one spin go to the three-term recurrence ----
 #
 # Runs of labels in which one spin steps by one (any position, moved first by symmetry) are computed as

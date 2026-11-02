@@ -35,8 +35,6 @@ CGTables{V}(ints, pows, I, P, k) where {V} = CGTables{V}(ints, pows, I, P, k, fa
 @inline _cgint(T::CGTables, n::Int) = @inbounds T.ints[n+1]
 @inline _cgpow(T::CGTables, n::Int) = @inbounds T.pows[n+T.P+1]
 
-_dw_of(x::BigFloat) = DWNum(x)
-
 "Real q > 0: built in 128 bits from r = √q itself, never from a rounded r (a rounded root would be amplified
 by the powers, as a rounded e^{iπ/h} was at a level)."
 function _cg_tables_real(q::Float64, I::Int, P::Int)

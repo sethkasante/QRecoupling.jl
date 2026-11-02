@@ -124,18 +124,6 @@ function qint_x(n::Int)
     end
 end
 
-"`[n]!` in ℤ[x]."
-function qfact_x(n::Int)
-    n >= 0 || throw(DomainError(n, "factorial of a negative argument"))
-    R, _ = xring()
-    p = R(1)
-    for m in 2:n
-        p *= qint_x(m)
-    end
-    return p
-end
-
-
 # ---------------------------------------------------------------------------------
 #  Radical classes as 𝔽₂ exponent vectors over the ψ basis
 # ---------------------------------------------------------------------------------
@@ -219,20 +207,6 @@ function _merge_exponents!(a::Dict{Int,Int}, b::Dict{Int,Int})
     return a
 end
 
-"Split `∏ ψ_e^{E_e}` as `(square root of the square part, odd-multiplicity indices)`."
-function _split_sqrt(E::Dict{Int,Int}; modulus = nothing, level = nothing)
-    rad = Int[]
-    nums = Tuple{Int,Int}[]; dens = Tuple{Int,Int}[]
-    for e in sort!(collect(keys(E)))
-        v = E[e]
-        r = mod(v, 2)
-        f = (v - r) ÷ 2
-        r == 1 && push!(rad, e)
-        f > 0 ? push!(nums, (e, f)) : f < 0 && push!(dens, (e, -f))
-    end
-    return _psi_pow_group(nums, modulus, level), _psi_pow_group(dens, modulus, level), rad
-end
-
 "`∏ ψ_e^{E_e}` as a numerator/denominator pair."
 function _psi_monomial(E::Dict{Int,Int}; modulus = nothing, level = nothing)
     nums = Tuple{Int,Int}[]; dens = Tuple{Int,Int}[]
@@ -304,9 +278,6 @@ Base.:(==)(a::XValue, b::XValue) =
     iszero(a) ? iszero(b) : (!iszero(b) && a.rad == b.rad && a.num == b.num && a.den == b.den)
 Base.hash(v::XValue, h::UInt) = hash(v.rad, hash(v.num, hash(v.den, h)))
 Base.:-(a::XValue) = XValue(a.rad, -a.num, a.den)
-
-"Is the value free of radicals, i.e. an element of ℚ(x)?"
-is_rational_x(v::XValue) = isempty(v.rad)
 
 function Base.:*(a::XValue, b::XValue)
     (iszero(a) || iszero(b)) && return zero(XValue)
@@ -643,14 +614,3 @@ function verify_by_evaluation(lhs::XValue, rhs::XValue)
     end
     return true
 end
-
-
-# ---------------------------------------------------------------------------------
-#  Triangle admissibility without a level — used by the generic machinery above and by the coherence
-#  examples, which live in the tutorials and the test suite rather than here.
-# ---------------------------------------------------------------------------------
-
-"Triangle admissibility for doubled labels, without a level."
-@inline _tri_x(a::Int, b::Int, c::Int) = a + b >= c && b + c >= a && c + a >= b && iseven(a + b + c)
-@inline _tet_x(a::Int, b::Int, c::Int, d::Int, e::Int, f::Int) =
-    _tri_x(a, b, c) && _tri_x(a, e, f) && _tri_x(d, b, f) && _tri_x(d, e, c)
