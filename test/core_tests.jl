@@ -66,4 +66,8 @@ const QR = QRecoupling
         QR.LEVEL_FIELD_CACHE_LIMIT[] = limit
     end
     @test Base.get_extension(QR, :QRecouplingNemoExt) === nothing
+    # the sectors say what they need when TensorKit is not loaded
+    @test Base.get_extension(QR, :QRecouplingTensorKitExt) === nothing
+    @test_throws ArgumentError SU2k(3)
+    @test_throws ArgumentError SU2q(0.8)
 end

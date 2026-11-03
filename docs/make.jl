@@ -24,6 +24,7 @@ makedocs(;
         "Applications" => "applications.md",
         "Tutorials" => [
             "Tensor Networks & Modular Data" => "tutorials/tensor_networks.md",
+            "TensorKit Sectors" => "tutorials/tensorkit.md",
             "Exact Forms" => "tutorials/exact_forms.md",
             "Finite Series" => "tutorials/finite_series.md",
             "Checking & Proving Identities" => "tutorials/identities.md",

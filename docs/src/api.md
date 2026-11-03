@@ -61,6 +61,13 @@ all_6j
 empty_caches!
 ```
 
+## TensorKit sectors
+
+```@docs
+SU2k
+SU2q
+```
+
 ## Exact values and x forms
 
 The [exact-values tutorial](tutorials/exact_forms.md#API-reference) documents `QForm`, `xform`, `XValue`, `ExactX`, `ExactXSum`, `radical`, `NoRadical`, and `numeric_value` with examples. Use `prove_identity` to compare expanded generic expressions.

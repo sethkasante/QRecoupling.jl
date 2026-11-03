@@ -67,6 +67,7 @@ To update an existing installation to the latest release, use `pkg> up QRecoupli
 - [Getting started](getting_started.md): labels, targets, and first calculations.
 - [Recoupling symbols](tqft.md): normalization, dimensions, and phases.
 - [Tensor networks and modular data](tutorials/tensor_networks.md): fusion bases and braiding.
+- [TensorKit sectors](tutorials/tensorkit.md): SU(2) at a level or at real q as tensor symmetries.
 - [Exact forms](tutorials/exact_forms.md) and [identity checks](tutorials/identities.md).
 - [Finite series](tutorials/finite_series.md) and [factorial-rule architecture](series.md).
 - [Applications](applications.md): research workflows built from these components.

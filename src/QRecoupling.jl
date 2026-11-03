@@ -58,6 +58,9 @@ export prove_identity, xform, XValue, LevelXValue
 export RadExpr, NoRadical, radical, numeric_value
 export QForm
 
+# TensorKit sectors, from the TensorKitSectors extension
+export SU2k, SU2q
+
 # structural queries and batches
 export all_6j, iszero_at, issingular_at, level_spectrum
 

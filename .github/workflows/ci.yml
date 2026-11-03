@@ -40,6 +40,10 @@ jobs:
       - name: Test without Nemo
         run: julia --startup-file=no test/core_environment.jl
 
+      - name: Test the TensorKit sectors
+        if: matrix.os == 'ubuntu-latest'
+        run: julia --startup-file=no test/tensorkit_environment.jl
+
       - name: Run tests
         uses: julia-actions/julia-runtest@v1
         with:

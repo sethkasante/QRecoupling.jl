@@ -74,6 +74,29 @@ function xform end
 "Largest generic polynomial the display of an `XValue` writes out, and its length."
 const GENERIC_MAX_DEGREE = 16
 const GENERIC_MAX_CHARS = 120
+
+_missing_tensorkit(name) = throw(ArgumentError("$name requires TensorKit or TensorKitSectors. Install one and load it with `using TensorKit`."))
+
+"""
+    SU2k(k) -> sector type
+
+The TensorKit sector type of SU(2) at level `k`, at q = e^{iπ/(k+2)}, available once TensorKit is loaded. `SU2k(k)(j)` is the
+spin `j`, with F-symbols from [`fsymbol`](@ref) and R-symbols from [`rmatrix`](@ref).
+
+```julia
+using TensorKit, QRecoupling
+V = Vect[SU2k(3)](0 => 2, 1//2 => 1, 1 => 3)
+```
+"""
+SU2k(args...) = _missing_tensorkit(:SU2k)
+
+"""
+    SU2q(q) -> sector type
+
+The TensorKit sector type of SU(2) at real `q > 0`, available once TensorKit is loaded. It has infinitely many spins and real
+F-symbols. It has no braiding, since its R-symbols are not unitary, so it supports planar tensor operations only.
+"""
+SU2q(args...) = _missing_tensorkit(:SU2q)
 function numeric_value end
 Base.zero(::Type{ExactX}, k) = _missing_algebra(:Exact)
 
