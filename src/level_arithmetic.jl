@@ -711,9 +711,10 @@ function _level_value_str(v::LevelValue; most::Int = QFORM_SHOWN_TERMS)
     return text * " √(" * _q_fraction(v.r // big(1), [n => 1 for n in v.rad]) * ")"
 end
 
-Base.show(io::IO, v::LevelValue) = print(io, "LevelValue(k = ", v.k, ", ", _level_value_str(v), ")")
+# printed as a `QForm` at a level is, since arithmetic on forms gives these
+Base.show(io::IO, v::LevelValue) = print(io, _level_value_str(v), "   (k = ", v.k, ")")
 Base.show(io::IO, s::LevelValueSum) =
-    print(io, "LevelValueSum(k = ", s.k, ", ", join((_level_value_str(v) for v in values(s.terms)), " + "), ")")
+    print(io, isempty(s.terms) ? "0" : join((_level_value_str(v) for (_, v) in sort!(collect(s.terms); by = first)), " + "), "   (k = ", s.k, ")")
 
 # ---- requests that need a symbol's rule ----
 

@@ -3,6 +3,7 @@
 ## v0.6.2
 
 - Added TensorKit sectors. `SU2k(k)` is SU(2) at level `k` and `SU2q(q)` is SU(2) at real `q`, with F- and R-symbols from the package's kernels, through an extension that needs only TensorKitSectors 0.3.5 or later and no Nemo. F-symbols are real, so with TensorKit 0.17 planar tensors stay real.
+- The result of arithmetic on values at a level prints as the values do, `(−4[3] + 11)/3   (k = 10)` instead of `LevelValue(k = 10, (−4[3] + 11)/3)`, and the terms of a sum of unlike roots print in a fixed order.
 
 ## v0.6.1
 

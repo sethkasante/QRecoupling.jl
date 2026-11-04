@@ -779,6 +779,11 @@ end
     g = q6j(Exact(3), 1, 1, 1, 1, 1, 1)
     @test g isa QForm && g.k == 3 && string(g) == "−1/[2]²   (k = 3)"
     @test sprint(show, MIME("text/plain"), g) == "−1/[2]²   (k = 3)"
+    # arithmetic gives a value at the level, printed as a form is, and a sum of unlike roots in a fixed order
+    x = q6j(Exact(10), 1, 1, 1, 1, 1, 1)
+    @test string(x^2) == sprint(show, MIME("text/plain"), x^2) == "(−4[3] + 11)/3   (k = 10)"
+    @test string(q6j(Exact(10), 3//2, 1, 1//2, 1, 3//2, 1) + q6j(Exact(10), 1, 1, 2, 1, 1, 1)) ==
+          "(−[3] + 4)/6 + (−[3] + 4)/6 √([2])   (k = 10)"
     @test string(radical(g)) == "(√5 − 3)/2"
     @test_throws ArgumentError g(1)
     @test_throws ArgumentError f == g
