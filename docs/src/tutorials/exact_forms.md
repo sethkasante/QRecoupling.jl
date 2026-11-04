@@ -40,7 +40,7 @@ c = q6j(Symbolic(), 1, 1, 1, 1, 1, 1)
 (c, c(1), c(1.0), c(0.8), c(0.8 + 0.2im))
 ```
 
-A formula has no arithmetic and no `float` of its own, since these need a value of q. It knows its rule but not its labels, so it does not move to a level: use `q6j(Exact(k), js...)`, which applies the level's fusion rules.
+A formula has no `float` of its own, since that needs a value of q, and no sums. Products, quotients, powers and roots of a formula that is one product of q-integers stay formulas, such as `sqrt(qdim(Symbolic(), 1))`, which is `√([3])`. It knows its rule but not its labels, so it does not move to a level: use `q6j(Exact(k), js...)`, which applies the level's fusion rules.
 
 `==` means equal at every q, for two formulas and for a formula and a number, which is a constant function. `[6]` and `[3]!` are both 6 at q = 1, and neither of them is 6.
 
@@ -74,11 +74,11 @@ a = q6j(Exact(12), 1, 1, 1, 1, 1, 1)
 (a^2, a * inv(a) == 1)
 ```
 
-`sqrt` and half-integer powers are exact for a form that is one product of q-integers, such as a quantum dimension, and for a rational value. The result of other arithmetic is held as a sum in that basis, where a root is not read off, so take the root of each symbol: write `sqrt(f) * sqrt(g)` for `sqrt(f * g)`.
+`sqrt` and half-integer powers are exact for a form that is one product of q-integers, such as a quantum dimension, and for a rational value. The root of a product is again a form, and so are products, quotients and powers of such forms, so nothing is expanded: `sqrt(qint(Exact(1098), 550))` is `√([550])` in a few microseconds. A sum is held in the basis above, where a root is not read off, so take the root of each symbol: write `sqrt(f) * sqrt(g)` for `sqrt(f * g)`.
 
 ```@example exact_forms
 d = qdim(Exact(12), 1)
-@assert sqrt(d)^2 == d && d^(3//2) == d * sqrt(d) # hide
+@assert sqrt(d)^2 == d && d^(3//2) == d * sqrt(d) && sqrt(d) isa QForm # hide
 (sqrt(d), d^(3//2), sqrt(d) * sqrt(qdim(Exact(12), 2)))
 ```
 

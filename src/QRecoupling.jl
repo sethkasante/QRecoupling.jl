@@ -86,6 +86,8 @@ export empty_caches!
         end
         a = q6j(Exact(10), labels...); b = q6j(Exact(10), 2, 2, 2, 2, 2, 2)
         a == b; a == 1//2; a * b; a + b; inv(a)
+        r = sqrt(qdim(Exact(10), 1)); r * r; float(r); sprint(show, MIME("text/plain"), r); r == r; r * a; sqrt(q6j(Exact(10), 1, 1, 2, 1, 1, 1)) * r
+        g = sqrt(qdim(Symbolic(), 1)); g(0.8); g(1); g * g == g
         iszero_at(q6j, 10, labels...); level_spectrum(labels...; k = 2:6)
     end
     empty_caches!()

@@ -28,7 +28,10 @@ A value written in q-integers, as returned by `Symbolic()` and `Exact(k)`.
 
 A generic form, from `Symbolic()`, is a function of q and has no value of its own. `f(q)` evaluates it at any q that `At`
 takes, and `f(1)` gives its value at q = 1 exactly. `==` and `iszero` mean at every q, decided exactly, whether the other
-side is a form or a number. `float`, `numeric_value` and arithmetic need a value of q, and say so.
+side is a form or a number. `float`, `numeric_value` and sums need a value of q, and say so.
+
+Products, quotients, powers and roots of forms that are one product of q-integers are forms again, generic or at a
+level, and expand nothing.
 
 A form at a level is one number, complex when it carries powers of q. `float` and `numeric_value` approximate it;
 `==` and `iszero` decide equality and vanishing exactly. Unweighted level forms support exact arithmetic.

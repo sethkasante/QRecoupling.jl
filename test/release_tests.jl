@@ -789,8 +789,19 @@ end
     @test string(sqrt(d)) == "√([3])   (k = 10)" && d^(1//2) == sqrt(d) && d^0.5 == sqrt(d) && d^(1/2) == sqrt(d)
     @test sqrt(d)^2 == d && d^(3//2) == d * sqrt(d) && d^(-1//2) * sqrt(d) == 1 && sqrt(p6)^2 == p6 && x^2.0 == x^2
     @test float(sqrt(p6)) ≈ sqrt(float(p6)) && sqrt(x - x + 9//4) == 3//2
+    # a root of one product is a form, and so are products, quotients and powers of such forms: nothing is expanded
+    R = sqrt(qint(Exact(1098), 550))
+    @test sqrt(d) isa QForm && d * p6 isa QForm && string(R) == "√([550])   (k = 1098)" && string(R * R) == "[550]   (k = 1098)"
+    @test R * R == qint(Exact(1098), 550) && float(R) ≈ sqrt(float(qint(Exact(1098), 550)))
+    @test string(sqrt(d) * sqrt(qdim(Exact(10), 2))) == "√([3][5])   (k = 10)" && string(d^(-1//2)) == "√(1/[3])   (k = 10)"
+    @test d / p6 == QR.level_value(d.rule, 10) / QR.level_value(p6.rule, 10) && inv(d) * d == 1 && d^0 == 1 && p6^-2 == inv(p6 * p6)
+    @test string(sqrt(qint(Exact(10), 3) * qint(Exact(10), 9))) == "[3]   (k = 10)"   # [9] = [3] at h = 12
+    G = sqrt(qdim(Symbolic(), 1))
+    @test string(G) == "√([3])" && G(1)^2 == 3 && G(0.9) ≈ sqrt(qdim(At(0.9), 1)) && G * G == qdim(Symbolic(), 1)
+    @test string(qdim(Symbolic(), 1) * qdim(Symbolic(), 2)) == "[3][5]" && inv(G)(0.9) ≈ 1 / G(0.9)
     for bad in (() -> sqrt(x), () -> sqrt(x^2), () -> sqrt(q6j(Exact(10), 3//2, 1, 1//2, 1, 3//2, 1)), () -> x^(1//3), () -> x^0.3,
-              () -> sqrt(q6j(Symbolic(), 1, 1, 1, 1, 1, 1)), () -> sqrt(q3j(Exact(10), 1, 1, 1, 0, 0, 0)))
+              () -> sqrt(q6j(Symbolic(), 1, 1, 1, 1, 1, 1)), () -> sqrt(q3j(Exact(10), 1, 1, 1, 0, 0, 0)), () -> sqrt(sqrt(d)),
+              () -> sqrt(G), () -> q6j(Symbolic(), 1, 1, 1, 1, 1, 1) * G, () -> G + G)
         @test_throws ArgumentError bad()
     end
     @test_throws DomainError sqrt(g)                      # g < 0, at level 3
