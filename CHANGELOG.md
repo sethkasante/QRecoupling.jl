@@ -2,7 +2,7 @@
 
 ## v0.6.2
 
-- Added TensorKit sectors. `SU2k(k)` is SU(2) at level `k` and `SU2q(q)` is SU(2) at real `q`, with F- and R-symbols from the package's kernels, through an extension that needs only TensorKitSectors and no Nemo. F-symbols are real, so planar tensors can stay real.
+- Added TensorKit sectors. `SU2k(k)` is SU(2) at level `k` and `SU2q(q)` is SU(2) at real `q`, with F- and R-symbols from the package's kernels, through an extension that needs only TensorKitSectors 0.3.5 or later and no Nemo. F-symbols are real, so with TensorKit 0.17 planar tensors stay real.
 
 ## v0.6.1
 

@@ -31,7 +31,7 @@ The conventions are TensorKit's, F^{abc}_{d,ef} = (−1)^{a+b+c+d} √([2e+1][2f
 | R-symbols | complex phases | none: they are not unitary, which TensorKit assumes |
 | Tensor operations | planar and braided | planar only |
 
-The F-symbols are `Float64` in both, so planar tensors can stay real. `SU2q(1.0)` agrees with `SU2Irrep`. Fusion tensors are not provided, since the quantum dimension of a sector is not the size of a matrix block, so `convert(Array, t)` is unavailable, as for TensorKit's other anyons.
+The F-symbols are `Float64` in both, so planar tensors can stay real. TensorKit 0.16 still turns real tensors at a level complex, with zero imaginary parts, and 0.17 keeps them real. `SU2q(1.0)` agrees with `SU2Irrep`. Fusion tensors are not provided, since the quantum dimension of a sector is not the size of a matrix block, so `convert(Array, t)` is unavailable, as for TensorKit's other anyons.
 
 TensorKit warns that tensors with real data might be incompatible with `SU2k(k)`. That matters only for a tensor that is braided, since the R-symbols are complex. Nemo and TensorKit both export `dim`, so with both loaded write `TensorKit.dim`, or load Nemo with `import Nemo`.
 

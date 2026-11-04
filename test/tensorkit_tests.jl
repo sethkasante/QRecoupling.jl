@@ -185,9 +185,8 @@ end
             r = repartition(t, 1, 3)
             @test norm(r) ≈ norm(t) && repartition(r, 2, 2) ≈ t
             @test norm(repartition(t, 3, 1)) ≈ norm(t)
-            # planar and braided permutations, undone
-            s = permute(t, ((2, 1), (3, 4)))
-            @test norm(s) ≈ norm(t)
+            # planar and braided permutations, undone. Not `permute`, which TensorKit 0.16 allows only for symmetric braiding
+            @test norm(transpose(t)) ≈ norm(t)
             @test braid(braid(t, ((2, 1), (3, 4)), (1, 2, 3, 4)), ((2, 1), (3, 4)), (2, 1, 3, 4)) ≈ t
             @test TensorKit.twist(TensorKit.twist(t, 1), 1; inv = true) ≈ t
             # Yang-Baxter, as two ways to reverse three strands
@@ -210,10 +209,10 @@ end
             @planar C1[-1 -2; -3 -4] := A[-1 -2; 1] * B[1; -3 -4]
             @test C1 ≈ A * B
         end
-        # planar tensors can stay real, since the F-symbols are
+        # planar tensors can stay real, since the F-symbols are. TensorKit 0.16 makes them complex, with zero imaginary parts
         I = SU2k(3); V = Vect[I](0 => 2, 1//2 => 2, 1 => 2)
-        t = randn(Float64, V ⊗ V ← V)
-        @test scalartype(repartition(t, 1, 2)) === Float64 && norm(repartition(t, 1, 2)) ≈ norm(t)
+        t = randn(Float64, V ⊗ V ← V); r = repartition(t, 1, 2)
+        @test norm(r) ≈ norm(t) && (scalartype(r) === Float64 || iszero(norm(imag(r))))
         # large levels do not put the whole sector in the type of a space
         for k in (1000,)
             L = SU2k(k); V = Vect[L](0 => 1, 1//2 => 1, k // 2 => 1)
