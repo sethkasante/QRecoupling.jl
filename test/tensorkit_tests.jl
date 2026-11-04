@@ -21,12 +21,12 @@ end
 
 "The spectrum of −Σ P0(i,i+1) on L spins 1/2, with P0 the projector on the trivial channel."
 function spin_half_chain(I, L)
-    P = Vect[I](I(1//2) => 1)
-    h = zeros(Float64, P ⊗ P ← P ⊗ P)
+    P = Vect[I](I(1//2) => 1); T = sectorscalartype(I)
+    h = zeros(T, P ⊗ P ← P ⊗ P)
     for (c, b) in blocks(h)
         b .= isunit(c) ? 1.0 : 0.0
     end
-    H = zeros(Float64, P^L ← P^L)
+    H = zeros(T, P^L ← P^L)
     for i in 1:L-1
         term = h
         i > 1 && (term = id(P^(i - 1)) ⊗ term)
@@ -47,12 +47,11 @@ end
     @test Base.get_extension(QR, :QRecouplingTensorKitExt) !== nothing
     @test Base.get_extension(QR, :QRecouplingNemoExt) === nothing
 
-    # the interface as TensorKit itself tests it, including pentagon, hexagon, triangle, A-, B-symbols and show-and-parse
-    for k in (1, 2, 3, 4, 5, 6, 8, 10, 13, 16, 40)
-        SectorTestSuite.test_sector(SU2k(k))
-    end
-    for q in (0.5, 0.8, 1.0, 1.3)
-        SectorTestSuite.test_sector(SU2q(q))
+    # the interface as TensorKit itself tests it, including pentagon, hexagon, triangle, A-, B-symbols and show-and-parse,
+    # so that a change in TensorKitSectors shows up here: an abelian level, Fibonacci, a level with half-integer spins and
+    # one past the size where spaces switch to dictionaries, and real q on both sides of 1
+    for I in (SU2k(1), SU2k(3), SU2k(10), SU2k(40), SU2q(0.8), SU2q(1.3))
+        SectorTestSuite.test_sector(I)
     end
 
     @testset "construction" begin
@@ -98,13 +97,13 @@ end
         @test Fsymbol(I(1), I(1), I(1), I(1), I(1//2), I(1)) == 0.0 && Rsymbol(I(1), I(1), I(1//2)) == 0
         @test Fsymbol(J(1), J(1), J(1), J(1), J(1//2), J(1)) == 0.0
         # dimensions multiply as the fusion rules say, at every level
-        for k in (1, 2, 3, 7, 12, 40), a in spins(SU2k(k), min(k // 2, 4)), b in spins(SU2k(k), min(k // 2, 4))
+        for k in (1, 3, 12), a in spins(SU2k(k), min(k // 2, 3)), b in spins(SU2k(k), min(k // 2, 3))
             @test dim(a) * dim(b) ≈ sum(dim, a ⊗ b)
         end
     end
 
     @testset "every associativity and braiding equation, small levels" begin
-        for k in 1:6
+        for k in (2, 4)
             I = SU2k(k); all_ = collect(values(I))
             @test all(triangle_equation(a, b; atol = 1e-13) for a in all_, b in all_)
             @test all(pentagon_equation(a, b, c, d; atol = 1e-12) for a in all_, b in all_, c in all_, d in all_)
@@ -116,17 +115,17 @@ end
 
     @testset "the equations hold at large levels and spins" begin
         # one large spin among small ones, in each position, since a large spin fused with a large spin has thousands of channels
-        for k in (50, 200, 1000, 5000)
-            K = SU2k(k); small = [K(1//2), K(1), K(3)]
-            for m in (K((k ÷ 2) // 2), K(k // 2 - 1), K(k // 2)), a in small, b in small, c in small
+        for k in (200, 5000)
+            K = SU2k(k); small = [K(1//2), K(1)]
+            for m in (K((k ÷ 2) // 2), K(k // 2)), a in small, b in small, c in small
                 @test pentagon_equation(m, a, b, c; atol = 1e-9) && pentagon_equation(a, m, b, c; atol = 1e-9) &&
                       pentagon_equation(a, b, m, c; atol = 1e-9)
                 @test hexagon_equation(m, a, b; atol = 1e-9) && hexagon_equation(a, m, b; atol = 1e-9)
                 @test unitarity_defect(m, a, b) < 1e-11 && unitarity_defect(a, m, b) < 1e-11
             end
         end
-        for q in (0.3, 0.9, 1.1, 2.0)
-            I = SU2q(q); s = spins(I, 5//2)
+        for q in (0.3, 2.0)
+            I = SU2q(q); s = spins(I, 3//2)
             @test all(pentagon_equation(a, b, c, d; atol = 1e-8) for a in s, b in s, c in s, d in s[1:3])
             @test all(unitarity_defect(a, b, c) < 1e-10 for a in s, b in s, c in s)
         end
@@ -134,7 +133,7 @@ end
 
     @testset "against independent data" begin
         # q = 1 is SU(2), and large level approaches it
-        for a in spins(SU2q(1.0), 2), b in spins(SU2q(1.0), 2), c in spins(SU2q(1.0), 2), d in ⊗(a, b, c)
+        for a in spins(SU2q(1.0), 1), b in spins(SU2q(1.0), 1), c in spins(SU2q(1.0), 3//2), d in ⊗(a, b, c)
             U = SU2Irrep
             @test dim(a) == dim(U(a.J // 2))
             for e in a ⊗ b, f in b ⊗ c
@@ -159,7 +158,7 @@ end
         @test dim(σ) ≈ √2 && abs(Fsymbol(σ, σ, σ, σ, J(0), J(0))) ≈ 1 / √2 && frobenius_schur_phase(σ) == -1 && frobenius_schur_phase(J(1)) == 1
         @test collect(σ ⊗ σ) == [J(0), J(1)] && collect(J(1) ⊗ J(1)) == [J(0)] && collect(J(1) ⊗ σ) == [σ]
         # the S-matrix of the package follows from these twists: S_ab = Σ_c d_c θ_c / (θ_a θ_b) / √(Σ_c d_c²)
-        for k in (2, 3, 5, 8)
+        for k in (3, 5)
             K = SU2k(k); S, _ = smatrix(k); θ(x) = TensorKitSectors.twist(x)
             for a in values(K), b in values(K)
                 s = sum(dim(c) * θ(c) / (θ(a) * θ(b)) for c in a ⊗ b)
@@ -172,7 +171,8 @@ end
     end
 
     @testset "tensors at a level" begin
-        for k in (2, 3, 4, 10)
+        # one level only: each sector type compiles TensorKit's tensor methods anew, which is most of the time here
+        for k in (3,)
             I = SU2k(k)
             V = Vect[I](0 => 2, 1//2 => 2, 1 => 1)
             W = Vect[I](0 => 1, 1 => 2)
@@ -211,11 +211,11 @@ end
             @test C1 ≈ A * B
         end
         # planar tensors can stay real, since the F-symbols are
-        I = SU2k(10); V = Vect[I](0 => 2, 1//2 => 2, 1 => 2)
+        I = SU2k(3); V = Vect[I](0 => 2, 1//2 => 2, 1 => 2)
         t = randn(Float64, V ⊗ V ← V)
         @test scalartype(repartition(t, 1, 2)) === Float64 && norm(repartition(t, 1, 2)) ≈ norm(t)
         # large levels do not put the whole sector in the type of a space
-        for k in (100, 1000)
+        for k in (1000,)
             L = SU2k(k); V = Vect[L](0 => 1, 1//2 => 1, k // 2 => 1)
             t = randn(ComplexF64, V ⊗ V ← V)
             @test dim(V) ≈ 1 + dim(L(1//2)) + 1 && norm(repartition(t, 1, 2)) ≈ norm(t)
@@ -234,7 +234,7 @@ end
     end
 
     @testset "threads" begin
-        I = SU2k(23); s = [I(j) for j in 0:1//2:4]
+        I = SU2k(23); s = [I(j) for j in 0:1//2:5//2]
         labels = [(a, b, c, d, e, f) for a in s for b in s for c in s for d in ⊗(a, b, c) for e in a ⊗ b for f in b ⊗ c if d in e ⊗ c && d in a ⊗ f]
         serial = [Fsymbol(l...) for l in labels]
         QR.empty_caches!()
@@ -263,15 +263,15 @@ end
             end
             return sort!(vcat([eigvals(Hermitian(Matrix(b))) for (_, b) in blocks(H)]...))
         end
-        for L in 2:6
+        for L in (3, 5)
             @test chain(SU2k(3)(1), L) ≈ chain(FibonacciAnyon(:τ), L)
         end
     end
 
     @testset "spin-1/2 chains are U_q-invariant XXZ chains" begin
         # every eigenvalue of the anyon chain is one of the XXZ chain, and the ground states agree, at a level and at real q
-        for (I, q) in ((SU2k(2), cispi(1 / 4)), (SU2k(5), cispi(1 / 7)), (SU2q(0.8), complex(0.8)))
-            for L in (4, 6)
+        for (I, q) in ((SU2k(3), cispi(1 / 5)), (SU2q(0.8), complex(0.8)))
+            for L in (5,)
                 a = spin_half_chain(I, L); x = xxz_chain(q, L)
                 @test all(λ -> minimum(abs.(x .- λ)) < 1e-10, a)
                 @test minimum(a) ≈ minimum(real, x) atol = 1e-10

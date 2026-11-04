@@ -40,12 +40,29 @@ jobs:
       - name: Test without Nemo
         run: julia --startup-file=no test/core_environment.jl
 
-      - name: Test the TensorKit sectors
-        if: matrix.os == 'ubuntu-latest'
-        run: julia --startup-file=no test/tensorkit_environment.jl
-
       - name: Run tests
         uses: julia-actions/julia-runtest@v1
         with:
           coverage: false
+
+  # a job of its own, in parallel with the others, since precompiling TensorKit takes minutes
+  tensorkit:
+    runs-on: ubuntu-latest
+    env:
+      JULIA_NUM_THREADS: 4
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Julia
+        uses: julia-actions/setup-julia@v3
+        with:
+          version: '1.12'
+
+      - name: Cache dependencies
+        uses: julia-actions/cache@v3
+
+      - name: Test the TensorKit sectors
+        run: julia --startup-file=no test/tensorkit_environment.jl
 
