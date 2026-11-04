@@ -331,7 +331,8 @@ end
     @test float(QR.qform(q6j, 3, 3, 3, 3, 3, 3; k = 2000)) ≈ q6j(Level(2000), 3, 3, 3, 3, 3, 3) rtol = 1e-12
     # above the limit there is no table to wait for, and a form still reads and evaluates right
     @test isempty(QR._level_relations(QR.RELATION_TABLE_LIMIT + 2))
-    @test (@elapsed string(q6j(Exact(5000), 5, 5, 5, 5, 5, 5))) < 1
+    string(q6j(Exact(5000), 5, 5, 5, 5, 5, 5))
+    @test haskey(QR.LEVEL_RELATIONS, 5002) && isempty(QR.LEVEL_RELATIONS[5002])   # printing asked, and nothing was built
     @test string(q6j(Exact(5000), 5, 5, 5, 5, 5, 5)) == string(QR.qform(q6j, 5, 5, 5, 5, 5, 5; k = 5000, reduce = false))
     @test QR._qform_level(q6j(Exact(5000), 5, 5, 5, 5, 5, 5)) ≈ numeric_value(q6j(Exact(5000), 5, 5, 5, 5, 5, 5)) rtol = 1e-12
     # an exponent past the range of Int stops a reduction, and never wraps
