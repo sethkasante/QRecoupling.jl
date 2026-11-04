@@ -2,11 +2,17 @@
 # through the plain-Julia kernel at a level, and a generic form has none. `==` expands nothing.
 
 
-"What a form means in arithmetic: the exact value at its level."
-function _form_value(f::QForm)
+"Whether a form has arithmetic: one at a level, without powers of q."
+function _check_arithmetic(f::QForm)
     f.k === nothing && throw(ArgumentError("a generic form has no arithmetic: use `Exact(k)` for a level, or `f(1)` for the exact value at q = 1"))
     f.weight == (0, 0) || f.rule === nothing ||
         throw(ArgumentError("exact arithmetic at a level is not available for forms with powers of q"))
+    return nothing
+end
+
+"What a form means in arithmetic: the exact value at its level."
+function _form_value(f::QForm)
+    _check_arithmetic(f)
     iszero(f) && return zero(LevelValue, f.k)
     return level_value(f.rule, f.k)
 end
@@ -84,6 +90,33 @@ Base.:(==)(v::Union{LevelValue,LevelValueSum}, f::QForm) = f == v
 Base.:-(f::QForm) = f.rule === nothing ? f : QForm(f.k, negated(f.rule), f.weight, f.reduce, nothing)
 Base.inv(f::QForm) = inv(_form_value(f))
 Base.:^(f::QForm, n::Integer) = _form_value(f)^n
+Base.:^(f::QForm, p::Union{Rational,AbstractFloat}) = _rational_power(f, p)
+
+"""
+    sqrt(f::QForm)
+
+The root of a form at a level that is one product, ±c ∏[n]^e with no sum and no root of its own, such as a quantum
+dimension or a 6j symbol written as a single product. The square part leaves the root. A sum of q-integers, or a root
+already present, has no exact root here, and says so. So does the result of arithmetic other than a rational one, since
+it is held as a sum: take the root of each symbol, as in `sqrt(qdim(Exact(k), a)) * sqrt(qdim(Exact(k), b))`.
+"""
+function Base.sqrt(f::QForm)
+    _check_arithmetic(f)
+    iszero(f) && return zero(LevelValue, f.k)
+    w = _written(f); top = (f.k + 2) ÷ 2
+    product = length(w.terms) == 1 && iszero(w.qpow) && isempty(w.powers) && isempty(w.rad) &&
+              _is_perfect_square(w.radcoef)
+    product || throw(ArgumentError("only a form that is one product of q-integers has an exact root: " * _LEVEL_ROOT_HINT))
+    c, labels = only(w.terms)
+    c *= w.coef * isqrt(numerator(w.radcoef)) // isqrt(denominator(w.radcoef))
+    w.sign * sign(c) < 0 && throw(DomainError(f, "sqrt of a negative value"))
+    E = zeros(Int, top)
+    for (n, e) in Iterators.flatten((w.out, labels))
+        1 <= n <= top || throw(ArgumentError("only a form that is one product of q-integers has an exact root: " * _LEVEL_ROOT_HINT))
+        E[n] += e
+    end
+    return _level_root(f.k, abs(Rational{BigInt}(c)), E)
+end
 const _NO_MIXED_ARITHMETIC = "a form and a value at q = 1 have no arithmetic together: a level form is a number at another q, and a formula has no number"
 for op in (:+, :-, :*, :/)
     @eval begin

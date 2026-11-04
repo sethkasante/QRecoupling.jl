@@ -1,17 +1,18 @@
 name = "QRecoupling"
 uuid = "12fbc973-52c7-4af8-b64a-f7602a7eb369"
+keywords = ["quantum-gravity", "tqft", "tensor-networks", "spin-foam", "hypergeometric-series", "math", "physics", "Racah", "quantum-wigner"]
 version = "0.6.2"
 authors = ["Seth K. Asante <seth.kurankyi@gmail.com>"]
 description = "Quantum recoupling coefficients and q-factorial series, as fast numbers at any q or exact values and formulas."
-keywords = ["quantum-gravity", "tqft", "tensor-networks", "spin-foam", "hypergeometric-series", "math","physics","Racah","quantum-wigner"]
 
 [deps]
 LRUCache = "8ac3fa9e-de4c-5943-b1dc-09c6b5f20637"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
+TensorKit = "07d1fe3e-3e46-537d-9eac-e9e13d0d4cec"
+TensorKitSectors = "13a9c161-d5da-41f0-bcbd-e1a08ae0647f"
 
 [weakdeps]
 Nemo = "2edaba10-b0f1-5616-af89-8c11ac63239a"
-TensorKitSectors = "13a9c161-d5da-41f0-bcbd-e1a08ae0647f"
 
 [extensions]
 QRecouplingNemoExt = "Nemo"
@@ -21,6 +22,7 @@ QRecouplingTensorKitExt = "TensorKitSectors"
 LRUCache = "1.1"
 Nemo = "0.54, 0.55, 0.56, 0.57"
 PrecompileTools = "1"
+TensorKit = "0.17.3"
 TensorKitSectors = "0.3.5"
 Test = "1"
 julia = "1.10"

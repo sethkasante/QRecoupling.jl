@@ -784,6 +784,28 @@ end
     @test string(x^2) == sprint(show, MIME("text/plain"), x^2) == "(−4[3] + 11)/3   (k = 10)"
     @test string(q6j(Exact(10), 3//2, 1, 1//2, 1, 3//2, 1) + q6j(Exact(10), 1, 1, 2, 1, 1, 1)) ==
           "(−[3] + 4)/6 + (−[3] + 4)/6 √([2])   (k = 10)"
+    # roots and half-integer powers: exact where the root is again one, and an error that says why where it is not
+    d = qdim(Exact(10), 1); p6 = q6j(Exact(10), 1, 1, 2, 1, 1, 1)
+    @test string(sqrt(d)) == "√([3])   (k = 10)" && d^(1//2) == sqrt(d) && d^0.5 == sqrt(d) && d^(1/2) == sqrt(d)
+    @test sqrt(d)^2 == d && d^(3//2) == d * sqrt(d) && d^(-1//2) * sqrt(d) == 1 && sqrt(p6)^2 == p6 && x^2.0 == x^2
+    @test float(sqrt(p6)) ≈ sqrt(float(p6)) && sqrt(x - x + 9//4) == 3//2
+    for bad in (() -> sqrt(x), () -> sqrt(x^2), () -> sqrt(q6j(Exact(10), 3//2, 1, 1//2, 1, 3//2, 1)), () -> x^(1//3), () -> x^0.3,
+              () -> sqrt(q6j(Symbolic(), 1, 1, 1, 1, 1, 1)), () -> sqrt(q3j(Exact(10), 1, 1, 1, 0, 0, 0)))
+        @test_throws ArgumentError bad()
+    end
+    @test_throws DomainError sqrt(g)                      # g < 0, at level 3
+    c = q6j(Exact(), 1, 1, 1, 1, 1, 1)
+    @test sqrt(c^2) == c && sqrt(c) isa QR.ClassicalResult && sqrt(c)^2 == c && c^(1//2) == sqrt(c) && c^0.5 == sqrt(c)
+    @test c^(-3//2) == inv(sqrt(c))^3
+    @test_throws ArgumentError sqrt(sqrt(c))
+    @test_throws ArgumentError c^(1//3)
+    @test_throws DomainError sqrt(-c)
+    # sums of unlike roots: integer powers, and no root or inverse
+    s = q6j(Exact(10), 3//2, 1, 1//2, 1, 3//2, 1) + p6
+    @test s^2 == s * s && s^(2//1) == s * s && s^0 == 1 && float(s^3) ≈ float(s)^3
+    for bad in (() -> sqrt(s), () -> inv(s), () -> s^-1, () -> sqrt(c + sqrt(c)))
+        @test_throws ArgumentError bad()
+    end
     @test string(radical(g)) == "(√5 − 3)/2"
     @test_throws ArgumentError g(1)
     @test_throws ArgumentError f == g

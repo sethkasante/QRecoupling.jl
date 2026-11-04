@@ -483,14 +483,40 @@ Base.:/(c::Union{Integer,Rational}, v::LevelValue) = c * inv(v)
 
 function Base.:^(v::LevelValue, n::Integer)
     n < 0 && return inv(v)^(-n)
-    out = one(v); base = v
-    while n > 0
-        isodd(n) && (out = out * base)
-        n >>= 1
-        n > 0 && (base = base * base)
-    end
-    return out
+    return iszero(n) ? one(v) : _square_power(v, n)
 end
+
+"""
+√(c ∏[n]^E) for c > 0 and labels 1 ≤ n ≤ h/2, where every [n] is positive: the square part leaves the root, by the
+relations of the level as in a product, and the rest stays under it.
+"""
+function _level_root(k::Int, c::Rational{BigInt}, E::Vector{Int})
+    F = _level_field(k + 2)
+    front, outside, r, rad, roots = _canonical_class(E, c, F.h)
+    num, den = _times_labels(one(LevelValue, k).num, big(1), _nonzero_pairs(front), F)
+    for G in roots
+        num = _label_mul(num, G, F)
+    end
+    return _level_make(k, num .* numerator(outside), den * denominator(outside), r, rad)
+end
+
+const _LEVEL_ROOT_HINT = "`sqrt(float(x))` gives its number, and the root of a product of symbols is the product of their roots"
+
+"""
+    sqrt(v::LevelValue)
+
+Exact when `v` is rational. The result of other arithmetic is held in the basis [1], [2], … of the field, where a root
+is not read off, so `sqrt(f * g)` of two symbols is written `sqrt(f) * sqrt(g)`, which is exact when each is a product.
+"""
+function Base.sqrt(v::LevelValue)
+    iszero(v) && return v
+    rational = isempty(v.rad) && isone(v.r) && all(iszero, @view v.num[2:end])
+    rational || throw(ArgumentError("the square root of a sum of q-integers at a level is not computed exactly: " *
+                                    _LEVEL_ROOT_HINT))
+    v.num[1] < 0 && throw(DomainError(v, "sqrt of a negative value"))
+    return _level_root(v.k, v.num[1] // v.den, zeros(Int, (v.k + 2) ÷ 2))
+end
+Base.:^(v::LevelValue, p::Union{Rational,AbstractFloat}) = _rational_power(v, p)
 
 # ---- sums, by square class ----
 
@@ -509,6 +535,15 @@ end
 _class_key(v::LevelValue) = (v.r, v.rad)
 LevelValueSum(k::Integer) = LevelValueSum(Int(k), Dict{Tuple{BigInt,Vector{Int}},LevelValue}())
 LevelValueSum(v::LevelValue) = iszero(v) ? LevelValueSum(v.k) : LevelValueSum(v.k, Dict(_class_key(v) => v))
+Base.sqrt(::LevelValueSum) = throw(ArgumentError("the square root of a sum of unlike roots is a nested root, which an " *
+                                                 "exact value does not keep: " * _LEVEL_ROOT_HINT))
+Base.:^(s::LevelValueSum, p::Union{Rational,AbstractFloat}) = _rational_power(s, p)
+Base.inv(::LevelValueSum) =
+    throw(ArgumentError("a sum of unlike roots at a level has no exact inverse yet: `inv(float(x))` gives its number"))
+function Base.:^(s::LevelValueSum, n::Integer)
+    n < 0 && return inv(s)
+    return iszero(n) ? LevelValueSum(one(LevelValue, s.k)) : _square_power(s, n)
+end
 
 "Two values of one class, added."
 function _add_same(a::LevelValue, b::LevelValue)
@@ -708,7 +743,10 @@ function _level_value_str(v::LevelValue; most::Int = QFORM_SHOWN_TERMS)
     terms = [(a // v.den, n == 1 ? Pair{Int,Int}[] : [n => 1]) for (n, a) in enumerate(v.num) if !iszero(a)]
     text = _q_sum_str(reverse!(terms); most = most)
     (isone(v.r) && isempty(v.rad)) && return _unwrap(text)
-    return text * " √(" * _q_fraction(v.r // big(1), [n => 1 for n in v.rad]) * ")"
+    root = "√(" * _q_fraction(v.r // big(1), [n => 1 for n in v.rad]) * ")"
+    text == "1" && return root
+    text == "−1" && return "−" * root
+    return text * " " * root
 end
 
 # printed as a `QForm` at a level is, since arithmetic on forms gives these

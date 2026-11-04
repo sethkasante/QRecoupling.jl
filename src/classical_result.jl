@@ -43,6 +43,52 @@ function Base.:^(res::ClassicalResult, p::Int)
     return ClassicalResult(new_sign, res.sq_val^p)
 end
 
+"x^n for n ≥ 1 by repeated squaring, with no product by one."
+function _square_power(x, n::Integer)
+    while iseven(n)
+        x = x * x; n >>= 1
+    end
+    out = x
+    while (n >>= 1) > 0
+        x = x * x
+        isodd(n) && (out = out * x)
+    end
+    return out
+end
+
+"""
+x^p for a half-integer p, through `sqrt(x)`. Exact values are a field element times one square root, so a root of a root
+or a cube root is not one of them, and says so.
+"""
+function _rational_power(x, p::Rational)
+    d = denominator(p); n = Int(numerator(p))
+    d == 1 && return x^n
+    d == 2 && return sqrt(x)^n
+    throw(ArgumentError("the power $p of an exact value is not exact in this form, since only square roots are kept: " *
+                        "`float(x)^p` gives its number"))
+end
+function _rational_power(x, p::AbstractFloat)
+    (isfinite(p) && isinteger(2p)) || throw(ArgumentError("the power $p of an exact value is not exact: only integer " *
+                                                          "and half-integer powers are, and `float(x)^p` gives its number"))
+    return _rational_power(x, Int(2p) // 2)
+end
+
+"""
+    sqrt(x::ClassicalResult)
+
+Exact when the root is again ±√(rational), so when `x` is rational, such as the square of a symbol. A root of an
+irrational √r is a fourth root, which is not kept, and says so.
+"""
+function Base.sqrt(a::ClassicalResult)
+    iszero(a) && return zero(ClassicalResult)
+    a.sign < 0 && throw(DomainError(a, "sqrt of a negative value"))
+    _is_perfect_square(a.sq_val) || throw(ArgumentError("the square root of $a is a fourth root, which an exact value " *
+                                                        "does not keep: `sqrt(float(x))` gives its number"))
+    return ClassicalResult(1, isqrt(numerator(a.sq_val)) // isqrt(denominator(a.sq_val)))
+end
+Base.:^(a::ClassicalResult, p::Rational) = _rational_power(a, p)          # two methods, as Base has ^(::Number, ::Rational)
+Base.:^(a::ClassicalResult, p::AbstractFloat) = _rational_power(a, p)
+
 function Base.:*(c::Union{Int, Rational}, res::ClassicalResult)
     iszero(c) && return zero(ClassicalResult)
     iszero(res) && return res
@@ -296,14 +342,12 @@ function Base.:/(a::ClassicalSum, c::Union{Int,BigInt,Rational})
 end
 function Base.:^(a::ClassicalSum, p::Integer)
     p < 0 && return inv(a)^(-p)
-    v = one(ClassicalResult); b = a; n = p
-    while n > 0
-        isodd(n) && (v = v * b)
-        n >>= 1
-        n > 0 && (b = b * b)
-    end
-    return v
+    return iszero(p) ? one(ClassicalResult) : _square_power(a, p)
 end
+Base.sqrt(a::ClassicalSum) = throw(ArgumentError("the square root of a sum of unlike roots is a nested root, which an " *
+                                                 "exact value does not keep: `sqrt(float(x))` gives its number"))
+Base.:^(a::ClassicalSum, p::Rational) = _rational_power(a, p)          # two methods, as Base has ^(::Number, ::Rational)
+Base.:^(a::ClassicalSum, p::AbstractFloat) = _rational_power(a, p)
 
 Base.zero(::Type{ClassicalSum}) = zero(ClassicalResult)
 Base.zero(::ClassicalSum) = zero(ClassicalResult)

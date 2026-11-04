@@ -4,6 +4,7 @@
 
 - Added TensorKit sectors. `SU2k(k)` is SU(2) at level `k` and `SU2q(q)` is SU(2) at real `q`, with F- and R-symbols from the package's kernels, through an extension that needs only TensorKitSectors 0.3.5 or later and no Nemo. F-symbols are real, so with TensorKit 0.17 planar tensors stay real.
 - The result of arithmetic on values at a level prints as the values do, `(−4[3] + 11)/3   (k = 10)` instead of `LevelValue(k = 10, (−4[3] + 11)/3)`, and the terms of a sum of unlike roots print in a fixed order.
+- Added `sqrt` and half-integer powers (`x^(1//2)`, `x^0.5`, `x^(3//2)`) of exact values. They are exact for a value at q = 1 that is rational, for a form at a level that is one product of q-integers, and for a rational value at a level. Other roots and powers raise an `ArgumentError` that says why and how to get the number. `sqrt` of an `Exact()` value used to return a `Float64` in every case, even when the root was exact. Sums of unlike roots at a level also have integer powers now.
 
 ## v0.6.1
 

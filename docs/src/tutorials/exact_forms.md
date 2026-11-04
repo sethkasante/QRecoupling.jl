@@ -21,7 +21,7 @@ r = q3j(Exact(), 1//2, 1//2, 0, 1//2, -1//2, 0)
 (q6j(Exact(), 1, 1, 1, 1, 1, 1), r, r^2)
 ```
 
-Adding values with unlike roots stays exact, as a sum of square roots with rational coefficients. Each sum has one such form, so `==` and `iszero` are proofs, which is what an identity or a contraction over products of symbols needs. `/`, `inv` and integer powers stay exact too, and `float` gives a number.
+Adding values with unlike roots stays exact, as a sum of square roots with rational coefficients. Each sum has one such form, so `==` and `iszero` are proofs, which is what an identity or a contraction over products of symbols needs. `/`, `inv` and integer powers stay exact too, and `float` gives a number. `sqrt` and half-integer powers such as `x^(1//2)` are exact when the value is rational, such as a square. Other roots would be nested roots, which these values do not keep, and they say so.
 
 ```@example exact_forms
 s = fsymbol(Exact(), 1, 1, 1, 1, 1, 2) + fsymbol(Exact(), 1, 1, 1, 1, 1, 1)
@@ -72,6 +72,14 @@ Arithmetic with `*`, `+`, `-`, `/` and `^` is exact at a level, needs no backend
 a = q6j(Exact(12), 1, 1, 1, 1, 1, 1)
 @assert a * inv(a) == 1 # hide
 (a^2, a * inv(a) == 1)
+```
+
+`sqrt` and half-integer powers are exact for a form that is one product of q-integers, such as a quantum dimension, and for a rational value. The result of other arithmetic is held as a sum in that basis, where a root is not read off, so take the root of each symbol: write `sqrt(f) * sqrt(g)` for `sqrt(f * g)`.
+
+```@example exact_forms
+d = qdim(Exact(12), 1)
+@assert sqrt(d)^2 == d && d^(3//2) == d * sqrt(d) # hide
+(sqrt(d), d^(3//2), sqrt(d) * sqrt(qdim(Exact(12), 2)))
 ```
 
 A form holds its rule, which is all that `==`, `iszero` and `float` read, so it costs about 0.15 µs at any size. What it prints is written the first time it is shown, about 490 µs at spins 100, k = 401.
