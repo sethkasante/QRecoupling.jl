@@ -164,15 +164,14 @@ function _level_x_str(v::ExactX)
     isempty(v.sqclass) && return body
     r, rd = _integer_poly_str(v.r)
     root = "√(" * (isone(rd) ? r : (occursin(" ", r) ? "(" * r * ")" : r) * "/" * string(rd)) * ")"
-    return body == "1" ? root : body * " " * root
+    body == "1" && return root
+    body == "−1" && return "−" * root
+    return body * " " * root
 end
 
-Base.show(io::IO, v::LevelXValue) = print(io, "LevelXValue(k = ", v.value.k, ", ", _level_x_str(v.value), ")")
-function Base.show(io::IO, ::MIME"text/plain", v::LevelXValue)
-    h = v.value.k + 2
-    println(io, "Exact value at level k = ", v.value.k, " in x = 2cos(π/", h, "), degree ", euler_phi(2h) ÷ 2, " over ℚ")
-    print(io, "  = ", _level_x_str(v.value))
-end
+# printed as a form is, with what x means after the level
+Base.show(io::IO, v::LevelXValue) =
+    print(io, _level_x_str(v.value), "   (k = ", v.value.k, ", x = 2cos(π/", v.value.k + 2, "))")
 
 """
 The value in q-integers: from its rule when it has one, which merges the labels at the level, and from

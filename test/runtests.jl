@@ -140,12 +140,15 @@ const ONES = (1, 1, 1, 1, 1, 1)
     end
     @testset "xform at a level" begin
         v = xform(q6j(Exact(10), 1, 1, 1, 1, 1, 1))
-        @test v isa LevelXValue && string(v) == "LevelXValue(k = 10, (2x² − 7)/3)"
-        @test occursin("(2x² − 7)/3", sprint(show, MIME"text/plain"(), v)) && occursin("2cos(π/12)", sprint(show, MIME"text/plain"(), v))
-        @test string(xform(q6j(Exact(3), 1, 1, 1, 1, 1, 1))) == "LevelXValue(k = 3, x − 2)"
+        @test v isa LevelXValue && string(v) == sprint(show, MIME"text/plain"(), v) == "(2x² − 7)/3   (k = 10, x = 2cos(π/12))"
+        @test string(xform(q6j(Exact(3), 1, 1, 1, 1, 1, 1))) == "x − 2   (k = 3, x = 2cos(π/5))"
+        @test string(xform(-sqrt(qdim(Exact(10), 1)))) == "−√(x² − 1)   (k = 10, x = 2cos(π/12))"
+        @test string(xform(q6j(Symbolic(), 1, 1, 1, 1, 1, 1))) == "(x² − 3)/(x⁴ − 3x² + 2)   (x = q + q⁻¹)"
+        @test sprint(show, MIME"text/plain"(), xform(q6j(Symbolic(), 3//2, 1, 1//2, 1, 3//2, 1))) ==
+              "√(ψ₄ψ₅ψ₁₀)/(x⁵ − 3x³ + 2x)   (x = q + q⁻¹, ψₑ the minimal polynomial of 2cos(2π/e))"
         @test v == xform(q6j(Exact(10), 1, 1, 1, 1, 1, 1)) && hash(v) == hash(xform(q6j(Exact(10), 1, 1, 1, 1, 1, 1)))
         @test iszero(xform(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2)))
-        @test string(xform(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2))) == "LevelXValue(k = 10, 0)"
+        @test string(xform(q6j(Exact(10), 1, 3//2, 3//2, 2, 3//2, 3//2))) == "0   (k = 10, x = 2cos(π/12))"
         @test_throws ArgumentError xform(q3j(Exact(5), 1, 1, 1, 1, -1, 0))
         # arithmetic results and values at q = 1 say why, not that Nemo is missing
         a = q6j(Exact(10), 1, 1, 1, 1, 1, 1); c = q6j(Exact(), 1, 1, 1, 1, 1, 1)
