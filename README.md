@@ -108,6 +108,7 @@ See the [migration guide](https://sethkasante.github.io/QRecoupling.jl/stable/mi
 
 - [Getting started](https://sethkasante.github.io/QRecoupling.jl/stable/getting_started/)
 - [Tensor networks and modular data](https://sethkasante.github.io/QRecoupling.jl/stable/tutorials/tensor_networks/)
+- [TensorKit sectors](https://sethkasante.github.io/QRecoupling.jl/stable/tutorials/tensorkit/) `SU2k(k)` and `SU2q(q)`, with TensorKitSectors loaded
 - [Exact formulas](https://sethkasante.github.io/QRecoupling.jl/stable/tutorials/exact_forms/) and [identity checks](https://sethkasante.github.io/QRecoupling.jl/stable/tutorials/identities/)
 - [Finite series](https://sethkasante.github.io/QRecoupling.jl/stable/tutorials/finite_series/)
 - [Accuracy and performance](https://sethkasante.github.io/QRecoupling.jl/stable/performance/)
