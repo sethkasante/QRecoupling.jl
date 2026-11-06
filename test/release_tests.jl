@@ -958,3 +958,30 @@ end
         @test col[i] ≈ ref rtol = 1e-13 atol = 1e-300
     end
 end
+
+@testset "exact values at q = 1 are real numbers to generic code" begin
+    # `plot([q6j(Exact(), i*ones(6)...) for i in 1:50])` failed in `isinf`, whose `Real` fallback needs `decompose`.
+    v = [q6j(Exact(), i, i, i, i, i, i) for i in 1:20]
+    out = similar(v, Float64)
+    broadcast!(x -> isinf(x) ? NaN : x, out, v)              # what Plots does with series data
+    @test out == Float64.(v) && all(isfinite, v) && !any(isnan, v)
+
+    x = q6j(Exact(), 1, 1, 1, 1, 1, 1)                      # 1//6
+    r = QR.ClassicalResult(-1, 2//3)                         # −√(2/3)
+    s = QR.ClassicalResult(1, 2//1) + QR.ClassicalResult(1, 3//1)   # √2 + √3
+    @test s isa QR.ClassicalSum
+    # exact order among exact values and rationals, rounded to Float64 against floats as `==` is
+    @test r < x < 1//5 < s < 4 && x <= x && !(x < x) && -s < r
+    @test sort([s, x, r, -s, 0]) == [-s, r, 0, x, s] && extrema([x, s, r]) == (r, s)
+    @test x < 0.2 && !(x < 1/6) && x == 1/6 && isless(x, NaN) && !isless(NaN, x)
+    @test max(x, 1) == 1 && max(x, 1) isa QR.ClassicalResult && min(s, x) === x && max(s, 3) === s
+    @test max(x, 0.1) isa BigFloat && x + π ≈ 1/6 + π && promote(x, 1)[2] == 1
+    @test [x, 1] isa Vector{QR.ClassicalResult}
+    @test signbit(r) && !signbit(x) && !signbit(zero(x))
+    # rounding is exact, ties to even only where the value is rational
+    @test round(QR.ClassicalResult(1, 25//4)) == 2 && round(QR.ClassicalResult(1, 49//4)) == 4
+    @test floor(r) == -1 && ceil(r) == 0 && trunc(Int, r) == 0 && round(Int, s) == 3 && floor(Int, -s) == -4
+    @test isinteger(q6j(Exact(), 0, 0, 0, 0, 0, 0)) && !isinteger(x) && !isinteger(s)
+    big_root = QR.ClassicalResult(1, big(10)^40 + 1)         # √(10⁴⁰+1), just above 10²⁰
+    @test floor(BigInt, big_root) == big(10)^20 && ceil(BigInt, big_root) == big(10)^20 + 1
+end
