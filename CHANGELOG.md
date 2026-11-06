@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.6.3
+
+- `fmatrix` at real q no longer returns NaN for large spins (from about spin 50 at q = 0.5, spin 100 at q = 0.7). Matrices that were finite before are unchanged bit for bit.
+
 ## v0.6.2
 
 - Added TensorKit sectors `SU2k(k)` and `SU2q(q)`, with F- and R-symbols from this package. They load with TensorKitSectors 0.3.5 or later, and need no Nemo.
