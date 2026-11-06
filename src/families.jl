@@ -164,7 +164,41 @@ struct RealQ
     ints::Vector{DWord}      # [n], n = 0…N
     invs::Vector{DWord}      # 1/[n]
     cancel::Float64          # worst cancellation seen building the table; see `column_accuracy`
+    # The same table split as [n] = m·2^k, m ∈ [1, 2), for columns whose products leave the exponent range
+    # (`ScaledRealQ`); finite where `ints` has overflowed. [0] is stored as m = 0, k = 0.
+    rints::Vector{DWord}     # m
+    rinvs::Vector{DWord}     # 1/m
+    rexp::Vector{Int}        # k
 end
+
+"Split one double word as m·2^k, m ∈ [1, 2) (exact), or (0, 0) for zero."
+function _dw_split(v::DWord)
+    iszero(v[1]) && return (0.0, 0.0), 0
+    k = exponent(v[1])
+    return (ldexp(v[1], -k), ldexp(v[2], -k)), k
+end
+
+"""
+Below this a table entry's split form comes from its words by powers of two (exact); above it the low word
+of 1/[n] would be subnormal, so the wide build splits the wide value instead.
+"""
+const SPLIT_FROM_WORDS_BELOW = 2.0^960
+
+"""
+The split form of a table, from its words by powers of two (exact), into arrays the wide build may already
+have filled for the entries at or above `SPLIT_FROM_WORDS_BELOW`.
+"""
+function _realq_split!(rints, rinvs, rexp, ints::Vector{DWord}, invs::Vector{DWord})
+    @inbounds for i in eachindex(ints)
+        abs(ints[i][1]) < SPLIT_FROM_WORDS_BELOW || continue
+        m, k = _dw_split(ints[i])
+        rints[i] = m; rexp[i] = k
+        rinvs[i] = iszero(m[1]) ? (Inf, 0.0) : (ldexp(invs[i][1], k), ldexp(invs[i][2], k))
+    end
+    return rints, rinvs, rexp
+end
+_realq_split(ints::Vector{DWord}, invs::Vector{DWord}) =
+    _realq_split!(similar(ints), similar(invs), similar(ints, Int), ints, invs)
 
 function RealQ(q::Real, N::Int)
     q > 0 || throw(DomainError(q, "RealQ needs a positive real q"))
@@ -174,6 +208,9 @@ function RealQ(q::Real, N::Int)
     N >= WIDE_TABLE_BELOW && N * abs(log(Float64(q))) <= 500 && return _realq_by_addition(q, N)
     ints = Vector{DWord}(undef, N + 1)
     invs = Vector{DWord}(undef, N + 1)
+    rints = Vector{DWord}(undef, N + 1)
+    rinvs = Vector{DWord}(undef, N + 1)
+    rexp = Vector{Int}(undef, N + 1)
     worst = 1.0
     setprecision(BigFloat, 128) do
         qb = BigFloat(q)
@@ -189,6 +226,13 @@ function RealQ(q::Real, N::Int)
             else
                 w = inv(v); h = Float64(w)
                 invs[n+1] = (h, Float64(w - h))
+                if !(abs(hi) < SPLIT_FROM_WORDS_BELOW)  # near or past overflow: split the wide value
+                    k = exponent(v)
+                    m = ldexp(v, -k); mh = Float64(m)
+                    rints[n+1] = (mh, Float64(m - mh)); rexp[n+1] = k
+                    r = inv(m); rh = Float64(r)
+                    rinvs[n+1] = (rh, Float64(r - rh))
+                end
             end
             if n > 0                        # (a tuple assignment cannot hide inside `||`)
                 t = x * cur
@@ -198,7 +242,8 @@ function RealQ(q::Real, N::Int)
             end
         end
     end
-    return RealQ(Float64(q), ints, invs, worst)
+    _realq_split!(rints, rinvs, rexp, ints, invs)
+    return RealQ(Float64(q), ints, invs, worst, rints, rinvs, rexp)
 end
 
 "[n] = sinh(nt)/sinh(t) with t = |log q|, the same for q and 1/q (`_qints_by_addition`)."
@@ -218,7 +263,7 @@ function _realq_by_addition(q::Real, N::Int)
         worst = max(worst, (a + prev) / (a - prev))     # the recurrence's cancellation, as in the wide build
         prev = v[n]
     end
-    return RealQ(Float64(q), ints, invs, worst)
+    return RealQ(Float64(q), ints, invs, worst, _realq_split(ints, invs)...)
 end
 
 """
@@ -492,8 +537,9 @@ function sixj_column!(out, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int,
     n == 0 && return X
     work = _column_work(Q, work)
     _resize!(work, n)
-    _column_coefficients!(work, Q, X, J2, J3, L1, L2, L3)
-    return _sixj_column_core!(out, J2, J3, L1, L2, L3, Q, work, X; xdim = xdim, cfac = cfac)
+    Qc = _column_q(Q, X, J2, J3, L2, L3)            # real q past the exponent range: the scaled column
+    _column_coefficients!(work, Qc, X, J2, J3, L1, L2, L3)
+    return _sixj_column_core!(out, J2, J3, L1, L2, L3, Qc, work, X; xdim = xdim, cfac = cfac)
 end
 
 """
@@ -750,6 +796,8 @@ function _sign_reference(w, X, J2, J3, L1, L2, L3, Q)
     nt(x2) = ((α, β) = racah_sums(x2, J2, J3, L1, L2, L3); β[1] - α[4])
     ends = nt(first(X)) <= nt(last(X)) ? (1, length(X)) : (length(X), 1)
     for ie in ends
+        # an end that underflowed far below the peak has no sign left to compare against
+        iszero(w[ie][1]) && continue
         sg = _entry_sign(Q, X[ie], J2, J3, L1, L2, L3)
         iszero(sg) || return ie, sg
     end
@@ -790,6 +838,277 @@ _entry_value(Q::RealQ, X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int)::Fl
 "And at complex q, where the reference is a phase rather than a sign."
 _entry_value(Q::ComplexQ, X2::Int, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int)::ComplexF64 =
     ComplexF64(analytic_value(sixj_sum(X2, J2, J3, L1, L2, L3), Q.q))
+
+# ---------------------------------------------------------------------------------
+#  Real-q columns past the exponent range
+#
+#  At real q every coefficient is a power of ρ = max(q, 1/q) times a bounded factor, [n] ≈ ρ^{n−1}, and the
+#  powers are large: up(x−1)² ≈ ρ^{j2+j3+l2+l3} (doubled labels) for the whole column, the intermediate
+#  Dn·Bn reaches ρ^{2x+j2+j3+l2+l3}, and [2x+1] ≈ ρ^{x}. At q = 0.5 up² is 2^406 for spins near 50, where
+#  the gauge state h·di and P²·up² of the column above leave the exponent range, and Dn·Bn alone does
+#  for spins near 75. Such a column runs here instead:
+#
+#    - each q-integer is taken as m·2^k from the table's split form, so no product overflows;
+#    - the recurrence is divided through by the constant gauge 2^s, di ↦ di/2^s, up² ↦ up²/2^{2s}
+#      (h(xᵢ) ↦ 2^{−s·i} h(xᵢ), f unchanged up to a constant), with s from the column's own up², which
+#      makes up² ≈ 1 everywhere — its power of ρ does not depend on x;
+#    - h, P² and the stored entries carry explicit binary exponents, rescaled exactly by powers of two.
+#
+#  The arithmetic is otherwise that of `_sixj_column_core!`, operation for operation, with the same u²
+#  error. Entries more than ~2^1074 below a column's peak come out zero, as their values are; a step whose
+#  coefficient alone leaves the range gives a non-finite column, which callers treat as declined.
+# ---------------------------------------------------------------------------------
+
+"""
+    ScaledRealQ(Q, s)
+
+A column at real q through the split tables of `Q::RealQ`, its recurrence divided through by 2^s; see the
+section comment. Chosen by [`_column_q`](@ref) only where the plain column could leave the exponent range.
+"""
+struct ScaledRealQ
+    Q::RealQ
+    s::Int
+end
+
+_column_range(::ScaledRealQ, J...) = sixj_column_range(J..., nothing)
+_column_q(Q, X, J2::Int, J3::Int, L2::Int, L3::Int) = Q
+
+"""
+Bound on log₂ of the largest magnitude a plain real-q column with these labels can meet (coefficients,
+intermediate products, `[2x+1]`), in powers of ρ with doubled labels: Dn·Bn ≤ ρ^{2X+J2+J3+L2+L3}, and
+C ≤ ρ^{2J3+L2} whatever L1, by its triangle conditions. Below `SCALED_REALQ_LOG2` the plain column's di·h,
+P²·up² and [2x+1]/P² stay inside the range its 2^±600 rescaling assumes; above it the scaled column runs.
+"""
+_realq_magnitude(q::Float64, X, J2::Int, J3::Int, L2::Int, L3::Int) =
+    abs(log2(q)) * (2 * last(X) + J2 + J3 + L2 + L3 + 2 * (J3 + L2) + 8)
+
+"Where the plain real-q column stops: q = 0.5 near spin 17, q = 0.9 near spin 110, for four equal spins."
+const SCALED_REALQ_LOG2 = 400.0
+
+"""
+    _column_q(Q, X, J2, J3, L2, L3) -> Q or ScaledRealQ
+
+The column's evaluation context: `Q` itself, or at real q with large labels its scaled form. The shift s
+is half the binary exponent of up(x−1)² at the column's second entry.
+"""
+function _column_q(Q::RealQ, X, J2::Int, J3::Int, L2::Int, L3::Int)
+    _realq_magnitude(Q.q, X, J2, J3, L2, L3) <= SCALED_REALQ_LOG2 && return Q
+    length(X) < 2 && return ScaledRealQ(Q, 0)
+    k(m) = @inbounds Q.rexp[abs(m)+1]
+    x1, x2 = X[1], X[2]
+    kB = k((x1 - J2 + J3) ÷ 2 + 1) + k((x1 + J2 + J3) ÷ 2 + 2) + k((x1 - L2 + L3) ÷ 2 + 1) + k((L2 + L3 - x1) ÷ 2)
+    kD = k((x2 + J2 - J3) ÷ 2) + k((J2 + J3 - x2) ÷ 2 + 1) + k((x2 + L2 - L3) ÷ 2) + k((x2 + L2 + L3) ÷ 2 + 1)
+    return ScaledRealQ(Q, (kB + kD - 2 * k(x2)) >> 1)
+end
+
+"[n] = m·2^k from the split table; [−n] = −[n]."
+@inline function _qint_split(Q::RealQ, n::Int)
+    @inbounds m = Q.rints[abs(n)+1]; k = Q.rexp[abs(n)+1]
+    return (n < 0 ? _dwn(m) : m), k
+end
+@inline _smul(a::Tuple{DWord,Int}, b::Tuple{DWord,Int}) = (_dwm(a[1], b[1]), a[2] + b[2])
+"2^k exactly, for the normal exponents −1022 ≤ k ≤ 1023."
+@inline _pow2(k::Int) = reinterpret(Float64, UInt64(k + 1023) << 52)
+"`ldexp` on a double word: one multiply by an exact power of two where 2^k is normal (rounding only into subnormals)."
+@inline function _dwldexp(a::DWord, k::Int)
+    -1022 <= k <= 1023 || return (ldexp(a[1], k), ldexp(a[2], k))
+    p = _pow2(k)
+    return (a[1] * p, a[2] * p)
+end
+@inline _dws(a::Tuple{DWord,Int}, t::Float64) = (_dws(a[1], t), a[2])
+
+"[n] = m′·4^k with m′ ∈ [1, 4), so that √[n] = √m′·2^k exactly."
+@inline function _qint_even_split(Q::RealQ, n::Int)
+    m, k = _qint_split(Q, n)
+    return isodd(k) ? _dws(m, 2.0) : m, k >> 1
+end
+
+"√[n] as (double word, binary exponent) — the F-matrix's `cfac` for a scaled column."
+@inline function _xdim_root(SQ::ScaledRealQ, n::Int)
+    m, k = _qint_even_split(SQ.Q, n)
+    return _dwsqrt(m), k
+end
+
+function _column_shared!(shared, work::ColumnWork, SQ::ScaledRealQ, X, J2::Int, J3::Int, L2::Int, L3::Int)
+    Q = SQ.Q; s = SQ.s; e = work.e
+    q(m) = _qint_split(Q, m)
+    Z = (0.0, 0.0)
+    Bprev = (Z, 0)
+    @inbounds for i in eachindex(X)
+        x2 = X[i]
+        Bn = _smul(_smul(q((x2 - J2 + J3) ÷ 2 + 1), q((x2 + J2 + J3) ÷ 2 + 2)),
+                   _smul(q((x2 - L2 + L3) ÷ 2 + 1), q((L2 + L3 - x2) ÷ 2)))
+        # [2x+1] B(x) = Bn / [2x+2], as in the plain column, with the gauge's 2^−s
+        t = iszero(Bn[1][1]) ? Z : _dwldexp(_dwm(Bn[1], Q.rinvs[x2+3]), Bn[2] - Q.rexp[x2+3] - s)
+        if x2 > 0
+            Dn = _smul(_smul(q((x2 + J2 - J3) ÷ 2), q((J2 + J3 - x2) ÷ 2 + 1)),
+                       _smul(q((x2 + L2 - L3) ÷ 2), q((x2 + L2 + L3) ÷ 2 + 1)))
+            iv = Q.rinvs[x2+1]; kv = Q.rexp[x2+1]
+            t = _dwa(t, _dwldexp(_dwm(Dn[1], iv), Dn[2] - kv - s))              # [2x+1] D(x)
+            i > 1 && (e[i] = _dwldexp(_dwm(_dwm(Dn[1], Bprev[1]), _dwm(iv, iv)),    # up(x−1)² / 2^{2s}
+                                      Dn[2] + Bprev[2] - 2kv - 2s))
+        end
+        shared[i] = t
+        Bprev = Bn
+    end
+    return shared
+end
+
+function _column_di!(work::ColumnWork, SQ::ScaledRealQ, X, J3::Int, L1::Int, L2::Int, shared)
+    Q = SQ.Q; s = SQ.s
+    C = _smul(_qint_split(Q, (J3 - L1 - L2) ÷ 2), _qint_split(Q, (J3 + L1 - L2) ÷ 2 + 1))
+    @inbounds for i in eachindex(X)
+        work.di[i] = _dwa(shared[i], _dwldexp(_dwm(Q.rints[X[i]+2], C[1]), Q.rexp[X[i]+2] + C[2] - s))
+    end
+    return work
+end
+
+"Mark a column as declined: every entry NaN, which every caller tests for."
+function _column_declined!(out, w, n)
+    @inbounds for i in 1:n
+        w[i] = (NaN, NaN)
+        out === nothing || (out[i] = NaN)
+    end
+    return nothing
+end
+
+"""
+    _scaled_entry!(w, rng, v, sh) -> (stored, shift added to the stored exponent)
+
+Store `v·2^sh`; if that passes 2^500, first divide the entries already stored in `rng` by the excess, so the
+new entry is near 1 (entries far below it underflow, as in `_shrink!`).
+"""
+@inline function _scaled_entry!(w, rng, v::DWord, sh::Int)
+    r = _dwldexp(v, sh)
+    abs(r[1]) <= 2.0^500 && return r, 0                       # also v = 0
+    d = exponent(v[1]) + sh
+    @inbounds for t in rng
+        w[t] = _dwldexp(w[t], -d)
+    end
+    return _dwldexp(v, sh - d), d
+end
+
+"Keep a running word within 2^±200 by an exact power of two; returns the exponent taken out (`even` for P²)."
+@inline function _renorm_exp(x::DWord, even::Bool)
+    (iszero(x[1]) || 2.0^-200 <= abs(x[1]) <= 2.0^200) && return 0
+    t = exponent(x[1])
+    return even ? t & ~1 : t
+end
+
+function _sixj_column_core!(out, J2::Int, J3::Int, L1::Int, L2::Int, L3::Int, SQ::ScaledRealQ,
+                            work::ColumnWork, X; xdim::Bool = false, cfac = (1.0, 0.0))
+    n = length(X)
+    n == 0 && return X
+    Q = SQ.Q
+    di, e, w = work.di, work.e, work.w
+    Z = (0.0, 0.0); U = (1.0, 0.0)
+    cm, ce = cfac isa Tuple{DWord,Int} ? cfac : (cfac, 0)
+    isfinite(cm[1]) || return (_column_declined!(out, w, n); X)
+    # the folded factor √[2x+1] = √m′·2^k (m′ unrooted, as `_leave_gauge` takes it), or 1
+    xf(x2) = xdim ? _qint_even_split(Q, x2 + 1) : (U, 0)
+    # ---- forward: true f·√[2x+1] = h·2^eH·√(m′/P²)·2^{k − eP/2}, stored as that times 2^−E ----
+    m1, E = xf(X[1])
+    w[1] = xdim ? _dwsqrt(m1) : U
+    hm = Z; hc = U; P2 = U; eH = 0; eP = 0
+    m = n
+    @inbounds for i in 1:n-1
+        d = di[i]
+        if !isfinite(d[1])
+            # di past 2^1024: row i makes f(xᵢ) ≤ 2^−1020 f(xᵢ₊₁), and the entries before it, which the run
+            # grows towards xᵢ, smaller still. They are zero against the column; start again at xᵢ₊₁.
+            for t in 1:i
+                w[t] = Z
+            end
+            mi, E = xf(X[i+1])
+            w[i+1] = xdim ? _dwsqrt(mi) : U
+            hm = Z; hc = U; P2 = U; eH = 0; eP = 0
+            continue
+        end
+        if abs(d[1]) > 2.0^600                                         # keep di·h inside the range
+            t = exponent(d[1]); hm = _dwldexp(hm, -t); hc = _dwldexp(hc, -t); eH += t
+        end
+        hn = _dwn(_dwm(d, hc))
+        i > 1 && (hn = _dwa(hn, _dwn(_dwm(e[i], hm))))
+        P2 = _dwm(P2, e[i+1])
+        hm, hc = hc, hn
+        t = _renorm_exp(hc, false); t == 0 || (hm = _dwldexp(hm, -t); hc = _dwldexp(hc, -t); eH += t)
+        t = _renorm_exp(P2, true); t == 0 || (P2 = _dwldexp(P2, -t); eP += t)
+        xm, xk = xf(X[i+1])
+        v = _dwm(hc, _dwsqrt(_dwdiv(xm, P2)))
+        isfinite(v[1]) || return (_column_declined!(out, w, n); X)
+        w[i+1], dd = _scaled_entry!(w, 1:i, v, eH + xk - (eP >> 1) - E)
+        E += dd
+        if abs(w[i+1][1]) < abs(w[i][1])
+            m = i
+            break
+        end
+    end
+    _divide!(w, 1:m, w[m])
+    # ---- backward from the right end, the same bookkeeping, matched at m ----
+    if m < n
+        @inbounds begin
+            mn, E = xf(X[n])
+            w[n] = xdim ? _dwsqrt(mn) : U
+            gp = Z; gc = U; R2 = U; eG = 0; eR = 0
+            for i in n:-1:m+1
+                d = di[i]
+                if !isfinite(d[1])                                     # as forward: xᵢ…x_n vanish
+                    for t in i:n
+                        w[t] = Z
+                    end
+                    mi, E = xf(X[i-1])
+                    fv = xdim ? _dwsqrt(mi) : U
+                    gp = Z; gc = U; R2 = U; eG = 0; eR = 0
+                    i - 1 == m || (w[i-1] = fv)
+                    continue
+                end
+                if abs(d[1]) > 2.0^600
+                    t = exponent(d[1]); gp = _dwldexp(gp, -t); gc = _dwldexp(gc, -t); eG += t
+                end
+                gn = _dwn(_dwm(d, gc))
+                i < n && (gn = _dwa(gn, _dwn(_dwm(e[i+1], gp))))
+                R2 = _dwm(R2, e[i])
+                gp, gc = gc, gn
+                t = _renorm_exp(gc, false); t == 0 || (gp = _dwldexp(gp, -t); gc = _dwldexp(gc, -t); eG += t)
+                t = _renorm_exp(R2, true); t == 0 || (R2 = _dwldexp(R2, -t); eR += t)
+                xm, xk = xf(X[i-1])
+                v = _dwm(gc, _dwsqrt(_dwdiv(xm, R2)))
+                isfinite(v[1]) || return (_column_declined!(out, w, n); X)
+                fv, dd = _scaled_entry!(w, i:n, v, eG + xk - (eR >> 1) - E)
+                E += dd
+                if i - 1 == m
+                    _divide!(w, m+1:n, fv)
+                else
+                    w[i-1] = fv
+                end
+            end
+        end
+    end
+    # ---- normalise by orthogonality, Σ [2x+1][2l1+1] f² = 1, exponents apart ----
+    tot = Z; K = 0
+    if xdim
+        @inbounds for i in 1:n
+            tot = _dwa(tot, _dwm(w[i], w[i]))
+        end
+    else                                    # Σ [2x+1] w², [2x+1] = m′·4^k: scaled by the largest 4^k
+        K = maximum(i -> last(_qint_even_split(Q, X[i] + 1)), 1:n)
+        @inbounds for i in 1:n
+            xm, xk = _qint_even_split(Q, X[i] + 1)
+            tot = _dwa(tot, _dwldexp(_dwm(xm, _dwm(w[i], w[i])), 2 * (xk - K)))
+        end
+    end
+    mL, kL = _qint_even_split(Q, L1 + 1)
+    s0 = _dwdiv(U, _dwsqrt(_dwm(mL, tot)))
+    ie, ref = _sign_reference(w, X, J2, J3, L1, L2, L3, Q)
+    s0 = _fix_phase(s0, w[ie], ref)
+    sc = _dwm(cm, s0); sh = ce - kL - K
+    @inbounds for i in 1:n
+        v = _dwldexp(_dwm(w[i], sc), sh)
+        w[i] = v
+        out === nothing || (out[i] = v[1] + v[2])
+    end
+    return X
+end
 
 # ---------------------------------------------------------------------------------
 #  One hard symbol from the nearer end of its column

@@ -99,6 +99,18 @@ function fmatrix(a::Spin, b::Spin, c::Spin, d::Spin;
     end
 
     Q, _ = _family_context(k, q, B, A, first(fs), D, C)
+    # real q with large spins: the scaled column (the f-independent labels decide, so one context serves
+    # every column)
+    _fmatrix_fill!(F, _column_q(Q, es, B, A, D, C), es, fs, A, B, C, D, a, b, c, d, kk, q)
+    return F, collect(es) .// 2, collect(fs) .// 2
+end
+
+"""
+Fill `F` column by column at machine precision in the context `Q`. A column the recurrence declines (any
+non-finite entry) is evaluated symbol by symbol instead, so the matrix never carries a NaN.
+"""
+function _fmatrix_fill!(F::AbstractMatrix{E}, Q, es, fs, A::Int, B::Int, C::Int, D::Int,
+                        a, b, c, d, kk, q) where {E}
     W = _wordtype(Q)
     work = ColumnWork(W)
     _resize!(work, length(es))
@@ -113,11 +125,17 @@ function fmatrix(a::Spin, b::Spin, c::Spin, d::Spin;
         # columns against `fsymbol` at four of twelve sampled complex q.
         cf = _dws(_xdim_root(Q, f + 1), Float64(sgn))
         _sixj_column_core!(col, B, A, f, D, C, Q, work, es; xdim = true, cfac = cf)
-        @inbounds for i in eachindex(es)
-            F[i, j] = E(col[i])
+        if all(isfinite, col)
+            @inbounds for i in eachindex(es)
+                F[i, j] = E(col[i])
+            end
+        else                                           # a declined column: symbol by symbol instead
+            for (i, e) in enumerate(es)
+                F[i, j] = E(fsymbol(a, b, e // 2, c, d, f // 2; k = kk, q = q))
+            end
         end
     end
-    return F, collect(es) .// 2, collect(fs) .// 2
+    return F
 end
 
 """

@@ -918,3 +918,43 @@ end
     @test Float64(qfact(5;k=10,exact=true)) ≈ qfact(5;k=10)
     @test Float64(qbinomial(5,2;k=10,exact=true)) ≈ qbinomial(5,2;k=10)
 end
+
+@testset "real-q F-matrices past the exponent range" begin
+    # The labels of LorentzianRecoupling's su2_dual_labels(1//2, 1, 3//2, N). At real q the column's
+    # coefficients grow like (1/q)^(spin): at q = 0.5 the plain recurrence gave NaN from N ≈ 100 (every
+    # entry at N = 150), at q = 0.7 from N ≈ 200; at q = 0.1, N = 300 some coefficients pass 2^1024.
+    dual(N) = (1//2 + (N - 1)//2, 1 + (N - 1)//2, 3//2 + (N - 1)//2, 3 + (N - 3)//2)
+    for (q, N) in ((0.5, 150), (0.7, 200), (0.1, 300))
+        a, b, c, d = dual(N)
+        F, es, fs = fmatrix(a, b, c, d; q)
+        @test all(isfinite, F)
+        @test transpose(F) * F ≈ [i == j for i in eachindex(fs), j in eachindex(fs)] atol = 1e-14
+        for (i, j) in ((1, 1), (N ÷ 2, N ÷ 2 + 1), (N + 1, N + 1), (N ÷ 3, N ÷ 3 + 3), (N ÷ 3, 2N ÷ 3))
+            ref = setprecision(() -> fsymbol(a, b, es[i], c, d, fs[j]; q = big(q), T = BigFloat), BigFloat, 256)
+            @test F[i, j] ≈ ref rtol = 1e-14 atol = 1e-300
+        end
+    end
+
+    # The scaled column is taken only for large labels; where the plain one also runs, they agree bit for bit.
+    a, b, c, d = dual(40)
+    A, B, C, D = QR.doubled(a, b, c, d)
+    fs = QR._fmatrix_cols(A, B, C, D, nothing)
+    es = QR.sixj_column_range(B, A, first(fs), D, C, nothing)
+    Q = QR.real_q_tables(0.5, B, A, first(fs), D, C)
+    @test QR._column_q(Q, es, B, A, D, C) isa QR.ScaledRealQ
+    @test QR._column_q(QR.real_q_tables(0.95, B, A, first(fs), D, C), es, B, A, D, C) isa QR.RealQ
+    plain = zeros(length(es), length(fs))
+    QR._fmatrix_fill!(plain, Q, es, fs, A, B, C, D, a, b, c, d, nothing, 0.5)
+    @test plain == first(fmatrix(a, b, c, d; q = 0.5))
+
+    # The bare 6j column (no dimension factor) through the same path, at q > 1.
+    J2, J3, L1, L2, L3 = 151, 150, 201, 153, 152
+    X = QR.sixj_column_range(J2, J3, L1, L2, L3, nothing)
+    col = zeros(length(X))
+    QR.sixj_column!(col, J2, J3, L1, L2, L3, QR.real_q_tables(2.0, J2, J3, L1, L2, L3))
+    @test all(isfinite, col)
+    for i in (1, length(X) ÷ 2, length(X))
+        ref = q6j(X[i]//2, J2//2, J3//2, L1//2, L2//2, L3//2; q = 2.0)
+        @test col[i] ≈ ref rtol = 1e-13 atol = 1e-300
+    end
+end
