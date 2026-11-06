@@ -516,7 +516,8 @@ function Base.sqrt(v::LevelValue)
     v.num[1] < 0 && throw(DomainError(v, "sqrt of a negative value"))
     return _level_root(v.k, v.num[1] // v.den, zeros(Int, (v.k + 2) ÷ 2))
 end
-Base.:^(v::LevelValue, p::Union{Rational,AbstractFloat}) = _rational_power(v, p)
+Base.:^(v::LevelValue, p::Rational) = _rational_power(v, p)          # two methods, as Base has ^(::Number, ::Rational)
+Base.:^(v::LevelValue, p::AbstractFloat) = _rational_power(v, p)
 
 # ---- sums, by square class ----
 
@@ -527,7 +528,7 @@ A sum of values at one level with different square classes. Roots of different c
 field unless their product is a square, which the relations of a level almost always show. Nothing rests on that:
 `iszero` proves its answer either way.
 """
-struct LevelValueSum
+struct LevelValueSum <: Real
     k::Int
     terms::Dict{Tuple{BigInt,Vector{Int}},LevelValue}
 end
@@ -537,7 +538,8 @@ LevelValueSum(k::Integer) = LevelValueSum(Int(k), Dict{Tuple{BigInt,Vector{Int}}
 LevelValueSum(v::LevelValue) = iszero(v) ? LevelValueSum(v.k) : LevelValueSum(v.k, Dict(_class_key(v) => v))
 Base.sqrt(::LevelValueSum) = throw(ArgumentError("the square root of a sum of unlike roots is a nested root, which an " *
                                                  "exact value does not keep: " * _LEVEL_ROOT_HINT))
-Base.:^(s::LevelValueSum, p::Union{Rational,AbstractFloat}) = _rational_power(s, p)
+Base.:^(s::LevelValueSum, p::Rational) = _rational_power(s, p)          # two methods, as Base has ^(::Number, ::Rational)
+Base.:^(s::LevelValueSum, p::AbstractFloat) = _rational_power(s, p)
 Base.inv(::LevelValueSum) =
     throw(ArgumentError("a sum of unlike roots at a level has no exact inverse yet: `inv(float(x))` gives its number"))
 function Base.:^(s::LevelValueSum, n::Integer)
@@ -717,8 +719,11 @@ Base.:(==)(x::AbstractFloat, v::Union{LevelValue,LevelValueSum}) = v == x
 # Equal values can have different keys and roots, so all that equal values are sure to share is their level.
 Base.hash(v::Union{LevelValue,LevelValueSum}, h::UInt) = hash((:LevelValue, v.k), h)
 Base.isequal(a::Union{LevelValue,LevelValueSum}, b::Union{LevelValue,LevelValueSum}) = a.k == b.k && a == b
-Base.isequal(::Union{LevelValue,LevelValueSum}, ::Number) = false
-Base.isequal(::Number, ::Union{LevelValue,LevelValueSum}) = false
+# never `isequal` to another kind of number, whose hash differs; Base has these pairs for `Real` and `Complex`
+for T in (:Number, :Real, :AbstractFloat, :Complex)
+    @eval Base.isequal(::Union{LevelValue,LevelValueSum}, ::$T) = false
+    @eval Base.isequal(::$T, ::Union{LevelValue,LevelValueSum}) = false
+end
 
 "The number a value denotes, correct to `bits` even when its coordinates cancel strongly."
 function numeric_value(x::Union{LevelValue,LevelValueSum}; bits::Integer = precision(BigFloat))

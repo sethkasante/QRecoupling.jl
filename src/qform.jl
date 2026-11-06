@@ -40,7 +40,7 @@ Arithmetic on forms carrying powers of q is not yet supported.
 A form holds its rule, which is short and is all that deciding and evaluating read. What it prints is written from the
 rule the first time it is shown, so a form costs no more than its rule until then.
 """
-mutable struct QForm
+mutable struct QForm <: Number                         # complex with powers of q, so not `Real`
     const k::Union{Nothing,Int}
     const rule::Union{Nothing,FactorialSum}             # `nothing` for a form known to be zero
     const weight::Tuple{Int,Int}                        # the weights (w, e2) of the rule
@@ -775,8 +775,8 @@ when its bound leaves almost nothing beyond the final rounding, that rounding is
 and for forms with powers of q, the value comes from `numeric_value`, which costs some 18 µs.
 """
 function _level_float(f::QForm)
+    f.rule === nothing && return 0.0                  # zero at every q, generic or not
     f.k === nothing && throw(ArgumentError(_NO_VALUE))
-    f.rule === nothing && return 0.0
     if f.weight == (0, 0)
         st, segs = classify_at_level(f.rule, f.k)
         if st === :finite && _within_level_tables(f.rule, segs, f.k)

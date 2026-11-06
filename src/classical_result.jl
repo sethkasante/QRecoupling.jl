@@ -421,88 +421,59 @@ function Base.show(io::IO, a::ClassicalSum)
     most < length(terms) && print(io, " + … (", length(terms), " terms)")
 end
 
-# ---- order, and the rest of the `Real` interface ----
+# ---- order: exact values at q = 1 are real numbers ----
 #
-# Both types are exact real numbers and say so (`<: Real`), so generic code — sorting, `max`, plotting, statistics —
-# compares them, asks whether they are finite, rounds them and mixes them with floats. Without these, `plot` of
-# a vector of `Exact()` values failed in `isinf`, whose `Real` fallback needs `Base.decompose`.
-#
-# Comparisons among exact values and rationals are exact. Against a float they round the exact value to
-# `Float64` first, as `==` does, so that `==`, `<` and `isless` agree. Mixed with a float or an irrational
-# number an exact value promotes to `BigFloat`, as its arithmetic with floats already gives; with an integer
-# or a rational, a `ClassicalResult` stays exact.
+# Exact among exact values and rationals. Against a float the exact value is rounded to `Float64` first, as `==` does,
+# so that `==`, `<` and `isless` agree. With a float or an irrational it promotes to `BigFloat`, as its float arithmetic
+# gives; with a rational a `ClassicalResult` stays exact. Base's `Real` fallbacks then supply the rest (`isless`,
+# `isinf`, `signbit`, `max`, sorting).
 
 const _ExactRational = Union{Integer,Rational}
-
-"The exact value of a rational, as a `ClassicalResult`."
 _exact(c::_ExactRational) = iszero(c) ? zero(ClassicalResult) : ClassicalResult(Int(sign(c)), Rational{BigInt}(c)^2)
-
-"Exact sign of a − b: by signs and squares for two single roots, otherwise from the difference, which is exact."
 _cmp_exact(a::ClassicalResult, b::ClassicalResult) =
     a.sign != b.sign ? cmp(a.sign, b.sign) : a.sign * cmp(a.sq_val, b.sq_val)
-_cmp_exact(a::_ClassicalExact, b::_ClassicalExact) = Int(sign(a - b))
+_cmp_exact(a, b) = Int(sign(a - b))                         # the difference is exact
 
-for (op, test) in ((:<, :<), (:<=, :<=))
-    @eval begin
-        Base.$op(a::_ClassicalExact, b::_ClassicalExact) = $test(_cmp_exact(a, b), 0)
-        Base.$op(a::_ClassicalExact, b::_ExactRational) = $test(_cmp_exact(a, _exact(b)), 0)
-        Base.$op(a::_ExactRational, b::_ClassicalExact) = $test(_cmp_exact(_exact(a), b), 0)
-        Base.$op(a::_ClassicalExact, b::AbstractFloat) = $op(Float64(a), b)
-        Base.$op(a::AbstractFloat, b::_ClassicalExact) = $op(a, Float64(b))
-    end
+for op in (:<, :<=)
+    @eval Base.$op(a::_ClassicalExact, b::Union{_ClassicalExact,_ExactRational}) = $op(_cmp_exact(a, b), 0)
+    @eval Base.$op(a::_ExactRational, b::_ClassicalExact) = $op(_cmp_exact(a, b), 0)
+    @eval Base.$op(a::_ClassicalExact, b::AbstractFloat) = $op(Float64(a), b)
+    @eval Base.$op(a::AbstractFloat, b::_ClassicalExact) = $op(a, Float64(b))
 end
-# NaN sorts last, as it does among floats
-Base.isless(a::_ClassicalExact, b::AbstractFloat) = isnan(b) || Float64(a) < b
-Base.isless(a::AbstractFloat, b::_ClassicalExact) = !isnan(a) && a < Float64(b)
-
+Base.isfinite(::_ClassicalExact) = true
 Base.promote_rule(::Type{ClassicalResult}, ::Type{<:_ExactRational}) = ClassicalResult
 Base.convert(::Type{ClassicalResult}, c::_ExactRational) = _exact(c)
 Base.promote_rule(::Type{<:_ClassicalExact}, ::Type{<:Union{AbstractFloat,AbstractIrrational}}) = BigFloat
+# a sum holds two roots at least, so it has no common type with a rational for Base's `max` to promote to
+Base.max(a::ClassicalSum, b::Union{ClassicalResult,_ExactRational}) = a < b ? b : a
+Base.max(a::Union{ClassicalResult,_ExactRational}, b::ClassicalSum) = a < b ? b : a
+Base.min(a::ClassicalSum, b::Union{ClassicalResult,_ExactRational}) = b < a ? b : a
+Base.min(a::Union{ClassicalResult,_ExactRational}, b::ClassicalSum) = b < a ? b : a
 
-# `ClassicalSum` holds two roots at least, so it has no common type with a rational; `max` and `min` need no
-# conversion anyway.
-for f in (:max, :min)
-    pick = f === :max ? :(isless(b, a) ? a : b) : :(isless(b, a) ? b : a)
-    @eval begin
-        Base.$f(a::ClassicalSum, b::Union{ClassicalResult,_ExactRational}) = $pick
-        Base.$f(a::Union{ClassicalResult,_ExactRational}, b::ClassicalSum) = $pick
-    end
-end
-
-Base.isfinite(::_ClassicalExact) = true
-Base.isinf(::_ClassicalExact) = false
-Base.isnan(::_ClassicalExact) = false
-Base.signbit(a::_ClassicalExact) = sign(a) < 0
-Base.isinteger(a::ClassicalResult) = iszero(a) || (isone(denominator(a.sq_val)) && _is_perfect_square(a.sq_val))
-Base.isinteger(::ClassicalSum) = false                      # √r for square-free r > 1 is irrational, and so is the sum
-
-"⌊a⌋ exactly. An irrational value is never an integer, so its ceiling is its floor plus one."
+# Rounding is exact: one root by `isqrt` (an irrational root is never an integer), a sum by certified digits.
+Base.isinteger(a::ClassicalResult) = isone(denominator(a.sq_val)) && _is_perfect_square(a.sq_val)
+Base.isinteger(::ClassicalSum) = false
 function _floor_exact(a::ClassicalResult)
-    iszero(a) && return big(0)
     _is_perfect_square(a.sq_val) && return floor(BigInt, Rational{BigInt}(a))
-    f = isqrt(numerator(a.sq_val) ÷ denominator(a.sq_val))           # ⌊√x⌋ = isqrt(⌊x⌋), x > 0
+    f = isqrt(numerator(a.sq_val) ÷ denominator(a.sq_val))   # ⌊√x⌋ = isqrt(⌊x⌋)
     return a.sign > 0 ? f : -f - 1
 end
-function _floor_exact(a::ClassicalSum)                      # irrational: refine until the floor is certain
-    bits = 64
-    while true
+function _floor_exact(a::ClassicalSum)
+    for bits in (64 .<< (0:30))
         f = setprecision(BigFloat, bits + 16) do
-            v = BigFloat(_sum_value(a, bits))
-            err = abs(v) * BigFloat(2)^(2 - bits)
-            lo = floor(BigInt, v - err); lo == floor(BigInt, v + err) ? lo : nothing
+            v = BigFloat(_sum_value(a, bits)); e = abs(v) * BigFloat(2)^(2 - bits)
+            floor(BigInt, v - e) == floor(BigInt, v + e) ? floor(BigInt, v) : nothing
         end
         f === nothing || return f
-        bits *= 2
     end
 end
-
-"The integer `round(a, r)` names, exactly. Ties are possible only for a rational value, where `Rational` decides them."
 function _round_exact(a::_ClassicalExact, r::RoundingMode)
     a isa ClassicalResult && _is_perfect_square(a.sq_val) && return round(BigInt, Rational{BigInt}(a), r)
-    r === RoundDown && return _floor_exact(a)
-    r === RoundUp && return _floor_exact(a) + 1
-    r === RoundToZero && return sign(a) < 0 ? _floor_exact(a) + 1 : _floor_exact(a)
-    return _floor_exact(a + 1//2)                           # nearest, with no tie to break
+    f = _floor_exact(r in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp) ? a + 1//2 : a)   # no ties
+    return r === RoundUp || (r === RoundToZero && a < 0) ? f + 1 : f
 end
 Base.round(a::_ClassicalExact, r::RoundingMode = RoundNearest) = _exact(_round_exact(a, r))
 Base.round(::Type{T}, a::_ClassicalExact, r::RoundingMode = RoundNearest) where {T<:Integer} = T(_round_exact(a, r))
+for (f, r) in ((:floor, RoundDown), (:ceil, RoundUp), (:trunc, RoundToZero))    # Julia 1.10 does not route these
+    @eval Base.$f(::Type{T}, a::_ClassicalExact) where {T<:Integer} = round(T, a, $r)   # to `round(T, x, r)`
+end

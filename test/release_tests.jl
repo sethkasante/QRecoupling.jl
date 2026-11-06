@@ -985,3 +985,25 @@ end
     big_root = QR.ClassicalResult(1, big(10)^40 + 1)         # √(10⁴⁰+1), just above 10²⁰
     @test floor(BigInt, big_root) == big(10)^20 && ceil(BigInt, big_root) == big(10)^20 + 1
 end
+
+@testset "exact values at a level are ordered real numbers" begin
+    v = [q6j(Exact(40), i, i, i, i, i, i) for i in 0:8]
+    out = similar(v, Float64)
+    broadcast!(x -> isinf(x) ? NaN : x, out, v)              # what Plots does with series data
+    @test out == Float64.(v) && float(zero(eltype(v))) === 0.0
+    @test sort(v) == v[sortperm(Float64.(v))] && maximum(v) == v[argmax(Float64.(v))]
+
+    a = q6j(Exact(10), 1, 1, 1, 1, 1, 1)                     # 0.1547…
+    b = q6j(Exact(10), 1, 1, 1, 1, 1, 2)                     # 0.2113…
+    c = QR._form_value(a)                                     # the same value as a LevelValue
+    d = c + 1 // big(10)^30                                   # differs from it far below Float64's resolution
+    @test a < b && !(a < c) && !(c < a) && a <= c && c < d && !(d < c) && sign(d - c) == 1
+    @test 0.154 < a < 0.155 && a < 1 && -1 < -a && !(a < float(c)) == (float(c) <= c)     # exact against floats
+    @test isless(a, NaN) && !isless(NaN, a) && sign(-a) == -1 && abs(-a) == a && signbit(-a)
+    @test max(2c, 1) == 1 && min(2c, 1) == 2c && max(1//2, 2c) == 1//2 && conj(a) == a && iszero(imag(a))
+    @test a + 1.0 ≈ float(a) + 1 && a * π ≈ π * float(a) && convert(Float64, c) == float(c) && big(c) ≈ float(c)
+    # complex (powers of q) and generic forms have no order, and say so
+    @test_throws ArgumentError q3j(Exact(10), 1, 1, 1, 0, 0, 0) < 1
+    @test_throws ArgumentError conj(q3j(Exact(10), 1, 1, 1, 0, 0, 0))
+    @test_throws ArgumentError q6j(Symbolic(), 1, 1, 1, 1, 1, 1) < 1
+end

@@ -164,7 +164,8 @@ function Base.:^(f::QForm, n::Integer)
     a === nothing && return _form_value(f)^n
     return _product_form(f.k, f.reduce, isodd(n) ? a[1] : 1, [m => Int(n) * e for (m, e) in a[2]])
 end
-Base.:^(f::QForm, p::Union{Rational,AbstractFloat}) = _rational_power(f, p)
+Base.:^(f::QForm, p::Rational) = _rational_power(f, p)          # two methods, as Base has ^(::Number, ::Rational)
+Base.:^(f::QForm, p::AbstractFloat) = _rational_power(f, p)
 
 """
     sqrt(f::QForm)
@@ -237,3 +238,72 @@ for op in (:+, :-, :*, :/)
         Base.$op(::_ClassicalExact, ::QForm) = throw(ArgumentError(_NO_MIXED_ARITHMETIC))
     end
 end
+
+# ---- order: a value at a level is a real number ----
+#
+# Real unless it carries powers of q (then it may be complex) or is generic (then it is not one number). Order is
+# exact: certified Float64 values separate almost every pair; otherwise exact `==`; otherwise, the values differ,
+# so certified values to more bits must separate them. Against a float the float's exact value is used, as `==` does.
+
+const _LevelOrdered = Union{QForm,LevelValue,LevelValueSum}
+const _PlainReal = Union{Integer,Rational,AbstractFloat}
+
+function _ordered(f::QForm)
+    f.k !== nothing && f.weight == (0, 0) && return f
+    throw(ArgumentError("this form " * (f.k === nothing ? "holds at every q" : "carries powers of q and may be complex") *
+                        ": order, `real`, `imag` and `conj` need a real value at a level"))
+end
+_ordered(x) = x
+_certified(f::QForm) = _form_value(f)                 # LevelValue: certified to any number of bits
+_certified(x) = x
+_bits_value(x::Union{LevelValue,LevelValueSum}, bits) = numeric_value(x; bits)
+_bits_value(x::_PlainReal, bits) = setprecision(() -> BigFloat(x), BigFloat, bits)
+
+"sign(a − b), exactly."
+function _level_cmp(a, b)
+    x, y = Float64(_ordered(a)), Float64(_ordered(b))  # each within a few units of its last place
+    m = max(abs(x), abs(y))
+    2.0^-960 < m < Inf && abs(x - y) > 8eps() * m && return cmp(x, y)
+    a == b && return 0
+    a, b = _certified(a), _certified(b)
+    bits = 128
+    while true
+        x, y = _bits_value(a, bits), _bits_value(b, bits)
+        d = setprecision(() -> abs(x - y) - (abs(x) + abs(y)) * BigFloat(2)^(4 - bits), BigFloat, bits + 16)
+        d > 0 && return cmp(x, y)
+        bits *= 2
+    end
+end
+
+Base.:<(a::_LevelOrdered, b::_LevelOrdered) = _level_cmp(a, b) < 0
+Base.:<(a::_LevelOrdered, b::_PlainReal) = !isnan(b) && _level_cmp(a, b) < 0
+Base.:<(a::_PlainReal, b::_LevelOrdered) = !isnan(a) && _level_cmp(a, b) < 0
+Base.isless(a::_LevelOrdered, b::Union{_LevelOrdered,Integer,Rational}) = a < b
+Base.isless(a::Union{Integer,Rational}, b::_LevelOrdered) = a < b
+Base.isless(a::QForm, b::AbstractFloat) = isnan(b) || a < b            # NaN last, as Base does for `Real`
+Base.isless(a::AbstractFloat, b::QForm) = !isnan(a) && a < b
+Base.:<=(a::_LevelOrdered, b::_LevelOrdered) = _level_cmp(a, b) <= 0
+Base.sign(x::_LevelOrdered) = _level_cmp(x, 0)
+Base.signbit(f::QForm) = f < 0
+Base.abs(f::QForm) = signbit(f) ? -f : f
+Base.isfinite(::_LevelOrdered) = true
+Base.isinf(::_LevelOrdered) = false
+Base.real(f::QForm) = _ordered(f)
+Base.conj(f::QForm) = _ordered(f)
+Base.imag(f::QForm) = zero(_ordered(f))
+# The zero that holds at every q, for code that asks a type for its zero (Plots does); it mixes with no level.
+Base.zero(::Type{<:_LevelOrdered}) = _qform_zero(nothing)
+for (f, pick) in ((:max, :(isless(b, a) ? a : b)), (:min, :(isless(b, a) ? b : a)))   # a rational has no level to
+    @eval Base.$f(a::Union{LevelValue,LevelValueSum}, b::_ExactRational) = $pick       # promote to, so Base's `Real`
+    @eval Base.$f(a::_ExactRational, b::Union{LevelValue,LevelValueSum}) = $pick       # fallback cannot
+end
+
+Base.promote_rule(::Type{<:_LevelOrdered}, ::Type{T}) where {T<:AbstractFloat} = T
+Base.promote_rule(::Type{<:_LevelOrdered}, ::Type{<:AbstractIrrational}) = Float64
+Base.promote_rule(::Type{<:AbstractIrrational}, ::Type{<:_LevelOrdered}) = Float64   # Base's own order asks for zero(T)
+Base.convert(::Type{T}, x::Union{LevelValue,LevelValueSum}) where {T<:Union{Base.IEEEFloat,BigFloat}} =
+    T(numeric_value(x; bits = max(128, precision(T) + 64)))
+Base.BigFloat(x::Union{LevelValue,LevelValueSum}) = numeric_value(x)
+Base.big(x::Union{LevelValue,LevelValueSum}) = BigFloat(x)
+Base.isequal(::QForm, ::Union{LevelValue,LevelValueSum}) = false
+Base.isequal(::Union{LevelValue,LevelValueSum}, ::QForm) = false

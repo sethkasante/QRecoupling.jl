@@ -568,7 +568,7 @@ A value at level k: (Σ_n num[n] [n]) / den · √(r ∏_{n ∈ rad} [n]), with 
 positive, because r > 0 and [n] > 0 for n ≤ h/2, and (r, rad) is reduced by the relations of the level, so that
 equal roots carry equal keys as far as those relations see.
 """
-struct LevelValue
+struct LevelValue <: Real
     k::Int
     num::Vector{BigInt}
     den::BigInt
