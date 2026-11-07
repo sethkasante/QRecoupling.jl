@@ -18,7 +18,11 @@ function _form_value(f::QForm)
     return level_value(f.rule, f.k)
 end
 
-_same_form_level(f::QForm, g::QForm) = f.k == g.k ||
+"The zero that holds at every q, as `zero(QForm)` gives it (matrix products and `sum` start from it): it adds at any level."
+_any_zero(f::QForm) = f.k === nothing && f.rule === nothing
+_form_value(f::QForm, k) = _any_zero(f) && k !== nothing ? zero(LevelValue, k) : _form_value(f)
+
+_same_form_level(f::QForm, g::QForm) = f.k == g.k || _any_zero(f) || _any_zero(g) ||
     throw(ArgumentError("these forms are at different levels: $(f.k) and $(g.k)"))
 
 "A rule up to the order of its factors. Two values with one key are one value."
@@ -216,6 +220,7 @@ end
 for (op, p) in ((:*, 1), (:/, -1))
     @eval function Base.$op(f::QForm, g::QForm)
         _same_form_level(f, g)
+        _any_zero(f) | _any_zero(g) && return _any_zero(f) & _any_zero(g) ? f : $op(_form_value(f, g.k), _form_value(g, f.k))
         h = _product_of(f, g, $p)
         return h === nothing ? $op(_form_value(f), _form_value(g)) : h
     end
@@ -225,15 +230,16 @@ const _NO_MIXED_ARITHMETIC = "a form and a value at q = 1 have no arithmetic tog
 for op in (:+, :-)
     @eval function Base.$op(f::QForm, g::QForm)
         _same_form_level(f, g)
-        return $op(_form_value(f), _form_value(g))
+        _any_zero(f) & _any_zero(g) && return f
+        return $op(_form_value(f, g.k), _form_value(g, f.k))
     end
 end
 for op in (:+, :-, :*, :/)
     @eval begin
         Base.$op(f::QForm, c::Union{Integer,Rational}) = $op(_form_value(f), c)
         Base.$op(c::Union{Integer,Rational}, f::QForm) = $op(c, _form_value(f))
-        Base.$op(f::QForm, v::Union{LevelValue,LevelValueSum}) = $op(_form_value(f), v)
-        Base.$op(v::Union{LevelValue,LevelValueSum}, f::QForm) = $op(v, _form_value(f))
+        Base.$op(f::QForm, v::Union{LevelValue,LevelValueSum}) = $op(_form_value(f, v.k), v)
+        Base.$op(v::Union{LevelValue,LevelValueSum}, f::QForm) = $op(v, _form_value(f, v.k))
         Base.$op(::QForm, ::_ClassicalExact) = throw(ArgumentError(_NO_MIXED_ARITHMETIC))
         Base.$op(::_ClassicalExact, ::QForm) = throw(ArgumentError(_NO_MIXED_ARITHMETIC))
     end
@@ -305,5 +311,11 @@ Base.convert(::Type{T}, x::Union{LevelValue,LevelValueSum}) where {T<:Union{Base
     T(numeric_value(x; bits = max(128, precision(T) + 64)))
 Base.BigFloat(x::Union{LevelValue,LevelValueSum}) = numeric_value(x)
 Base.big(x::Union{LevelValue,LevelValueSum}) = BigFloat(x)
+# a matrix product of forms holds forms and the values their arithmetic gives
+Base.promote_rule(::Type{QForm}, ::Type{T}) where {T<:Union{LevelValue,LevelValueSum}} = T
+Base.promote_rule(::Type{LevelValue}, ::Type{LevelValueSum}) = LevelValueSum
+Base.convert(::Type{LevelValue}, f::QForm) = _form_value(f)
+Base.convert(::Type{LevelValueSum}, f::QForm) = LevelValueSum(_form_value(f))
+Base.convert(::Type{LevelValueSum}, v::LevelValue) = LevelValueSum(v)
 Base.isequal(::QForm, ::Union{LevelValue,LevelValueSum}) = false
 Base.isequal(::Union{LevelValue,LevelValueSum}, ::QForm) = false

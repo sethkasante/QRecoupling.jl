@@ -441,6 +441,9 @@ for op in (:<, :<=)
     @eval Base.$op(a::AbstractFloat, b::_ClassicalExact) = $op(a, Float64(b))
 end
 Base.isfinite(::_ClassicalExact) = true
+# `isequal` is exact against a float, so that equal values hash alike (`==` rounds, as above)
+Base.isequal(a::_ClassicalExact, b::AbstractFloat) = isfinite(b) && !(iszero(b) && signbit(b)) && a == Rational{BigInt}(b)
+Base.isequal(a::AbstractFloat, b::_ClassicalExact) = isequal(b, a)
 Base.promote_rule(::Type{ClassicalResult}, ::Type{<:_ExactRational}) = ClassicalResult
 Base.convert(::Type{ClassicalResult}, c::_ExactRational) = _exact(c)
 Base.promote_rule(::Type{<:_ClassicalExact}, ::Type{<:Union{AbstractFloat,AbstractIrrational}}) = BigFloat

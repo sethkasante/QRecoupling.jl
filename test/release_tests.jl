@@ -1007,3 +1007,19 @@ end
     @test_throws ArgumentError conj(q3j(Exact(10), 1, 1, 1, 0, 0, 0))
     @test_throws ArgumentError q6j(Symbolic(), 1, 1, 1, 1, 1, 1) < 1
 end
+
+@testset "matrices of exact values, and hashing against floats" begin
+    # a matrix product starts from zero(T), the zero that holds at every q, which must add at any level
+    e, f = fmatrix_labels(1, 1, 1, 1; k = 6)
+    F = [fsymbol(Exact(6), 1, 1, ei, 1, 1, fj) for ei in e, fj in f]
+    @test transpose(F) * F == [i == j for i in axes(F, 2), j in axes(F, 2)]       # orthogonal, exactly
+    a = q6j(Exact(10), 1, 1, 1, 1, 1, 1); b = q6j(Exact(10), 1, 1, 1, 1, 1, 2)
+    @test zero(QForm) + a == a && a - zero(QForm) == a && zero(QForm) - a == -a && iszero(zero(QForm) * a)
+    @test sum([a, b]; init = zero(QForm)) == a + b && [a, QR._form_value(b)] isa Vector{QR.LevelValue}
+    @test_throws ArgumentError a + q6j(Exact(12), 1, 1, 1, 1, 1, 1)               # levels still do not mix
+    # equal values hash alike: `isequal` is exact against a float, though `==` rounds there
+    x = q6j(Exact(), 1, 1, 1, 1, 1, 1); h = QR.ClassicalResult(1, 1//4)            # 1//6 and exactly 1//2
+    @test x == 1/6 && !isequal(x, 1/6) && length(Set([x, 1/6])) == 2
+    @test isequal(h, 0.5) && isequal(0.5, h) && hash(h) == hash(0.5) && length(Set([h, 0.5])) == 1
+    @test isequal(zero(x), 0.0) && !isequal(zero(x), -0.0)
+end
