@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.6.4
+
+- Exact values work as numbers: they compare, sort and plot. `Exact()` values also round exactly. Values at a level compare exactly and multiply as matrices, so `transpose(F) * F == I` can be checked exactly. Forms with powers of q may be complex and have no order.
+- `isequal` of an `Exact()` value with a float is exact, so equal values hash alike. `==` is unchanged.
+
 ## v0.6.3
 
 - `fmatrix` at real q no longer returns NaN for large spins (from about spin 50 at q = 0.5, spin 100 at q = 0.7). Matrices that were finite before are unchanged bit for bit.

@@ -1,7 +1,7 @@
 name = "QRecoupling"
 uuid = "12fbc973-52c7-4af8-b64a-f7602a7eb369"
 keywords = ["quantum-gravity", "tqft", "tensor-networks", "spin-foam", "hypergeometric-series", "math", "physics", "Racah", "quantum-wigner"]
-version = "0.6.3"
+version = "0.6.4"
 authors = ["Seth K. Asante <seth.kurankyi@gmail.com>"]
 description = "Quantum recoupling coefficients and q-factorial series, as fast numbers at any q or exact values and formulas."
 
