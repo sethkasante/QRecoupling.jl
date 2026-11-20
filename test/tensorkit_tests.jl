@@ -68,6 +68,12 @@ end
         @test_throws DomainError SU2q(Inf)
         @test string(I) == "SU2k(10)" && string(I(3//2)) == "SU2k(10)(3//2)" && string(SU2q(0.8)) == "SU2q(0.8)"
         @test sprint(show, Vect[I](1//2 => 2)) == "Vect[SU2k(10)](1//2 => 2)"
+        # types that are not concrete print through Base, for example in an error message that names them
+        E = Base.get_extension(QR, :QRecouplingTensorKitExt)
+        @test endswith(string(E.SU2kIrrep), "SU2kIrrep") && endswith(string(E.SU2qIrrep), "SU2qIrrep")
+        @test occursin("SU2qIrrep{q}", string(Tuple{E.SU2qIrrep{q}, E.SU2qIrrep{q}} where {q}))
+        f(::E.SU2qIrrep{q}) where {q} = q
+        @test occursin("SU2qIrrep{q}", sprint(showerror, MethodError(f, (1,))))
         @test length(values(I)) == 11 && collect(values(I)) == spins(I, 5) && values(I)[3] == I(1)
         @test findindex(values(I), I(1)) == 3
         @test_throws BoundsError values(I)[12]

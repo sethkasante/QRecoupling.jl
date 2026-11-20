@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Error messages that name the TensorKit sector types with a free parameter, such as `SU2qIrrep{q}`, print again. They used to crash Julia's error display.
+
 ## v0.6.4
 
 - Exact values work as numbers: they compare, sort and plot. `Exact()` values also round exactly. Values at a level compare exactly and multiply as matrices, so `transpose(F) * F == I` can be checked exactly. Forms with powers of q may be complex and have no order.

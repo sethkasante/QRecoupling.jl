@@ -58,8 +58,10 @@ Base.isless(a::I, b::I) where {I<:DeformedSU2} = isless(a.J, b.J)
 
 type_repr(::Type{SU2kIrrep{k}}) where {k} = "SU2k($k)"
 type_repr(::Type{SU2qIrrep{q}}) where {q} = "SU2q($q)"
-Base.show(io::IO, ::Type{I}) where {I<:Union{SU2kIrrep{k} where {k},SU2qIrrep{q} where {q}}} =
-    isconcretetype(I) ? print(io, type_repr(I)) : Base.show_datatype(io, I)
+# Only a concrete sector type prints as its constructor. The rest, such as `SU2kIrrep` or `SU2qIrrep{q}` with a free `q`
+# in a method signature, goes to Base, so error messages that name them still print.
+Base.show(io::IO, I::Type{<:DeformedSU2}) =
+    isconcretetype(I) ? print(io, type_repr(I)) : invoke(show, Tuple{IO,Type}, io, I)
 function Base.show(io::IO, a::I) where {I<:DeformedSU2}
     j = isodd(a.J) ? string(a.J, "//2") : string(a.J ÷ 2)
     get(io, :typeinfo, nothing) === I ? print(io, j) : print(io, type_repr(I), "(", j, ")")
